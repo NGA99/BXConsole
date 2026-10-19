@@ -263,8 +263,21 @@ export class BlobStore {
             // A part-file from a write in flight is not an orphan yet.
             if (sha.endsWith('.part')) continue;
             const { size, mtimeMs } = await fs.stat(file);
-            // Too young to judge: its index line may still be on its way.
-            if (Date.now() - mtimeMs < graceMs) continue;
+            /*
+             * Too young to judge: its index line may still be on its way.
+             *
+             * Clamped, because the two clocks do not agree to the millisecond.
+             * A file's mtime carries sub-millisecond precision and `Date.now`
+             * truncates to the millisecond, so a file written moments ago
+             * reads as a fraction of a millisecond in the future — on this
+             * machine, for 95% of writes. The raw difference is then negative
+             * and below any grace at all, including none, which left a sweep
+             * with `graceMs: 0` declining to collect the orphan it was called
+             * to collect. Harmless at the default grace, where it waits one
+             * more cycle; wrong whenever the caller asked for no grace.
+             */
+            const age = Math.max(0, Date.now() - mtimeMs);
+            if (age < graceMs) continue;
             await fs.rm(file);
             removed++;
             bytes += size;
