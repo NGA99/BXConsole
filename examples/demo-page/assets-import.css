@@ -1,0 +1,2 @@
+/* Reached through @import inside assets.css, so it tests the second hop. */
+.imported { outline: 3px solid #188038; outline-offset: 2px; }

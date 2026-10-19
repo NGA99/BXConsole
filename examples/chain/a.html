@@ -1,0 +1,67 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>chain A — bxconsole</title>
+    <link rel="stylesheet" href="a.css" />
+    <style>
+      body { font-family: system-ui, sans-serif; padding: 24px; }
+      h1 { color: #1a73e8; }
+      .row { display: flex; gap: 12px; align-items: center; margin: 16px 0; }
+      button { padding: 8px 14px; }
+      code { background: #eee; padding: 1px 4px; }
+    </style>
+    <!--
+      The agent is added only when this window's letter is in ?agent=, so one
+      set of pages covers every case: the agent landing in C and climbing to B
+      and A, landing in B, or being there from the start.
+    -->
+    <script>
+      (function () {
+        var want = new URLSearchParams(location.search).get('agent') || '';
+        if (want.indexOf('a') < 0) return;
+        var s = document.createElement('script');
+        s.src = '/agent.js?name=chain-a';
+        document.head.appendChild(s);
+      })();
+    </script>
+  </head>
+  <body>
+    <h1>A</h1>
+    <p>Window <strong>A</strong> of the A &rarr; B &rarr; C chain. Its own picture and stylesheet are
+      <code>a.png</code> and <code>a.css</code>, so the Screen mirror of this window should show a
+      blue square and nothing from the other two.</p>
+    <div class="row">
+      <img src="a.png" width="48" height="48" alt="" />
+      <span class="badge-a"></span>
+      <span id="agent-state">agent: checking…</span>
+    </div>
+    <div class="row">
+      <button id="open">open B in a new window</button>
+    </div>
+    <script>
+      document.getElementById('open').onclick = function () {
+        window.open('b.html' + location.search, '_blank');
+      };
+    </script>
+    <div class="row">
+      <button id="log">log from A</button>
+      <button id="fetch">fetch from A</button>
+    </div>
+    <script>
+      var here = 'A';
+      document.getElementById('log').onclick = function () {
+        console.log('hello from ' + here, { window: here, at: new Date().toISOString() });
+      };
+      document.getElementById('fetch').onclick = function () {
+        fetch('a.json?from=' + here).catch(function () {});
+      };
+      setInterval(function () {
+        var el = document.getElementById('agent-state');
+        el.textContent = window.__bxconsole
+          ? 'agent: in this window (tab ' + window.__bxconsole.tabId + ' of session ' + window.__bxconsole.sessionId + ')'
+          : 'agent: not here';
+      }, 500);
+    </script>
+  </body>
+</html>

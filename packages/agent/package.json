@@ -1,0 +1,20 @@
+{
+  "name": "@bxconsole/agent",
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "esbuild src/index.ts --bundle --format=iife --target=es2018 --sourcemap --outfile=dist/agent.js --watch",
+    "build": "esbuild src/index.ts --bundle --format=iife --target=es2018 --minify --outfile=dist/agent.js && esbuild src/index.ts --bundle --format=iife --target=es2018 --outfile=dist/agent.readable.js",
+    "typecheck": "tsc -p tsconfig.json",
+    "test": "tsx --test test/*.test.ts"
+  },
+  "dependencies": {
+    "@bxconsole/protocol": "*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.24.2",
+    "tsx": "^4.19.2"
+  }
+}

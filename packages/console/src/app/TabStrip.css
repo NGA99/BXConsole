@@ -1,0 +1,63 @@
+/* The windows of a session, shown as tabs above the panel. */
+.tabstrip {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  padding: 4px 8px 0;
+  /* Sits above the top bar, the way a browser keeps its tabs above the address bar. */
+  background: var(--sys-color-surface3);
+  overflow-x: auto;
+  flex: 0 0 auto;
+  scrollbar-width: thin;
+}
+
+.tabstrip-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 200px;
+  min-width: 0;
+  height: 24px;
+  padding: 0 10px 0 8px;
+  border: 1px solid transparent;
+  border-bottom: none;
+  border-radius: 6px 6px 0 0;
+  background: transparent;
+  color: var(--sys-color-token-subtle);
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.tabstrip-tab:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+
+.tabstrip-tab.active {
+  background: var(--sys-color-surface2);
+  border-color: var(--sys-color-divider);
+  color: var(--sys-color-on-surface);
+}
+
+.tabstrip-tab.gone .tabstrip-label {
+  opacity: 0.6;
+  text-decoration: line-through;
+}
+
+.tabstrip-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--sys-color-neutral-outline);
+  flex: 0 0 auto;
+}
+
+.tabstrip-dot.on {
+  background: var(--sys-color-green);
+}
+
+.tabstrip-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

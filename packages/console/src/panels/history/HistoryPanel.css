@@ -1,0 +1,521 @@
+/* History tab: lane timeline on top, event list below. */
+
+.hist-body {
+  --hist-navigation: #1a73e8;
+  --hist-interaction: #188038;
+  --hist-network: #8430ce;
+  --hist-console: #e8710a;
+  --hist-marks: #c5221f;
+  --hist-dom: #018786;
+  --hist-perf: #b06000;
+  --hist-label-width: 86px;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  background: var(--sys-color-cdt-base-container);
+  container-type: inline-size;
+}
+
+/* In a narrow dock the secondary text is all ellipsis, so drop it and keep the label. */
+@container (max-width: 560px) {
+  .hist-row-detail {
+    display: none;
+  }
+}
+
+/*
+ * Narrower still, the fixed columns add up to more than the row and squeeze
+ * the label — the one part of the row anyone reads — down to nothing. The
+ * kind is already in the colour of the dot, and the duration is on the lane
+ * above, so both can go before the label gives up a pixel.
+ */
+@container (max-width: 400px) {
+  .hist-row-kind,
+  .hist-row-duration {
+    display: none;
+  }
+}
+
+:root[data-theme='dark'] .hist-body,
+html:not([data-theme='light']) .hist-body {
+  --hist-navigation: #8ab4f8;
+  --hist-interaction: #6dd58c;
+  --hist-network: #c58af9;
+  --hist-console: #fcad70;
+  --hist-marks: #f28b82;
+  --hist-dom: #4ecdc4;
+  --hist-perf: #fdd663;
+}
+
+@media (prefers-color-scheme: light) {
+  html:not([data-theme='dark']) .hist-body {
+    --hist-navigation: #1a73e8;
+    --hist-interaction: #188038;
+    --hist-network: #8430ce;
+    --hist-console: #e8710a;
+    --hist-marks: #c5221f;
+    --hist-dom: #018786;
+    --hist-perf: #b06000;
+  }
+}
+
+/* ------------------------------------------------------------- toolbar bits */
+
+.hist-lane-chips {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.hist-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 7px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--sys-color-token-subtle);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.hist-chip:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+
+.hist-chip.on {
+  background: var(--sys-color-tonal-container);
+  color: var(--sys-color-on-surface);
+}
+
+.hist-chip-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--chip-color);
+  opacity: 0.35;
+}
+
+.hist-chip.on .hist-chip-dot {
+  opacity: 1;
+}
+
+.hist-chip-count {
+  color: var(--sys-color-token-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.hist-text-button {
+  height: 19px;
+  padding: 0 8px;
+  border: 1px solid var(--sys-color-neutral-outline);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sys-color-on-surface);
+  font: inherit;
+  font-size: 11px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.hist-text-button:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+
+.hist-text-button.on {
+  background: var(--sys-color-tonal-container);
+  border-color: transparent;
+}
+
+.hist-status {
+  color: var(--sys-color-token-subtle);
+  font-size: 11px;
+  white-space: nowrap;
+  padding-right: 4px;
+}
+
+/* ---------------------------------------------------------------- timeline */
+
+.hist-timeline {
+  display: flex;
+  border-bottom: 1px solid var(--sys-color-divider);
+  background: var(--sys-color-surface1);
+  flex: 0 0 auto;
+  user-select: none;
+}
+
+.hist-lane-labels {
+  width: var(--hist-label-width);
+  flex: 0 0 var(--hist-label-width);
+  border-right: 1px solid var(--sys-color-divider);
+}
+
+.hist-ruler-label {
+  height: 16px;
+  border-bottom: 1px solid var(--sys-color-divider);
+}
+
+.hist-lane-label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 6px;
+  font-size: 11px;
+  color: var(--sys-color-on-surface-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hist-lane-swatch {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  flex: 0 0 auto;
+}
+
+.hist-tracks {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  cursor: crosshair;
+  overflow: hidden;
+}
+
+.hist-ruler {
+  position: relative;
+  height: 16px;
+  border-bottom: 1px solid var(--sys-color-divider);
+}
+
+.hist-tick {
+  position: absolute;
+  top: 2px;
+  transform: translateX(-100%);
+  padding-right: 3px;
+  font-size: 10px;
+  color: var(--sys-color-token-subtle);
+  border-right: 1px solid var(--sys-color-divider);
+  line-height: 12px;
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.hist-track {
+  position: relative;
+  height: 22px;
+  border-bottom: 1px solid color-mix(in srgb, var(--sys-color-divider) 45%, transparent);
+}
+
+.hist-track:last-of-type {
+  border-bottom: none;
+}
+
+.hist-marker {
+  position: absolute;
+  top: 5px;
+  height: 12px;
+  width: 2px;
+  margin-left: -1px;
+  border-radius: 1px;
+  background: var(--sys-color-token-subtle);
+  cursor: pointer;
+}
+
+.hist-marker.bar {
+  margin-left: 0;
+  border-radius: 2px;
+  opacity: 0.8;
+}
+
+.hist-marker:hover {
+  outline: 1px solid var(--sys-color-on-surface);
+  outline-offset: 1px;
+}
+
+.hist-marker.selected {
+  outline: 2px solid var(--sys-color-primary);
+  outline-offset: 1px;
+  z-index: 2;
+}
+
+.hist-marker.lane-navigation {
+  background: var(--hist-navigation);
+}
+.hist-marker.lane-interaction {
+  background: var(--hist-interaction);
+}
+.hist-marker.lane-network {
+  background: var(--hist-network);
+}
+.hist-marker.lane-console {
+  background: var(--hist-console);
+}
+.hist-marker.lane-marks {
+  background: var(--hist-marks);
+}
+.hist-marker.lane-perf {
+  background: var(--hist-perf);
+}
+
+.hist-marker.lane-dom {
+  background: var(--hist-dom);
+  top: auto;
+  bottom: 3px;
+  width: 3px;
+  opacity: 0.75;
+}
+
+.hist-marker.sev-error {
+  background: var(--sys-color-error);
+}
+
+.hist-marker.sev-warning {
+  background: var(--sys-color-yellow-outline);
+}
+
+.hist-band {
+  position: absolute;
+  top: 16px;
+  bottom: 0;
+  background: color-mix(in srgb, var(--sys-color-primary) 18%, transparent);
+  border-left: 1px solid var(--sys-color-primary);
+  border-right: 1px solid var(--sys-color-primary);
+  pointer-events: none;
+}
+
+/* -------------------------------------------------------------------- list */
+
+.hist-list {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: var(--mono-font-size);
+}
+
+.hist-empty,
+.hist-more {
+  padding: 8px 10px;
+  color: var(--sys-color-token-subtle);
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
+}
+
+.hist-more {
+  border-bottom: 1px solid var(--sys-color-divider);
+}
+
+.hist-row {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 1px 8px 1px 6px;
+  border-bottom: 1px solid color-mix(in srgb, var(--sys-color-divider) 40%, transparent);
+  cursor: default;
+  content-visibility: auto;
+  contain-intrinsic-size: auto 17px;
+  white-space: nowrap;
+  /* Whatever the arithmetic above works out to, nothing paints past the row. */
+  overflow: hidden;
+}
+
+.hist-row:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+
+.hist-row.selected {
+  background: var(--sys-color-tonal-container);
+}
+
+.hist-row-time {
+  /* Not a fixed 62px: a full `01:59:20.530` needs more, and a flex item that
+     cannot shrink simply took it, pushing the label off the row instead.
+     Tabular figures keep the column aligned without a declared width. */
+  flex: 0 0 auto;
+  text-align: right;
+  color: var(--sys-color-token-subtle);
+  font-variant-numeric: tabular-nums;
+}
+
+.hist-row-dot {
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  align-self: center;
+}
+
+.hist-row-kind {
+  flex: 0 1 72px;
+  min-width: 0;
+  color: var(--sys-color-on-surface-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.hist-row-label {
+  color: var(--sys-color-on-surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  /* the label is the point of the row, so it keeps the space the detail gives up */
+  flex: 3 1 40%;
+  min-width: 0;
+}
+
+.hist-row-detail {
+  color: var(--sys-color-token-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: right;
+}
+
+.hist-row-duration {
+  padding-left: 8px;
+  color: var(--sys-color-token-subtle);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+}
+
+.hist-row.sev-error .hist-row-label {
+  color: var(--sys-color-error);
+}
+
+.hist-row.sev-warning .hist-row-label {
+  color: var(--sys-color-on-yellow-container);
+}
+
+/*
+ * Row actions. They used to be 14px text glyphs that only appeared on hover,
+ * which left you guessing what they were; now they are drawn icons with a real
+ * hit target, dim until the row is hovered so a long list stays calm.
+ */
+.hist-row-action {
+  flex: 0 0 auto;
+  align-self: center;
+  margin-left: 4px;
+  width: 20px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--sys-color-token-subtle);
+  cursor: pointer;
+  padding: 0;
+  opacity: 0.4;
+}
+
+.hist-row:hover .hist-row-action:not(:disabled) {
+  opacity: 1;
+}
+
+.hist-row-action:not(:disabled):hover {
+  color: var(--sys-color-primary);
+  background: var(--sys-color-state-hover-on-subtle);
+}
+
+/* Kept in place rather than removed: the column stays straight down the list. */
+.hist-row-action:disabled {
+  opacity: 0.15;
+  cursor: default;
+}
+
+.hist-row-action:focus-visible {
+  outline: 1px solid var(--sys-color-primary-bright);
+  outline-offset: -1px;
+  opacity: 1;
+}
+
+
+/* Zoom presets and the clock toggle stay on one line together. */
+.hist-button-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  flex: 0 0 auto;
+}
+
+/* where the Screen panel's replay stands (DOM time travel) */
+.hist-playhead {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 0;
+  border-left: 1px solid var(--sys-color-primary-bright);
+  box-shadow: 0 0 3px color-mix(in srgb, var(--sys-color-primary-bright) 60%, transparent);
+  pointer-events: none;
+  z-index: 3;
+}
+.hist-ruler {
+  cursor: ew-resize;
+}
+
+/* Which window of the session a row came from. */
+.hist-row-tab {
+  flex: 0 0 16px;
+  text-align: center;
+  color: var(--sys-color-token-subtle);
+  border: 1px solid var(--sys-color-divider);
+  border-radius: 3px;
+  line-height: 13px;
+  font-size: 10px;
+  cursor: pointer;
+  align-self: center;
+}
+
+.hist-row-tab:hover {
+  border-color: var(--sys-color-primary);
+  color: var(--sys-color-primary);
+}
+
+.hist-row-tab.none {
+  cursor: default;
+  opacity: 0.5;
+}
+
+.hist-row-tab.none:hover {
+  border-color: var(--sys-color-divider);
+  color: var(--sys-color-token-subtle);
+}
+
+/* the replay is off-screen in this zoom: a handle at the edge it lies past */
+.hist-playhead-edge {
+  position: absolute;
+  top: 18px;
+  z-index: 3;
+  width: 14px;
+  height: 16px;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 3px;
+  font-size: 9px;
+  line-height: 1;
+  cursor: pointer;
+  color: var(--sys-color-cdt-base-container);
+  background: var(--sys-color-primary-bright);
+  opacity: 0.75;
+}
+.hist-playhead-edge:hover {
+  opacity: 1;
+}
+.hist-playhead-edge.left {
+  left: 0;
+}
+.hist-playhead-edge.right {
+  right: 0;
+}

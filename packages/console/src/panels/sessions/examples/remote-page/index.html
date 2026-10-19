@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>remote page (served from another origin)</title>
+  </head>
+  <body>
+    <h1>Remote page</h1>
+    <p>This page is served from a different origin than the relay. The agent is installed with <code>import()</code>.</p>
+    <button onclick="console.log('hello from the remote page', { at: Date.now() })">console.log</button>
+    <button onclick="fetch(location.href).then(r => console.log('fetched self', r.status))">fetch self</button>
+    <script>
+      // The relay address comes from the file the relay serves (self.__BXCONSOLE__), not from this page.
+      const relay = new URLSearchParams(location.search).get('relay') || 'http://localhost:7331';
+      import(relay + '/agent.js?name=remote-import').then(() => console.log('agent installed via import()'));
+    </script>
+  </body>
+</html>

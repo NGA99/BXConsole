@@ -1,0 +1,150 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>A — launcher / supervisor</title>
+    <style>
+      body { font: 13px system-ui, sans-serif; margin: 16px; }
+      button { font: inherit; padding: 4px 10px; margin: 2px 4px 2px 0; }
+      #log { font-family: Menlo, monospace; font-size: 11px; white-space: pre-wrap; background: #f6f6f6; padding: 8px; margin-top: 10px; max-height: 60vh; overflow: auto; }
+      .row { margin: 8px 0; }
+      code { background: #eee; padding: 1px 4px; }
+    </style>
+  </head>
+  <body>
+    <h2>A — launcher and supervisor</h2>
+    <p>
+      This page <b>never navigates</b>. It watches the windows it opens and re-injects the agent
+      every time one of them loads a new document. None of this touches BXConsole itself — the
+      supervisor logic lives entirely in this test page.
+    </p>
+
+    <div class="row">
+      <button id="open-b">Open B and supervise it</button>
+      <button id="open-b-noopener">Open B with noopener (should lose the link)</button>
+      <button id="clear">Clear log</button>
+    </div>
+    <div class="row">
+      Windows being watched: <b id="count">0</b>
+    </div>
+
+    <div id="log"></div>
+
+    <script>
+      const RELAY = 'http://localhost:7331';
+      const logEl = document.getElementById('log');
+      const countEl = document.getElementById('count');
+      const watched = [];
+
+      function log(...parts) {
+        const line = `[${new Date().toLocaleTimeString()}.${String(Date.now() % 1000).padStart(3, '0')}] ${parts.join(' ')}`;
+        logEl.textContent += line + '\n';
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      // The child calls this through window.opener when it opens a window of its own.
+      window.__bxcAdopt = function (w, why) {
+        log('adopting a window handed over by a child:', why || '');
+        supervise(w, 'adopted');
+      };
+
+      /**
+       * Watch one window. Whenever it shows a document we have not injected into yet,
+       * inject the agent plus a small hook that hands this page any window the child opens.
+       */
+      function supervise(w, label) {
+        if (!w || watched.includes(w)) return;
+        watched.push(w);
+        countEl.textContent = String(watched.length);
+        let lastHref = null;
+
+        const tick = setInterval(() => {
+          let href, doc;
+          try {
+            if (w.closed) {
+              clearInterval(tick);
+              log(`[${label}] window closed, no longer watching`);
+              return;
+            }
+            doc = w.document; // throws if the child went cross-origin
+            href = w.location.href;
+          } catch (err) {
+            log(`[${label}] unreachable (it may have gone cross-origin):`, err.name);
+            return;
+          }
+          if (href === lastHref) return;
+          if (!doc || doc.readyState === 'loading' && !doc.head) return;
+
+          lastHref = href;
+          const early = w.__earlyAt;
+          const gap = early ? Date.now() - early : null;
+          log(`[${label}] new document: ${href}`);
+          log(`         delay before injection: ${gap === null ? 'not measurable' : gap + ' ms'} (readyState=${doc.readyState})`);
+
+          injectChildHook(w);
+          injectAgent(w, 'nav-' + (href.split('/').pop() || 'page').replace('.html', ''));
+        }, 30);
+      }
+
+      function injectAgent(w, name) {
+        if (w.__bxcAgentInjected) return;
+        w.__bxcAgentInjected = true;
+        const s = w.document.createElement('script');
+        s.src = RELAY + '/agent.js?name=' + encodeURIComponent(name);
+        s.onload = () => log(`         agent injected: ${name}`);
+        s.onerror = () => log(`         agent failed to load: ${name}`);
+        (w.document.head || w.document.documentElement).appendChild(s);
+      }
+
+      /**
+       * Runs in the child's realm. Patches window.open and intercepts target="_blank"
+       * clicks, so a window the child opens still reaches this supervisor.
+       * In the real thing this would live inside the agent.
+       */
+      function injectChildHook(w) {
+        if (w.__bxcChildHook) return;
+        w.__bxcChildHook = true;
+        const code = `(function () {
+          function report(win, why) {
+            try { if (window.opener && window.opener.__bxcAdopt) window.opener.__bxcAdopt(win, why); } catch (e) {}
+          }
+          var nativeOpen = window.open;
+          window.open = function () {
+            var win = nativeOpen.apply(window, arguments);
+            if (win) report(win, 'window.open');
+            return win;
+          };
+          document.addEventListener('click', function (e) {
+            var a = e.target && e.target.closest && e.target.closest('a[target="_blank"]');
+            if (!a) return;
+            e.preventDefault();
+            var win = nativeOpen.call(window, a.href);
+            if (win) report(win, 'intercepted target=_blank');
+          }, true);
+        })();`;
+        const s = w.document.createElement('script');
+        s.textContent = code;
+        (w.document.head || w.document.documentElement).appendChild(s);
+      }
+
+      document.getElementById('open-b').onclick = () => {
+        const w = window.open('b.html', '_blank');
+        if (!w) return log('window.open was blocked');
+        log('opened B (plain window.open)');
+        supervise(w, 'B');
+      };
+
+      document.getElementById('open-b-noopener').onclick = () => {
+        const w = window.open('b.html', '_blank', 'noopener');
+        log('opened B with noopener. Returned:', String(w));
+        if (w) supervise(w, 'B-noopener');
+      };
+
+      document.getElementById('clear').onclick = () => {
+        logEl.textContent = '';
+      };
+
+      log('launcher ready. This window will not navigate.');
+    </script>
+  </body>
+</html>

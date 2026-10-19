@@ -1,0 +1,17 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "relay",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["packages/server/dist/index.js"],
+      "port": 7331
+    },
+    {
+      "name": "remote-page",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "8099", "-d", "examples/remote-page"],
+      "port": 8099
+    }
+  ]
+}

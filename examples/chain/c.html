@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>chain C — bxconsole</title>
+    <link rel="stylesheet" href="c.css" />
+    <style>
+      body { font-family: system-ui, sans-serif; padding: 24px; }
+      h1 { color: #ea4335; }
+      .row { display: flex; gap: 12px; align-items: center; margin: 16px 0; }
+      button { padding: 8px 14px; }
+      code { background: #eee; padding: 1px 4px; }
+    </style>
+    <!--
+      The agent is added only when this window's letter is in ?agent=, so one
+      set of pages covers every case: the agent landing in C and climbing to B
+      and A, landing in B, or being there from the start.
+    -->
+    <script>
+      (function () {
+        var want = new URLSearchParams(location.search).get('agent') || '';
+        if (want.indexOf('c') < 0) return;
+        var s = document.createElement('script');
+        s.src = '/agent.js?name=chain-c';
+        document.head.appendChild(s);
+      })();
+    </script>
+  </head>
+  <body>
+    <h1>C</h1>
+    <p>Window <strong>C</strong> of the A &rarr; B &rarr; C chain. Its own picture and stylesheet are
+      <code>c.png</code> and <code>c.css</code>, so the Screen mirror of this window should show a
+      red square and nothing from the other two.</p>
+    <div class="row">
+      <img src="c.png" width="48" height="48" alt="" />
+      <span class="badge-c"></span>
+      <span id="agent-state">agent: checking…</span>
+    </div>
+    <p><em>End of the chain.</em></p>
+    <div class="row">
+      <button id="log">log from C</button>
+      <button id="fetch">fetch from C</button>
+    </div>
+    <script>
+      var here = 'C';
+      document.getElementById('log').onclick = function () {
+        console.log('hello from ' + here, { window: here, at: new Date().toISOString() });
+      };
+      document.getElementById('fetch').onclick = function () {
+        fetch('c.json?from=' + here).catch(function () {});
+      };
+      setInterval(function () {
+        var el = document.getElementById('agent-state');
+        el.textContent = window.__bxconsole
+          ? 'agent: in this window (tab ' + window.__bxconsole.tabId + ' of session ' + window.__bxconsole.sessionId + ')'
+          : 'agent: not here';
+      }, 500);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,9 @@
+/* Loaded with <link>: the relay serves this and rewrites the url() below,
+   so the background comes from the debugged page's own browser too. */
+@import './assets-import.css';
+.css-bg {
+  width: 64px;
+  height: 64px;
+  background-image: url(box.png);
+  display: inline-block;
+}

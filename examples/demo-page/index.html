@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>bxconsole demo target</title>
+    <!-- The one line a target page needs. Served by the relay at /agent.js. -->
+    <!-- data-screen="record": stream the DOM from boot, so History can time-travel the whole session -->
+    <script src="/agent.js" data-name="demo-page" data-screen="record"></script>
+    <link rel="stylesheet" href="assets.css" />
+    <style>
+      body { font-family: system-ui, sans-serif; padding: 24px; max-width: 640px; }
+      button { margin: 4px; padding: 6px 12px; }
+      /* An inline sheet's url() is rewritten by the console, not the relay. */
+      .inline-bg { width: 64px; height: 64px; background-image: url('box.png'); display: inline-block; }
+    </style>
+  </head>
+  <body>
+    <h1>bxconsole demo target (A)</h1>
+    <p>Open the console UI in another tab or browser, pick this session, then press buttons here.</p>
+
+    <h3>Console</h3>
+    <button onclick="console.log('hello', { a: 1, b: [1, 2, 3], nested: { deep: true } })">console.log</button>
+    <button onclick="console.warn('careful', new Date())">console.warn</button>
+    <button onclick="console.error('boom', new Error('demo error'))">console.error</button>
+    <button onclick="console.group('group'); console.log('inside'); console.groupEnd()">console.group</button>
+    <button onclick="console.log(document.body, new Map([['k', 1]]), new Set([1, 2]))">DOM / Map / Set</button>
+    <button onclick="console.clear()">console.clear</button>
+
+    <h3>Errors</h3>
+    <button onclick="setTimeout(() => { throw new Error('uncaught demo') })">throw</button>
+    <button onclick="Promise.reject(new Error('rejected demo'))">unhandled rejection</button>
+    <button onclick="setTimeout(() => { throw new Error('outer failure', { cause: new TypeError('inner reason') }) })">throw with cause</button>
+    <button onclick="console.warn('warned with stack', { retries: 3 })">console.warn + stack</button>
+
+    <h3>Network</h3>
+    <button onclick="fetch('/demo/sample.json').then(r => r.json()).then(j => console.log('fetched', j))">fetch JSON</button>
+    <button onclick="fetch('/demo/missing').catch(() => {})">fetch 404</button>
+    <button onclick="fetch('/demo/sample.json', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ x: 1 }) })">fetch POST</button>
+    <button onclick="var x = new XMLHttpRequest(); x.open('GET', '/demo/sample.json'); x.send()">XHR</button>
+    <button onclick="var i = new Image(); i.src = '/demo/pixel.png?' + Date.now()">load image</button>
+    <button onclick="fetch('/demo/sample.json?q=hello%20world&amp;tags=a%2Cb&amp;n=1')">fetch with query</button>
+    <button onclick="var i = new Image(); i.src = '/demo/nope.png?' + Date.now()">load broken image</button>
+    <button onclick="fetch('https://example.com/', { mode: 'no-cors' })">no-cors fetch</button>
+    <button onclick="var ws = new WebSocket('ws://' + location.host + '/ws/console'); ws.onopen = function () { ws.send(JSON.stringify({ type: 'sessions.list' })); setTimeout(function () { ws.close(1000, 'demo done'); }, 1500); }; window.__demoWs = ws">open WebSocket</button>
+
+    <h3>Page</h3>
+    <button onclick="history.pushState({}, '', '/demo/#/route-' + Date.now())">pushState</button>
+
+    <h3>DOM (for the Screen tab)</h3>
+    <button onclick="var li = document.createElement('li'); li.textContent = 'item ' + (++window.__n || (window.__n = 1)); document.getElementById('list').appendChild(li)">append item</button>
+    <button onclick="var l = document.getElementById('list'); if (l.lastElementChild) l.removeChild(l.lastElementChild)">remove item</button>
+    <button onclick="var b = document.getElementById('box'); b.style.background = '#' + Math.floor(Math.random() * 0xffffff).toString(16).padStart(6, '0')">recolor box</button>
+    <button onclick="document.getElementById('counter').textContent = 'count: ' + Date.now() % 1000">change text</button>
+    <button onclick="document.body.classList.toggle('dark')">toggle dark</button>
+    <div style="display:flex; gap:16px; align-items:flex-start; margin-top:8px">
+      <div id="box" style="width:80px; height:80px; background:#4285f4; border-radius:8px"></div>
+      <div>
+        <div id="counter">count: 0</div>
+        <ul id="list" style="margin:4px 0"></ul>
+        <input placeholder="type here" style="display:block; margin-top:4px" />
+        <label><input type="checkbox" /> check me</label>
+      </div>
+    </div>
+    <style>body.dark { background: #202124; color: #e8eaed; }</style>
+
+    <h3>Subresources</h3>
+    <p>Each of these reaches the console through the relay, fetched by this page. They are the
+      check that an intranet site's pictures and styles still show up in the Screen mirror.</p>
+    <div class="assets-row">
+      <img id="asset-img" src="box.png" width="64" height="64" alt="plain src" />
+      <img id="asset-srcset" srcset="box.png 1x, box2.png 2x" src="box.png" width="64" height="64" alt="srcset" />
+      <span id="asset-inline" class="inline-bg" title="inline <style> url()"></span>
+      <span id="asset-link" class="css-bg imported" title="<link> stylesheet url() + @import"></span>
+      <span id="asset-attr" style="width:64px;height:64px;display:inline-block;background-image:url(box2.png)" title="style attribute url()"></span>
+    </div>
+    <button onclick="document.getElementById('asset-img').src = 'box2.png?t=' + Date.now()">swap image src</button>
+
+    <h3>History</h3>
+    <button onclick="window.__bxconsole.mark('checkout:start', { cart: 3, total: 42.5 })">mark()</button>
+    <button onclick="var t = Date.now(); while (Date.now() - t < 250) {} console.log('blocked 250ms')">long task</button>
+    <button onclick="var s = document.getElementById('shifter'); s.style.height = s.style.height === '60px' ? '0px' : '60px'">cause layout shift</button>
+    <div id="shifter" style="height:0; background:#fbbc04; transition:none"></div>
+    <form id="demo-form" onsubmit="event.preventDefault(); console.log('submitted')">
+      <input name="who" placeholder="your name" />
+      <select name="plan">
+        <option>free</option>
+        <option>pro</option>
+      </select>
+      <button type="submit">submit</button>
+    </form>
+
+    <script>
+      console.log('demo page booted', { sessionId: window.__bxconsole && window.__bxconsole.sessionId });
+    </script>
+  </body>
+</html>

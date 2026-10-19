@@ -1,0 +1,128 @@
+.datagrid {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  outline: none;
+  font-family: var(--font-mono);
+  font-size: var(--mono-font-size);
+}
+.datagrid table {
+  width: 100%;
+  min-width: 100%;
+  table-layout: fixed;
+  /* separate (not collapse): with collapsed borders Chrome leaves the sticky header's border area unpainted, so rows show through */
+  border-collapse: separate;
+  border-spacing: 0;
+}
+.datagrid th,
+.datagrid td {
+  padding: 0 6px;
+  height: 21px;
+  line-height: 21px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-right: 1px solid var(--sys-color-divider);
+}
+.datagrid th {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  font-family: var(--font-ui);
+  font-weight: normal;
+  text-align: left;
+  background: var(--sys-color-surface2);
+  background-clip: padding-box;
+  border-bottom: 1px solid var(--sys-color-divider);
+  color: var(--sys-color-on-surface-subtle);
+  user-select: none;
+}
+.datagrid th.sortable {
+  cursor: default;
+}
+.datagrid th.sortable:hover {
+  /* opaque: a translucent hover colour would let scrolled rows show through the sticky header */
+  background: color-mix(in srgb, var(--sys-color-surface2), var(--sys-color-on-surface) 8%);
+}
+.datagrid th.sorted {
+  color: var(--sys-color-on-surface);
+}
+.datagrid-sort-arrow {
+  font-size: 8px;
+  margin-left: 4px;
+}
+.datagrid-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  width: 7px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 2;
+}
+.datagrid th {
+  position: sticky;
+}
+.datagrid th > .datagrid-th-label {
+  pointer-events: none;
+}
+.datagrid td {
+  border-bottom: 1px solid var(--sys-color-divider);
+  color: var(--sys-color-on-surface);
+}
+.datagrid .align-right {
+  text-align: right;
+}
+.datagrid .align-center {
+  text-align: center;
+}
+.datagrid tbody.striped tr:nth-child(even) {
+  background: var(--sys-color-surface1);
+}
+.datagrid tbody tr:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+.datagrid tbody tr.selected,
+.datagrid tbody tr.selected:hover {
+  background: var(--sys-color-tonal-container);
+}
+.datagrid:focus tbody tr.selected {
+  background: var(--sys-color-primary-bright);
+  color: #fff;
+}
+.datagrid:focus tbody tr.selected td {
+  color: #fff;
+}
+.datagrid tbody tr.error td {
+  color: var(--sys-color-error);
+}
+.datagrid tbody tr.pending td {
+  color: var(--sys-color-token-subtle);
+}
+
+.datagrid.rows-big td {
+  height: 41px;
+  line-height: 18px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+  white-space: normal;
+}
+.datagrid .cell-sub {
+  display: block;
+  color: var(--sys-color-token-subtle);
+  font-size: 10px;
+  line-height: 14px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.datagrid .cell-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+}
+.datagrid .cell-name > span:last-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

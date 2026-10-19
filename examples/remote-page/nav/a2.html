@@ -1,0 +1,158 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>A2 — tab-strip supervisor</title>
+    <style>
+      html, body { height: 100%; margin: 0; font: 13px system-ui, sans-serif; }
+      body { display: flex; flex-direction: column; }
+      .strip { display: flex; align-items: center; gap: 2px; padding: 4px 6px; background: #dee1e6; border-bottom: 1px solid #c0c3c7; flex: 0 0 auto; }
+      .tab { display: flex; align-items: center; gap: 6px; max-width: 220px; padding: 5px 10px; background: #f1f3f4; border-radius: 8px 8px 0 0; cursor: pointer; white-space: nowrap; overflow: hidden; }
+      .tab.active { background: #fff; font-weight: 600; }
+      .tab .x { color: #777; }
+      .tab .dot { width: 7px; height: 7px; border-radius: 50%; background: #bbb; flex: 0 0 auto; }
+      .tab .dot.on { background: #188038; }
+      .newtab { padding: 4px 10px; cursor: pointer; }
+      .frames { flex: 1; position: relative; min-height: 0; }
+      iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; background: #fff; }
+      iframe[hidden] { display: none; }
+      #log { flex: 0 0 150px; overflow: auto; font-family: Menlo, monospace; font-size: 11px; white-space: pre-wrap; background: #f6f6f6; border-top: 1px solid #ccc; padding: 6px; }
+    </style>
+  </head>
+  <body>
+    <div class="strip" id="strip">
+      <span class="newtab" id="newtab" title="New tab">＋</span>
+    </div>
+    <div class="frames" id="frames"></div>
+    <div id="log"></div>
+
+    <script>
+      const RELAY = 'http://localhost:7332';
+      const START = 'b.html';
+      const strip = document.getElementById('strip');
+      const frames = document.getElementById('frames');
+      const newtabBtn = document.getElementById('newtab');
+      const logEl = document.getElementById('log');
+      const tabs = [];
+      let active = null;
+
+      function log(...p) {
+        logEl.textContent += `[${new Date().toLocaleTimeString()}] ${p.join(' ')}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      function openTab(url) {
+        const frame = document.createElement('iframe');
+        frame.src = url;
+        frames.appendChild(frame);
+
+        const el = document.createElement('div');
+        el.className = 'tab';
+        el.innerHTML = '<span class="dot"></span><span class="title">loading…</span><span class="x">✕</span>';
+        strip.insertBefore(el, newtabBtn);
+
+        const tab = { frame, el, lastHref: null, session: null };
+        tabs.push(tab);
+        el.onclick = (e) => {
+          if (e.target.classList.contains('x')) return closeTab(tab);
+          select(tab);
+        };
+        select(tab);
+        watch(tab);
+        log('opening a new tab:', url);
+        return tab;
+      }
+
+      function closeTab(tab) {
+        clearInterval(tab.timer);
+        tab.frame.remove();
+        tab.el.remove();
+        tabs.splice(tabs.indexOf(tab), 1);
+        if (active === tab) select(tabs[tabs.length - 1] || null);
+        log('tab closed');
+      }
+
+      function select(tab) {
+        active = tab;
+        for (const t of tabs) {
+          t.frame.hidden = t !== tab;
+          t.el.classList.toggle('active', t === tab);
+        }
+      }
+
+      /**
+       * Poll the frame for a document we have not injected into yet. The iframe's own
+       * `load` event is too late (it fires after everything ran), so this watches
+       * readyState and injects as soon as there is a <head> to append to.
+       */
+      function watch(tab) {
+        tab.timer = setInterval(() => {
+          let doc, href;
+          try {
+            doc = tab.frame.contentDocument;
+            href = tab.frame.contentWindow.location.href;
+          } catch (err) {
+            setTitle(tab, 'cross-origin');
+            return; // navigated off-origin: nothing we can do
+          }
+          if (!doc || !doc.head || href === tab.lastHref || href === 'about:blank') return;
+          tab.lastHref = href;
+
+          const w = tab.frame.contentWindow;
+          const gap = w.__earlyAt ? Date.now() - w.__earlyAt : null;
+          log(`document: ${href.split('/').pop()} · injection delay ${gap === null ? '?' : gap + 'ms'} · readyState=${doc.readyState}`);
+
+          hookChild(tab, w);
+          injectAgent(tab, w, href);
+          setTitle(tab, doc.title || href.split('/').pop());
+          // Titles arrive late on some documents.
+          setTimeout(() => setTitle(tab, doc.title || href.split('/').pop()), 500);
+        }, 20);
+      }
+
+      function setTitle(tab, t) {
+        tab.el.querySelector('.title').textContent = t;
+      }
+
+      function injectAgent(tab, w, href) {
+        const name = 'tab-' + (href.split('/').pop() || 'page').replace('.html', '');
+        const s = w.document.createElement('script');
+        s.src = RELAY + '/agent.js?name=' + encodeURIComponent(name);
+        s.onload = () => {
+          setTimeout(() => {
+            tab.session = w.__bxconsole && w.__bxconsole.sessionId;
+            tab.el.querySelector('.dot').classList.add('on');
+            log('  agent attached:', name, '-> session', tab.session);
+          }, 300);
+        };
+        s.onerror = () => log('  agent failed to load:', name);
+        (w.document.head || w.document.documentElement).appendChild(s);
+      }
+
+      /** Make the child's window.open and target="_blank" land in our tab strip. */
+      function hookChild(tab, w) {
+        if (w.__bxcHooked) return;
+        w.__bxcHooked = true;
+        w.open = function (url) {
+          log('intercepted the child\'s window.open:', url);
+          openTab(new URL(url, w.location.href).href);
+          return null;
+        };
+        w.document.addEventListener(
+          'click',
+          (e) => {
+            const a = e.target && e.target.closest && e.target.closest('a[target="_blank"]');
+            if (!a) return;
+            e.preventDefault();
+            log('intercepted the child\'s target=_blank:', a.getAttribute('href'));
+            openTab(a.href);
+          },
+          true,
+        );
+      }
+
+      newtabBtn.onclick = () => openTab(START);
+      openTab(START);
+    </script>
+  </body>
+</html>

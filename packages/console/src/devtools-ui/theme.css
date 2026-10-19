@@ -1,0 +1,155 @@
+/*
+ * Chrome DevTools look-alike tokens. Names follow devtools-frontend's
+ * --sys-color-* convention so styles can be ported from it as panels grow.
+ * Values approximate the default light and dark DevTools themes.
+ */
+:root {
+  --sys-color-cdt-base-container: #ffffff;
+  --sys-color-surface: #ffffff;
+  --sys-color-surface1: #f8f9fa;
+  --sys-color-surface2: #f1f3f4;
+  --sys-color-surface3: #e8eaed;
+  --sys-color-on-surface: #1f1f1f;
+  --sys-color-on-surface-subtle: #474747;
+  --sys-color-token-subtle: #5f6368;
+  --sys-color-divider: #d9d9d9;
+  --sys-color-neutral-outline: #c7c7c7;
+  --sys-color-primary: #0b57d0;
+  --sys-color-primary-bright: #1a73e8;
+  --sys-color-tonal-container: #d3e3fd;
+  --sys-color-state-hover-on-subtle: rgba(31, 31, 31, 0.06);
+  --sys-color-state-disabled: rgba(31, 31, 31, 0.38);
+  --sys-color-green: #188038;
+  --sys-color-error: #d93025;
+  --sys-color-error-container: #fce8e6;
+  --sys-color-error-bright: #c5221f;
+  --sys-color-on-error-container: #a50e0e;
+  --sys-color-orange: #e8710a;
+  --sys-color-yellow-container: #fef7e0;
+  --sys-color-on-yellow-container: #7f5600;
+  --sys-color-yellow-outline: #f9ab00;
+  --sys-color-token-property-special: #c80000;
+  --sys-color-token-attribute-value: #1a1aa6;
+  --sys-color-token-string: #c41a16;
+  --sys-color-token-number: #1c00cf;
+  --sys-color-token-keyword: #aa0d91;
+  --sys-color-token-tag: #881280;
+  --sys-color-token-attribute: #994500;
+  --sys-color-token-property: #881391;
+  --sys-color-token-meta: #7f7f7f;
+  --sys-color-token-variable: #1f1f1f;
+
+  --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono: Menlo, Monaco, Consolas, 'Courier New', monospace;
+  --ui-font-size: 12px;
+  --mono-font-size: 11px;
+  --tabbar-height: 27px;
+  --toolbar-height: 26px;
+
+  color-scheme: light dark;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --sys-color-cdt-base-container: #282828;
+    --sys-color-surface: #1f1f1f;
+    --sys-color-surface1: #282828;
+    --sys-color-surface2: #2d2d2d;
+    --sys-color-surface3: #333333;
+    --sys-color-on-surface: #e3e3e3;
+    --sys-color-on-surface-subtle: #c7c7c7;
+    --sys-color-token-subtle: #9aa0a6;
+    --sys-color-divider: #494c50;
+    --sys-color-neutral-outline: #5e5e5e;
+    --sys-color-primary: #a8c7fa;
+    --sys-color-primary-bright: #8ab4f8;
+    --sys-color-tonal-container: #004a77;
+    --sys-color-state-hover-on-subtle: rgba(255, 255, 255, 0.1);
+    --sys-color-state-disabled: rgba(227, 227, 227, 0.38);
+    --sys-color-green: #6dd58c;
+    --sys-color-error: #f28b82;
+    --sys-color-error-container: #4a1b1a;
+    --sys-color-error-bright: #ff8080;
+    --sys-color-on-error-container: #f2b8b5;
+    --sys-color-orange: #fcad70;
+    --sys-color-yellow-container: #332b00;
+    --sys-color-on-yellow-container: #fdd663;
+    --sys-color-yellow-outline: #f9ab00;
+    --sys-color-token-property-special: #5db0d7;
+    --sys-color-token-attribute-value: #f29766;
+    --sys-color-token-string: #f28b54;
+    --sys-color-token-number: #9980ff;
+    --sys-color-token-keyword: #9a7fd5;
+    --sys-color-token-tag: #5db0d7;
+    --sys-color-token-attribute: #9bbbdc;
+    --sys-color-token-property: #e3a7f6;
+    --sys-color-token-meta: #9aa0a6;
+    --sys-color-token-variable: #e3e3e3;
+    }
+}
+
+:root[data-theme='dark'] {
+    --sys-color-cdt-base-container: #282828;
+    --sys-color-surface: #1f1f1f;
+    --sys-color-surface1: #282828;
+    --sys-color-surface2: #2d2d2d;
+    --sys-color-surface3: #333333;
+    --sys-color-on-surface: #e3e3e3;
+    --sys-color-on-surface-subtle: #c7c7c7;
+    --sys-color-token-subtle: #9aa0a6;
+    --sys-color-divider: #494c50;
+    --sys-color-neutral-outline: #5e5e5e;
+    --sys-color-primary: #a8c7fa;
+    --sys-color-primary-bright: #8ab4f8;
+    --sys-color-tonal-container: #004a77;
+    --sys-color-state-hover-on-subtle: rgba(255, 255, 255, 0.1);
+    --sys-color-state-disabled: rgba(227, 227, 227, 0.38);
+    --sys-color-green: #6dd58c;
+    --sys-color-error: #f28b82;
+    --sys-color-error-container: #4a1b1a;
+    --sys-color-error-bright: #ff8080;
+    --sys-color-on-error-container: #f2b8b5;
+    --sys-color-orange: #fcad70;
+    --sys-color-yellow-container: #332b00;
+    --sys-color-on-yellow-container: #fdd663;
+    --sys-color-yellow-outline: #f9ab00;
+    --sys-color-token-property-special: #5db0d7;
+    --sys-color-token-attribute-value: #f29766;
+    --sys-color-token-string: #f28b54;
+    --sys-color-token-number: #9980ff;
+    --sys-color-token-keyword: #9a7fd5;
+    --sys-color-token-tag: #5db0d7;
+    --sys-color-token-attribute: #9bbbdc;
+    --sys-color-token-property: #e3a7f6;
+    --sys-color-token-meta: #9aa0a6;
+    --sys-color-token-variable: #e3e3e3;
+  }
+
+* {
+  box-sizing: border-box;
+}
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  font-family: var(--font-ui);
+  font-size: var(--ui-font-size);
+  background: var(--sys-color-cdt-base-container);
+  color: var(--sys-color-on-surface);
+  overflow: hidden;
+}
+.mono {
+  font-family: var(--font-mono);
+  font-size: var(--mono-font-size);
+}
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--sys-color-neutral-outline);
+  border-radius: 5px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}

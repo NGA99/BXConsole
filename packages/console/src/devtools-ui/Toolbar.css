@@ -1,0 +1,87 @@
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  height: var(--toolbar-height);
+  padding: 0 4px;
+  background: var(--sys-color-cdt-base-container);
+  border-bottom: 1px solid var(--sys-color-divider);
+  flex-shrink: 0;
+  /* Docked narrow, the controls are wider than the column. Scrolling keeps
+     the ones past the edge reachable; clipping them loses the filter box.
+     The scrollbar is hidden, so a toolbar that fits looks no different. */
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.toolbar::-webkit-scrollbar {
+  display: none;
+}
+/* A wrapping toolbar has somewhere to put the overflow already. */
+.toolbar.wrap {
+  overflow-x: visible;
+}
+.toolbar.wrap {
+  flex-wrap: wrap;
+  height: auto;
+  min-height: var(--toolbar-height);
+  row-gap: 2px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+.toolbar-button {
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  outline: none;
+  box-shadow: none;
+  background: transparent;
+  color: var(--sys-color-on-surface-subtle);
+  font: inherit;
+  height: 22px;
+  min-width: 22px;
+  padding: 0 5px;
+  border-radius: 50%;
+  cursor: default;
+}
+.toolbar-button:hover {
+  background: color-mix(in srgb, var(--sys-color-on-surface) 8%, transparent);
+}
+.toolbar-button:active {
+  background: color-mix(in srgb, var(--sys-color-on-surface) 14%, transparent);
+}
+.toolbar-button:focus {
+  outline: none;
+}
+.toolbar-button:focus-visible {
+  outline: 1px solid var(--sys-color-primary-bright);
+  outline-offset: -1px;
+}
+.toolbar-button svg {
+  display: block;
+}
+.toolbar-icon {
+  color: var(--sys-color-on-surface-subtle);
+}
+.toolbar-icon.active {
+  color: var(--sys-color-primary-bright);
+}
+.toolbar-divider {
+  width: 1px;
+  height: 16px;
+  background: var(--sys-color-divider);
+  margin: 0 4px;
+}
+.toolbar-input {
+  font: inherit;
+  height: 20px;
+  padding: 0 6px;
+  border: 1px solid var(--sys-color-neutral-outline);
+  border-radius: 4px;
+  background: var(--sys-color-surface);
+  color: var(--sys-color-on-surface);
+  width: 200px;
+}
+.toolbar-input:focus {
+  outline: none;
+  border-color: var(--sys-color-primary-bright);
+}

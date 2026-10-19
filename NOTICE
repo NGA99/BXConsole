@@ -1,0 +1,11 @@
+BXConsole
+Copyright 2026 ENKI
+
+This product includes software developed at ENKI (https://enki.co.kr).
+
+Licensed under the Apache License, Version 2.0. See the LICENSE file.
+
+BXConsole is offensive security tooling. It is intended for use against
+systems the operator is authorized to test. Recordings it produces contain
+whatever the debugged page contained, including credentials typed into it,
+and should be handled as engagement data.

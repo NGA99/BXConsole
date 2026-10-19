@@ -1,0 +1,456 @@
+.screen-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 6px;
+  color: var(--sys-color-on-surface-subtle);
+  /* the replay clock reads out seconds: equal-width digits keep what follows still */
+  font-variant-numeric: tabular-nums;
+}
+.screen-status .dot {
+  background: var(--sys-color-state-disabled);
+}
+.screen-status.live .dot {
+  background: var(--sys-color-error);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sys-color-error) 30%, transparent);
+}
+.screen-meta {
+  padding: 0 6px;
+  color: var(--sys-color-token-subtle);
+  white-space: nowrap;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/*
+ * The right-hand readouts (hovered element, batch counts) change width with
+ * every mutation batch. Left loose in a wrapping toolbar they cross the wrap
+ * boundary back and forth, the toolbar grows a line, and `.screen-host` —
+ * which is `flex: 1` — resizes the mirror each time. So they live in one box
+ * that takes the leftover width and clips: the toolbar keeps its height while
+ * streaming, and the controls still wrap when the pane is genuinely narrow.
+ */
+.screen-toolbar-tail {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  overflow: hidden;
+  white-space: nowrap;
+}
+/* the hover label gives way first; the counters keep their place */
+.screen-meta.hover {
+  flex: 0 1 auto;
+}
+/*
+ * The two readouts on the replay bar. Their width is reserved inline, from a
+ * figure that holds still while playing; tabular numerals keep the digits
+ * from shuffling underneath that.
+ */
+.screen-meta.counts,
+.screen-meta.clock {
+  flex: 0 0 auto;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  overflow: visible;
+}
+.screen-kbd {
+  flex: 0 0 auto;
+}
+.screen-host {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  overflow: auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  background: var(--sys-color-surface2);
+}
+.screen-host.mode-fill {
+  overflow: hidden;
+}
+.screen-frame-box {
+  position: relative;
+  flex-shrink: 0;
+  background: #fff;
+  overflow: hidden;
+}
+.screen-host.mode-fit .screen-frame-box,
+.screen-host.mode-actual .screen-frame-box {
+  box-shadow: 0 0 0 1px var(--sys-color-divider);
+}
+.screen-modes {
+  display: inline-flex;
+  gap: 1px;
+  padding: 0 4px;
+}
+.screen-mode {
+  appearance: none;
+  border: 1px solid var(--sys-color-neutral-outline);
+  background: transparent;
+  color: var(--sys-color-on-surface-subtle);
+  font: inherit;
+  font-size: 11px;
+  height: 18px;
+  padding: 0 7px;
+  cursor: default;
+}
+.screen-mode:first-child {
+  border-radius: 9px 0 0 9px;
+}
+.screen-mode:last-child {
+  border-radius: 0 9px 9px 0;
+}
+.screen-mode:not(:first-child) {
+  margin-left: -1px;
+}
+.screen-mode.selected {
+  background: var(--sys-color-tonal-container);
+  color: var(--sys-color-on-surface);
+  border-color: var(--sys-color-primary-bright);
+  position: relative;
+}
+.screen-frame {
+  border: 0;
+  transform-origin: top left;
+  background: #fff;
+  display: block;
+}
+.screen-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sys-color-token-subtle);
+  background: var(--sys-color-surface1);
+  font-family: var(--font-ui);
+}
+
+/* input capture layer above the iframe */
+.screen-input-layer {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  cursor: default;
+}
+.screen-input-layer.interactive {
+  cursor: crosshair;
+}
+.screen-cursor {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
+  will-change: transform;
+}
+.screen-cursor.pressed svg path {
+  fill: var(--sys-color-primary-bright);
+}
+.screen-ripple {
+  position: absolute;
+  width: 24px;
+  height: 24px;
+  margin: -12px 0 0 -12px;
+  border: 2px solid var(--sys-color-primary-bright);
+  border-radius: 50%;
+  pointer-events: none;
+  animation: screen-ripple 0.5s ease-out forwards;
+}
+@keyframes screen-ripple {
+  from {
+    transform: scale(0.3);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1.4);
+    opacity: 0;
+  }
+}
+
+.screen-input-layer {
+  outline: none;
+}
+.screen-input-layer.focused {
+  box-shadow: inset 0 0 0 2px var(--sys-color-primary-bright);
+}
+.screen-kbd {
+  padding: 0 8px;
+  color: var(--sys-color-primary);
+  white-space: nowrap;
+}
+
+.screen-highlight {
+  position: absolute;
+  pointer-events: none;
+  background: rgba(111, 168, 220, 0.45);
+  outline: 1px solid rgba(26, 115, 232, 0.9);
+}
+.screen-highlight-label {
+  position: absolute;
+  left: 0;
+  top: -20px;
+  padding: 1px 6px;
+  background: #1f1f1f;
+  color: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+  border-radius: 3px;
+}
+.screen-highlight-label .dim {
+  color: #9aa0a6;
+}
+
+.screen-input-layer.inspecting {
+  cursor: crosshair;
+  box-shadow: inset 0 0 0 2px var(--sys-color-primary-bright);
+}
+
+/* replay (DOM time travel) ------------------------------------------------ */
+.screen-status.replay .dot {
+  background: var(--sys-color-primary-bright);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sys-color-primary-bright) 30%, transparent);
+}
+.screen-replaybar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 0 0 auto;
+  height: 26px;
+  padding: 0 6px;
+  overflow: hidden;
+  border-bottom: 1px solid var(--sys-color-divider);
+  background: var(--sys-color-cdt-base-container);
+  font: 11px var(--font-ui);
+}
+.screen-replay-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--sys-color-on-surface);
+  line-height: 0;
+  height: 22px;
+  min-width: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 4px;
+  cursor: default;
+  border-radius: 4px;
+}
+.screen-replay-button:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+.screen-replay-button:focus-visible {
+  outline: 1px solid var(--sys-color-primary-bright);
+  outline-offset: -1px;
+}
+/* play/pause is the one you reach for: give it the accent and a touch more room */
+.screen-replay-button.play {
+  color: var(--sys-color-primary);
+  min-width: 28px;
+}
+.screen-speeds {
+  display: inline-flex;
+  gap: 1px;
+}
+.screen-scrubber {
+  /*
+   * Takes the free space, and keeps it. It used to give way eagerly
+   * (shrink 8) whenever a note appeared — which during playback is every
+   * prefetch, as "loading…" blinks in and out, so the slider breathed in and
+   * out with it. Every neighbour now holds a reserved width instead, and this
+   * one only shrinks when the bar itself does.
+   */
+  flex: 1 1 140px;
+  min-width: 140px;
+  accent-color: var(--sys-color-primary-bright);
+  height: 14px;
+}
+.screen-replay-live {
+  appearance: none;
+  height: 19px;
+  padding: 0 8px;
+  border: 1px solid var(--sys-color-primary-bright);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--sys-color-primary);
+  font: inherit;
+  cursor: default;
+  white-space: nowrap;
+}
+.screen-replay-live:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+/* a past frame is not clickable: say so with the cursor */
+.screen-input-layer.replaying {
+  cursor: default;
+}
+
+/*
+ * Notes about playback ("skipped 4.2 s" after a jump, "loading…", "end of
+ * recording"). One slot of a fixed width, so a note coming and going never
+ * moves the scrubber.
+ */
+.screen-replay-note {
+  /* A slot, not a label: held open whether or not there is a note in it. */
+  flex: 0 0 15ch;
+  width: 15ch;
+  min-width: 0;
+  padding: 0 6px;
+  color: var(--sys-color-token-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Narrower, still reserved: a slot that sizes to its text is the thing that
+   made the scrubber twitch, and a narrow bar needs the stillness more. */
+.screen-replay-note.compact,
+.screen-replaybar.compact .screen-replay-note {
+  flex: 0 0 11ch;
+  width: 11ch;
+  padding: 0 4px;
+}
+/* Below this there is no room for a note at all, and the readouts matter more. */
+.screen-replaybar.tight .screen-replay-note {
+  display: none;
+}
+.screen-replay-note.skip {
+  color: var(--sys-color-primary);
+  animation: screen-skip-in 0.15s ease-out;
+}
+@keyframes screen-skip-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/*
+ * The readouts beside the scrubber change every frame. Equal-width digits and
+ * a reserved width keep the bar from shuffling while it plays.
+ */
+.screen-replaybar .screen-meta {
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+/*
+ * Reserved for the longest these get ("1:03:28 / 1:05:57", "1203 / 4071
+ * changes"), padding included — `width` is border-box here, so the padding has
+ * to be added or the text is clipped at its longest, which is exactly when you
+ * want to read it.
+ */
+.screen-replaybar .screen-meta.mono:not(.counts) {
+  flex: 0 1 auto;
+  width: calc(15ch + 12px);
+  min-width: 0;
+}
+.screen-replaybar .screen-meta.counts {
+  flex: 0 1 auto;
+  width: calc(20ch + 12px);
+  min-width: 0;
+}
+/* no room for the word: the numbers alone, with the full text in the tooltip */
+.screen-replaybar.tight .screen-meta.counts {
+  width: calc(12ch + 12px);
+}
+
+/*
+ * The run ended: the last frame stays, greyed, so it is not read as live.
+ * Centred and sized to be read at a glance — tucked into a corner it was
+ * missed, and the picture underneath kept being taken for a live page.
+ */
+.screen-ended {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+  background: color-mix(in srgb, var(--sys-color-cdt-base-container) 66%, transparent);
+  backdrop-filter: grayscale(1);
+}
+.screen-ended-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: min(360px, 80%);
+  padding: 20px 28px;
+  border-radius: 10px;
+  text-align: center;
+  background: var(--sys-color-surface1);
+  border: 1px solid var(--sys-color-divider);
+  box-shadow: 0 2px 14px rgb(0 0 0 / 18%);
+}
+.screen-ended-card strong {
+  font-size: 17px;
+  font-weight: 500;
+  color: var(--sys-color-on-surface);
+}
+.screen-ended-card p {
+  margin: 0;
+  color: var(--sys-color-on-surface-subtle);
+  line-height: 1.45;
+}
+.screen-ended-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+.screen-ended-replay {
+  pointer-events: auto;
+  padding: 6px 18px;
+  border: 1px solid var(--sys-color-primary-bright);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--sys-color-primary);
+  font: inherit;
+  font-size: var(--ui-font-size);
+  cursor: pointer;
+}
+.screen-ended-replay:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+.screen-ended-replay:focus-visible {
+  outline: 2px solid var(--sys-color-primary-bright);
+  outline-offset: 2px;
+}
+/* Quieter than Replay: this one only takes the notice away. */
+.screen-ended-ok {
+  pointer-events: auto;
+  padding: 6px 18px;
+  border: 1px solid var(--sys-color-divider);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--sys-color-on-surface-subtle);
+  font: inherit;
+  font-size: var(--ui-font-size);
+  cursor: pointer;
+}
+.screen-ended-ok:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+  color: var(--sys-color-on-surface);
+}
+.screen-ended-ok:focus-visible {
+  outline: 2px solid var(--sys-color-primary-bright);
+  outline-offset: 2px;
+}
+
+.screen-overlay-hint {
+  display: inline-block;
+  margin-top: 6px;
+  color: var(--sys-color-token-subtle);
+  font-size: var(--ui-font-size);
+}
+.screen-overlay-hint a {
+  color: var(--sys-color-primary);
+}

@@ -1,0 +1,124 @@
+.sources {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.sources-nav {
+  /* Was a fixed 230px that would not shrink, which in a narrow dock left the
+     editor 37 pixels wide — a file tree beside a column too thin to read a
+     line of code in. It gives ground now, down to a width that still shows a
+     filename. */
+  flex: 0 1 230px;
+  min-width: 110px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--sys-color-divider);
+  min-height: 0;
+}
+.sources-tree {
+  flex: 1;
+  overflow: auto;
+  padding: 4px 0;
+}
+.sources-node {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  height: 20px;
+  padding-right: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+  cursor: default;
+  color: var(--sys-color-on-surface);
+}
+.sources-node:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+.sources-node.selected {
+  background: var(--sys-color-tonal-container);
+}
+.sources-node.root,
+.sources-node.host,
+.sources-node.folder,
+.sources-node.inline {
+  font-family: var(--font-ui);
+}
+.sources-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.sources-arrow {
+  display: inline-block;
+  width: 10px;
+  flex-shrink: 0;
+  color: var(--sys-color-token-subtle);
+  font-size: 9px;
+}
+.sources-arrow::before {
+  content: '▶';
+}
+.sources-arrow.open::before {
+  content: '▼';
+}
+.sources-arrow.hidden {
+  visibility: hidden;
+}
+.sources-icon {
+  flex-shrink: 0;
+  color: var(--sys-color-on-surface-subtle);
+}
+.sources-kind {
+  flex-shrink: 0;
+  width: 24px;
+  font-size: 9px;
+  font-weight: bold;
+  text-align: center;
+  border-radius: 2px;
+  color: #fff;
+  background: var(--sys-color-token-subtle);
+}
+.sources-kind.script { background: #e3a008; }
+.sources-kind.stylesheet { background: #7c4dff; }
+.sources-kind.document { background: #5f6368; }
+.sources-editor {
+  flex: 1;
+  /* A real minimum, not zero. With zero the editor simply took whatever the
+     tree left over — 37 pixels in a narrow dock — because the two widths
+     added up to less than the container and nothing had to give way. Saying
+     what a readable column of code costs is what makes the tree shrink. */
+  min-width: 150px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.sources-path {
+  flex: 1 1 120px;
+  min-width: 80px;
+  color: var(--sys-color-on-surface-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  direction: rtl; /* keep the file name visible when the URL is long */
+  text-align: left;
+}
+.sources-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+.sources-find {
+  width: 140px;
+}
+.sources-truncated {
+  padding: 2px 8px;
+  border-top: 1px solid var(--sys-color-divider);
+}
+.source-link {
+  color: var(--sys-color-token-subtle);
+  text-decoration: none;
+}
+.source-link:hover {
+  text-decoration: underline;
+}

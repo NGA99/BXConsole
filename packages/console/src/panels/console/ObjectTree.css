@@ -1,0 +1,120 @@
+.otree-node {
+  display: inline-block;
+  vertical-align: top;
+  max-width: 100%;
+}
+.otree-line {
+  display: inline-flex;
+  align-items: baseline;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.otree-line.expandable {
+  cursor: default;
+}
+.otree-arrow {
+  display: inline-block;
+  width: 10px;
+  margin-right: 2px;
+  flex-shrink: 0;
+  color: var(--sys-color-token-subtle);
+  font-size: 9px;
+}
+.otree-arrow::before {
+  content: '▶';
+}
+.otree-arrow.open::before {
+  content: '▼';
+}
+.otree-arrow.hidden {
+  visibility: hidden;
+}
+.otree-children {
+  padding-left: 14px;
+}
+.otree-child {
+  display: block;
+  line-height: 1.5;
+}
+.otree-child.non-enumerable .tok-property {
+  opacity: 0.6;
+}
+.otree-leaf {
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.otree-note {
+  color: var(--sys-color-token-subtle);
+  font-style: italic;
+  padding-left: 12px;
+}
+.otree-stack {
+  margin: 0 0 2px 0;
+  white-space: pre-wrap;
+  color: var(--sys-color-on-surface-subtle);
+}
+
+/* syntax tokens */
+.tok {
+  color: var(--sys-color-on-surface);
+}
+.tok-string {
+  color: var(--sys-color-token-string);
+}
+.tok-number {
+  color: var(--sys-color-token-number);
+}
+.tok-meta {
+  color: var(--sys-color-token-meta);
+}
+.tok-property {
+  color: var(--sys-color-token-property);
+}
+.tok-punct {
+  color: var(--sys-color-on-surface);
+}
+.tok-regexp {
+  color: var(--sys-color-token-string);
+}
+.tok-function {
+  color: var(--sys-color-on-surface);
+}
+.tok-italic {
+  font-style: italic;
+  color: var(--sys-color-token-meta);
+}
+.tok-error {
+  color: var(--sys-color-error);
+}
+.tok-tag {
+  color: var(--sys-color-token-tag);
+}
+.tok-attribute {
+  color: var(--sys-color-token-attribute);
+}
+.tok-attribute-value {
+  color: var(--sys-color-token-attribute-value);
+}
+
+.otree-getter,
+.otree-more {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--sys-color-primary);
+  font: inherit;
+  padding: 0 2px;
+  cursor: default;
+}
+.otree-getter:hover,
+.otree-more:hover {
+  text-decoration: underline;
+}
+.otree-more {
+  margin-left: 6px;
+  color: var(--sys-color-token-subtle);
+}
+.otree-line.is-node:hover {
+  background: color-mix(in srgb, var(--sys-color-primary-bright) 14%, transparent);
+  border-radius: 2px;
+}

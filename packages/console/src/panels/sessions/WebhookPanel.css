@@ -1,0 +1,250 @@
+/* Inbox on the left, what arrived on the right. */
+.diag {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  font-size: var(--ui-font-size);
+  color: var(--sys-color-on-surface);
+}
+
+.diag-inbox {
+  flex: 0 0 240px;
+  min-width: 0;
+  overflow: auto;
+  border-right: 1px solid var(--sys-color-divider);
+  background: var(--sys-color-surface1);
+  display: flex;
+  flex-direction: column;
+}
+.diag-inbox-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 9px 10px 6px;
+  font-weight: 500;
+}
+.diag-inbox-actions {
+  display: flex;
+  gap: 8px;
+  font-weight: 400;
+}
+.diag-search {
+  margin: 0 10px 8px;
+}
+.diag-empty {
+  padding: 10px;
+  color: var(--sys-color-token-subtle);
+}
+
+/* One row per request, newest first. */
+.diag-req {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: 7px 10px;
+  border: none;
+  border-top: 1px solid var(--sys-color-divider);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+.diag-req:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+.diag-req.selected {
+  background: var(--sys-color-tonal-container);
+}
+.diag-req-top {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+}
+.diag-method {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--sys-color-primary-bright);
+}
+.diag-req-probe {
+  font-family: var(--font-mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.diag-req-sub {
+  color: var(--sys-color-token-subtle);
+  font-size: 11px;
+  margin-top: 1px;
+}
+
+.diag-detail {
+  flex: 1;
+  min-width: 0;
+  overflow: auto;
+  padding: 12px 16px 24px;
+}
+.diag-h {
+  margin: 18px 0 6px;
+  font-size: var(--ui-font-size);
+  font-weight: 500;
+}
+.diag-h:first-child {
+  margin-top: 0;
+}
+.diag-h-row {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+}
+/* The aside beside a heading drops to its own line rather than crushing it. */
+.diag-h-row .diag-note {
+  flex: 1 1 320px;
+  margin: 0;
+}
+.diag-h-row .diag-h {
+  margin-bottom: 6px;
+}
+.diag-note,
+.diag-warn {
+  margin: 4px 0 8px;
+  max-width: 760px;
+  color: var(--sys-color-on-surface-subtle);
+  line-height: 1.5;
+}
+.diag-warn {
+  color: var(--sys-color-on-yellow-container);
+  background: color-mix(in srgb, var(--sys-color-yellow-outline) 16%, transparent);
+  padding: 7px 10px;
+  border-radius: 4px;
+}
+.diag-token {
+  font-family: var(--font-mono);
+  color: var(--sys-color-token-subtle);
+}
+
+/* The verdict is the first thing read, so it is the first thing drawn. */
+.diag-verdict {
+  max-width: 760px;
+  padding: 9px 12px;
+  border-left: 3px solid var(--sys-color-divider);
+  background: var(--sys-color-surface1);
+}
+.diag-verdict p {
+  margin: 4px 0 0;
+  color: var(--sys-color-on-surface-subtle);
+  line-height: 1.5;
+}
+.diag-verdict.tone-blocked {
+  border-left-color: var(--sys-color-error);
+}
+.diag-verdict.tone-partial {
+  border-left-color: var(--sys-color-yellow-outline);
+}
+.diag-verdict.tone-ok {
+  border-left-color: var(--sys-color-primary-bright);
+}
+
+.diag-snippet {
+  max-width: 760px;
+  margin: 0;
+  padding: 10px 12px;
+  border: 1px solid var(--sys-color-divider);
+  border-radius: 5px;
+  background: var(--sys-color-surface1);
+  white-space: pre-wrap;
+  word-break: break-all;
+  user-select: all;
+}
+
+.diag-matrix {
+  max-width: 760px;
+  width: 100%;
+  border-collapse: collapse;
+}
+/*
+ * Fixed layout with every column but the first given a width, so the name
+ * takes what is left. Sizing one column at 100% instead squeezed the others
+ * to nothing and their text drew over each other.
+ */
+.diag-matrix {
+  table-layout: fixed;
+}
+.diag-matrix col.c-state {
+  width: 72px;
+}
+.diag-matrix col.c-at {
+  width: 78px;
+}
+.diag-matrix col.c-directive {
+  width: 104px;
+}
+.diag-matrix col.c-actions {
+  width: 88px;
+}
+.diag-matrix th,
+.diag-matrix td {
+  text-align: left;
+  padding: 5px 8px;
+  border-bottom: 1px solid var(--sys-color-divider);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.diag-row-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: flex-end;
+}
+.diag-matrix th {
+  color: var(--sys-color-token-subtle);
+  font-weight: 400;
+}
+.diag-matrix tr.pending td {
+  color: var(--sys-color-token-subtle);
+}
+.diag-matrix tr.arrived td:nth-child(2) {
+  color: var(--sys-color-primary-bright);
+}
+
+.diag-facts {
+  max-width: 760px;
+  margin: 0;
+}
+.diag-facts-row {
+  display: grid;
+  grid-template-columns: minmax(0, 190px) minmax(0, 1fr);
+  gap: 10px;
+  padding: 3px 0;
+  border-top: 1px solid var(--sys-color-divider);
+}
+.diag-facts-row:first-child {
+  border-top: none;
+}
+.diag-facts dt {
+  color: var(--sys-color-token-subtle);
+}
+.diag-facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+/* Said, not left blank: the gap is deliberate. */
+.diag-withheld {
+  color: var(--sys-color-token-subtle);
+  font-style: italic;
+}
+
+/* What the page's own response says about being framed. */
+.diag-framing {
+  max-width: 760px;
+  margin: 0 0 14px;
+  padding: 9px 12px;
+  border-left: 3px solid var(--sys-color-divider);
+  background: var(--sys-color-surface1);
+}
+.diag-framing p {
+  margin: 4px 0 0;
+  color: var(--sys-color-on-surface-subtle);
+  line-height: 1.5;
+}

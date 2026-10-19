@@ -1,0 +1,2 @@
+/* a's own stylesheet, so each window's mirror has a resource only it loads. */
+.badge-a { background-image: url(a.png); width: 48px; height: 48px; display: inline-block; }

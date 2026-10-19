@@ -1,0 +1,23 @@
+{
+  "name": "bxconsole",
+  "private": true,
+  "version": "0.1.0",
+  "license": "Apache-2.0",
+  "type": "module",
+  "workspaces": [
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,console,agent -c blue,green,yellow \"npm run dev -w @bxconsole/server\" \"npm run dev -w @bxconsole/console\" \"npm run dev -w @bxconsole/agent\"",
+    "build": "npm run build -w @bxconsole/agent && npm run build -w @bxconsole/console && npm run build -w @bxconsole/server",
+    "fixtures": "node examples/stress/make-fixtures.mjs",
+    "csp-cases": "node examples/csp/serve.mjs",
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "test": "npm test --workspaces --if-present",
+    "start": "node packages/server/dist/index.js"
+  },
+  "devDependencies": {
+    "concurrently": "^9.1.2",
+    "typescript": "^5.7.3"
+  }
+}

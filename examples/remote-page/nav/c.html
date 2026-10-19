@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>C — the third page</title>
+    <script>
+      // Runs before anything else in this document. Used to measure how much of the
+      // document's start a supervisor misses before it can inject.
+      window.__earlyAt = Date.now();
+      console.log('C: EARLY inline script', { at: window.__earlyAt });
+      fetch('./data.json?from=C-early').catch(() => {});
+    </script>
+    <style>
+      body { font: 13px system-ui, sans-serif; margin: 16px; }
+      button, a { font: inherit; }
+      .row { margin: 8px 0; }
+      code { background: #eee; padding: 1px 4px; }
+    </style>
+  </head>
+  <body>
+    <h2>C — the third page</h2>
+    <p>Agent attached: <b id="agent">checking…</b></p>
+
+    <div class="row"><a href="b.html">Back to B (same tab)</a></div>
+    <div class="row"><a href="b.html" target="_blank">B in a new tab (target=_blank)</a></div>
+    <div class="row"><button id="open-c">Open B with window.open</button></div>
+    <div class="row"><button id="log">console.log</button> <button id="net">fetch</button></div>
+
+    <script>
+      console.log('C: LATE script at end of body');
+      fetch('./data.json?from=C-late').catch(() => {});
+
+      document.getElementById('open-c').onclick = () => window.open('b.html');
+      document.getElementById('log').onclick = () => console.log('logged from C', { t: Date.now() });
+      document.getElementById('net').onclick = () => fetch('./data.json?from=C-click').catch(() => {});
+
+      // Report whether the agent is present, and keep checking for a moment since a
+      // supervisor may inject slightly after this script runs.
+      // The agent's handle is named by the run's `mark` (default __wv), so look
+      // for it rather than naming it.
+      const findAgent = () =>
+        Object.keys(window).map((k) => window[k]).find((v) => v && typeof v === 'object' && v.sessionId && v.tabId);
+      let tries = 0;
+      const el = document.getElementById('agent');
+      const check = setInterval(() => {
+        const handle = findAgent();
+        if (handle) {
+          el.textContent = 'attached · session-' + handle.sessionId;
+          clearInterval(check);
+        } else if (++tries > 40) {
+          el.textContent = 'none';
+          clearInterval(check);
+        }
+      }, 50);
+    </script>
+  </body>
+</html>

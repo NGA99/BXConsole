@@ -1,0 +1,652 @@
+.toolbar-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 6px;
+  white-space: nowrap;
+  color: var(--sys-color-on-surface-subtle);
+}
+.toolbar-check input {
+  margin: 0;
+}
+.network-chips {
+  display: flex;
+  gap: 4px;
+  overflow-x: auto;
+  padding: 0 2px;
+  scrollbar-width: none;
+}
+.network-chips::-webkit-scrollbar {
+  display: none;
+}
+.network-chip {
+  appearance: none;
+  border: 1px solid var(--sys-color-neutral-outline);
+  background: var(--sys-color-surface);
+  color: var(--sys-color-on-surface);
+  font: inherit;
+  height: 20px;
+  padding: 0 8px;
+  border-radius: 6px;
+  cursor: default;
+  white-space: nowrap;
+}
+.network-chip:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+.network-chip.selected {
+  background: var(--sys-color-tonal-container);
+  border-color: var(--sys-color-tonal-container);
+  color: var(--sys-color-primary);
+}
+
+/* Chrome-style pill filter box */
+.network-filter {
+  flex: 1;
+  min-width: 120px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 11px;
+  background: var(--sys-color-surface2);
+  border: 1px solid transparent;
+  color: var(--sys-color-token-subtle);
+}
+.network-filter:focus-within {
+  border-color: var(--sys-color-primary-bright);
+  background: var(--sys-color-surface);
+}
+.network-filter .toolbar-icon {
+  flex-shrink: 0;
+  width: 13px;
+  height: 13px;
+  color: var(--sys-color-token-subtle);
+}
+.network-filter-input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--sys-color-on-surface);
+  font: inherit;
+}
+
+/* settings rows, two columns like Chrome */
+.network-settings-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  row-gap: 4px;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--sys-color-divider);
+  flex-shrink: 0;
+}
+.network-settings-grid .toolbar-check {
+  padding: 0;
+}
+.toolbar-check.disabled {
+  color: var(--sys-color-state-disabled);
+}
+.toolbar-check input[type='checkbox'] {
+  accent-color: var(--sys-color-primary-bright);
+}
+.network-empty {
+  padding: 24px;
+  color: var(--sys-color-token-subtle);
+  text-align: center;
+}
+.network-name {
+  color: var(--sys-color-on-surface);
+}
+
+/* waterfall */
+.waterfall-cell {
+  position: relative;
+  height: 20px;
+  width: 100%;
+}
+.waterfall-bar {
+  position: absolute;
+  top: 6px;
+  height: 8px;
+  min-width: 1px;
+  border-radius: 1px;
+}
+.waterfall-bar.queueing { background: var(--sys-color-token-subtle); opacity: 0.5; }
+.waterfall-bar.dns { background: #1c9d8f; }
+.waterfall-bar.connect { background: #e8710a; }
+.waterfall-bar.ssl { background: #a142f4; }
+.waterfall-bar.request { background: #8ab4f8; }
+.waterfall-bar.waiting { background: #34a853; }
+.waterfall-bar.download { background: #4285f4; }
+.waterfall-bar.pending { background: var(--sys-color-neutral-outline); opacity: 0.6; }
+.waterfall-header {
+  position: relative;
+  height: 20px;
+  width: 100%;
+  overflow: hidden;
+}
+.waterfall-tick {
+  position: absolute;
+  top: 0;
+  transform: translateX(-50%);
+  font-size: 10px;
+  color: var(--sys-color-token-subtle);
+}
+.waterfall-tick::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 14px;
+  height: 6px;
+  border-left: 1px solid var(--sys-color-divider);
+}
+
+/* status bar */
+.network-status {
+  display: flex;
+  gap: 16px;
+  white-space: nowrap;
+  overflow: hidden;
+  height: 22px;
+  align-items: center;
+  padding: 0 10px;
+  border-top: 1px solid var(--sys-color-divider);
+  background: var(--sys-color-surface2);
+  color: var(--sys-color-on-surface-subtle);
+  font-size: 11px;
+  flex-shrink: 0;
+}
+
+/* detail drawer */
+.request-detail {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--sys-color-cdt-base-container);
+}
+.request-detail-close {
+  align-self: center;
+  margin-right: 4px;
+}
+.request-detail-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.detail-sections {
+  padding: 4px 0;
+}
+.detail-section {
+  border-bottom: 1px solid var(--sys-color-divider);
+}
+.detail-section-title {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 8px;
+  font-weight: 500;
+  background: var(--sys-color-surface1);
+  cursor: default;
+  user-select: none;
+}
+.detail-section-action {
+  margin-left: auto;
+  font-weight: normal;
+}
+.detail-link {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--sys-color-primary);
+  font: inherit;
+  cursor: pointer;
+  text-decoration: underline;
+}
+.detail-section-body {
+  padding: 4px 8px 6px 20px;
+}
+.detail-kv {
+  display: flex;
+  gap: 8px;
+  line-height: 20px;
+  word-break: break-all;
+}
+.detail-kv-name {
+  flex-shrink: 0;
+  font-weight: 500;
+  color: var(--sys-color-on-surface);
+}
+.detail-kv-value {
+  color: var(--sys-color-on-surface-subtle);
+  font-family: var(--font-mono);
+  font-size: var(--mono-font-size);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.status-dot.ok { background: var(--sys-color-green); }
+.status-dot.redirect { background: var(--sys-color-yellow-outline); }
+.status-dot.error { background: var(--sys-color-error); }
+.detail-note {
+  color: var(--sys-color-token-subtle);
+  font-style: italic;
+  margin: 4px 0;
+}
+.detail-pre {
+  margin: 0;
+  padding: 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  font-family: var(--font-mono);
+  font-size: var(--mono-font-size);
+}
+.detail-empty {
+  padding: 24px;
+  text-align: center;
+  color: var(--sys-color-token-subtle);
+}
+.detail-image {
+  padding: 16px;
+  text-align: center;
+  background:
+    linear-gradient(45deg, var(--sys-color-surface2) 25%, transparent 25%, transparent 75%, var(--sys-color-surface2) 75%),
+    linear-gradient(45deg, var(--sys-color-surface2) 25%, transparent 25%, transparent 75%, var(--sys-color-surface2) 75%);
+  background-size: 16px 16px;
+  background-position: 0 0, 8px 8px;
+}
+.detail-image img {
+  max-width: 100%;
+  image-rendering: pixelated;
+}
+.detail-frame {
+  width: 100%;
+  height: 100%;
+  border: 0;
+  background: #fff;
+}
+
+/* timing tab */
+.timing-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.timing-table td {
+  padding: 3px 4px;
+  line-height: 16px;
+}
+.timing-label {
+  width: 180px;
+  color: var(--sys-color-on-surface-subtle);
+}
+.timing-bar-cell {
+  position: relative;
+  height: 16px;
+}
+.timing-bar {
+  position: absolute;
+  top: 4px;
+  height: 10px;
+  min-width: 2px;
+  border-radius: 1px;
+}
+.timing-value {
+  width: 70px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: var(--mono-font-size);
+}
+
+/* ---- toolbar extras ---- */
+.record-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--sys-color-token-subtle);
+}
+.record-dot.on {
+  background: var(--sys-color-error);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--sys-color-error) 30%, transparent);
+}
+.network-blocked {
+  color: var(--sys-color-error);
+}
+.network-more {
+  position: relative;
+  white-space: nowrap;
+}
+.network-more-popup {
+  position: absolute;
+  top: 100%;
+  right: 0; /* the button sits at the right edge of the toolbar: open leftwards */
+  z-index: 10;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  white-space: nowrap;
+  background: var(--sys-color-surface);
+  border: 1px solid var(--sys-color-divider);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+.network-more-popup label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* ---- type icons ---- */
+.type-icon {
+  flex-shrink: 0;
+  color: var(--sys-color-token-subtle);
+}
+.type-icon.js { color: #e3a008; }
+.type-icon.css { color: #7c4dff; }
+.type-icon.img { color: #1e8e3e; }
+.type-icon.fetch { color: #1a73e8; }
+.type-icon.ws { color: #12b5cb; }
+.type-icon.doc { color: #5f6368; }
+.type-icon.error { color: var(--sys-color-error); }
+.error-text,
+.error-detail {
+  color: var(--sys-color-error);
+}
+.error-detail {
+  opacity: 0.8;
+}
+.initiator-link {
+  color: var(--sys-color-primary);
+  text-decoration: none;
+}
+.initiator-link:hover {
+  text-decoration: underline;
+}
+
+/* ---- overview ---- */
+.overview {
+  position: relative;
+  height: 64px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--sys-color-divider);
+  background: var(--sys-color-surface1);
+  overflow: hidden;
+  user-select: none;
+  cursor: col-resize;
+}
+.overview-tick {
+  position: absolute;
+  top: 2px;
+  transform: translateX(calc(-100% - 4px));
+  font-size: 10px;
+  color: var(--sys-color-token-subtle);
+}
+.overview-tick::before {
+  content: '';
+  position: absolute;
+  left: calc(100% + 4px);
+  top: 0;
+  height: 64px;
+  border-left: 1px solid var(--sys-color-divider);
+}
+.overview-bar {
+  position: absolute;
+  height: 4px;
+  min-width: 2px;
+  border-radius: 1px;
+  background: #4285f4;
+  opacity: 0.8;
+}
+.overview-bar.failed {
+  background: var(--sys-color-error);
+}
+.overview-marker {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  border-left: 1px solid;
+}
+.overview-marker.dcl {
+  border-color: #1a73e8;
+}
+.overview-marker.load {
+  border-color: #d93025;
+}
+.overview-selection {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: color-mix(in srgb, var(--sys-color-primary-bright) 18%, transparent);
+  border-left: 1px solid var(--sys-color-primary-bright);
+  border-right: 1px solid var(--sys-color-primary-bright);
+}
+.overview-clear {
+  position: absolute;
+  right: 6px;
+  top: 4px;
+  font: inherit;
+  font-size: 10px;
+  border: 1px solid var(--sys-color-divider);
+  background: var(--sys-color-surface);
+  color: var(--sys-color-on-surface-subtle);
+  border-radius: 3px;
+  cursor: default;
+}
+
+/* ---- search ---- */
+.network-search {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  max-height: 40%;
+}
+.network-search-results {
+  overflow: auto;
+  border-bottom: 1px solid var(--sys-color-divider);
+}
+.network-search-hit {
+  display: grid;
+  grid-template-columns: 160px 110px 1fr;
+  gap: 8px;
+  padding: 2px 8px;
+  line-height: 18px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.network-search-hit:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+.network-search-hit.muted {
+  color: var(--sys-color-token-subtle);
+}
+.network-search-name {
+  color: var(--sys-color-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.network-search-where {
+  color: var(--sys-color-token-subtle);
+}
+.network-search-snippet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ---- status bar markers ---- */
+.status-dcl {
+  color: #1a73e8;
+}
+.status-load {
+  color: #d93025;
+}
+
+/* ---- detail extras ---- */
+.detail-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 26px;
+  padding: 0 8px;
+  border-bottom: 1px solid var(--sys-color-divider);
+  background: var(--sys-color-surface1);
+}
+.detail-format {
+  font: inherit;
+  font-family: var(--font-mono);
+  font-weight: bold;
+  border: 1px solid var(--sys-color-neutral-outline);
+  background: transparent;
+  color: var(--sys-color-on-surface-subtle);
+  border-radius: 3px;
+  padding: 0 6px;
+  height: 18px;
+  cursor: default;
+}
+.detail-format.on {
+  background: var(--sys-color-tonal-container);
+  color: var(--sys-color-on-surface);
+}
+
+/* ---- WebSocket messages ---- */
+.ws-messages {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+.ws-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.ws-table th {
+  position: sticky;
+  top: 0;
+  text-align: left;
+  font-weight: normal;
+  padding: 2px 6px;
+  background: var(--sys-color-surface2);
+  border-bottom: 1px solid var(--sys-color-divider);
+  color: var(--sys-color-on-surface-subtle);
+}
+.ws-table td {
+  padding: 1px 6px;
+  border-bottom: 1px solid var(--sys-color-divider);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 320px;
+}
+.ws-table .num {
+  text-align: right;
+  width: 70px;
+}
+.ws-table tr.sent td {
+  background: color-mix(in srgb, #1e8e3e 10%, transparent);
+}
+.ws-table tr.received td {
+  background: color-mix(in srgb, #1a73e8 6%, transparent);
+}
+.ws-table tr.selected td {
+  background: var(--sys-color-tonal-container);
+}
+.ws-arrow {
+  color: var(--sys-color-token-subtle);
+}
+.ws-detail {
+  border-top: 1px solid var(--sys-color-divider);
+  max-height: 40%;
+  overflow: auto;
+}
+
+.detail-code {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.status-unknown {
+  color: var(--sys-color-token-subtle);
+}
+
+.network-root {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/*
+ * What the search could not look in. Deliberately part of the results, not a
+ * tooltip: a reader who misses this reads "No matches" as an answer.
+ */
+.network-search-note {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+  flex-wrap: wrap;
+  padding: 4px 8px;
+  border-bottom: 1px solid var(--sys-color-divider);
+  color: var(--sys-color-token-subtle);
+}
+
+/*
+ * The Body column: can this response still be read, and from where.
+ *
+ * One rule builds every pill, from the badge's own text colour. The first
+ * attempt gave each state its own background token and two of them —
+ * green-bright, yellow-bright — did not exist, so `color-mix` dropped the
+ * whole declaration and those two badges silently lost their pill while the
+ * others kept theirs. Deriving the fill from `currentColor` means a badge
+ * cannot end up shaped differently from its neighbours.
+ */
+.body-state {
+  display: inline-block;
+  max-width: 100%;
+  padding: 0 7px;
+  border-radius: 10px;
+  font-size: 11px;
+  line-height: 16px;
+  color: var(--body-state-color);
+  background: color-mix(in srgb, currentColor 14%, transparent);
+  /* Docked narrow the column is squeezed with the rest of the grid, and a
+     hard clip turned "Captured" into "Capt". The full word is on the cell's
+     title either way. */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.body-state.captured {
+  --body-state-color: var(--sys-color-primary);
+}
+.body-state.stored {
+  --body-state-color: var(--sys-color-green);
+}
+.body-state.live-only {
+  --body-state-color: var(--sys-color-orange);
+}
+.body-state.lost {
+  --body-state-color: var(--sys-color-error);
+}
+.body-state.none {
+  --body-state-color: var(--sys-color-token-subtle);
+}
+
+/* The one state worth marking the whole row for: a body that could have been
+   read and no longer can. */
+.datagrid tbody tr.body-lost {
+  background: color-mix(in srgb, var(--sys-color-error-bright) 7%, transparent);
+}
+.datagrid tbody tr.body-lost:hover {
+  background: color-mix(in srgb, var(--sys-color-error-bright) 12%, transparent);
+}

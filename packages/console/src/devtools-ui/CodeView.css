@@ -1,0 +1,82 @@
+.codeview {
+  display: block;
+  overflow: auto;
+  flex: 1;
+  min-height: 0;
+  font-family: var(--font-mono);
+  font-size: var(--mono-font-size);
+  line-height: 18px;
+}
+/* One row per line, so the number sits beside its text even when it wraps. */
+.codeview-lines {
+  display: block;
+  min-width: 100%;
+  padding: 4px 0;
+  tab-size: 2;
+}
+.codeview-line {
+  display: flex;
+  align-items: flex-start;
+  width: max-content;
+  min-width: 100%;
+  /* an empty line still takes a row's height */
+  min-height: 18px;
+}
+.codeview-ln {
+  position: sticky;
+  left: 0;
+  z-index: 1;
+  flex: 0 0 auto;
+  min-width: 36px;
+  padding: 0 8px 0 4px;
+  text-align: right;
+  color: var(--sys-color-token-subtle);
+  background: var(--sys-color-surface1);
+  border-right: 1px solid var(--sys-color-divider);
+  user-select: none;
+}
+.codeview-text {
+  flex: 1;
+  padding: 0 8px;
+  white-space: pre;
+  min-width: 0;
+}
+.codeview-line.active {
+  background: color-mix(in srgb, var(--sys-color-yellow-outline) 28%, transparent);
+}
+.codeview-line.active .codeview-ln {
+  color: var(--sys-color-on-surface);
+  background: color-mix(in srgb, var(--sys-color-yellow-outline) 28%, transparent);
+}
+.codeview-line.match .codeview-ln {
+  box-shadow: inset 3px 0 0 var(--sys-color-primary-bright);
+}
+.codeview.wrap .codeview-line {
+  width: auto;
+}
+.codeview.wrap .codeview-text {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+/* highlight.js classes -> DevTools-ish tokens */
+.hljs-tag { color: var(--sys-color-token-tag); }
+.hljs-name { color: var(--sys-color-token-tag); }
+.hljs-attr { color: var(--sys-color-token-attribute); }
+.hljs-string,
+.hljs-regexp { color: var(--sys-color-token-string); }
+.hljs-number,
+.hljs-literal { color: var(--sys-color-token-number); }
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in { color: var(--sys-color-token-keyword); }
+.hljs-comment,
+.hljs-meta { color: var(--sys-color-token-meta); font-style: italic; }
+.hljs-attribute,
+.hljs-property,
+.hljs-selector-class,
+.hljs-selector-id,
+.hljs-selector-attr,
+.hljs-selector-pseudo { color: var(--sys-color-token-property); }
+.hljs-title,
+.hljs-title.function_ { color: var(--sys-color-on-surface); }
+.hljs-punctuation { color: var(--sys-color-on-surface-subtle); }

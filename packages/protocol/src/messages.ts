@@ -1,0 +1,357 @@
+import type { ObjectId, PropertyPreview, SerializedValue } from './values';
+import type { SessionHello, SessionMeta } from './session';
+import type { ScreenEvent, ScreenInput, ScreenSegment } from './screen';
+import type { ElementStyles } from './dom';
+import type { AssetData, KeptFile, SourceEntry, SourceText } from './sources';
+import type { ProbeArrival } from './ping';
+
+export const PROTOCOL_VERSION = 1 as const;
+
+export type Role = 'agent' | 'console';
+
+export const WS_PATH = {
+  agent: '/ws/agent',
+  console: '/ws/console',
+} as const;
+
+// ---------------------------------------------------------------------------
+// Console-tab related
+// ---------------------------------------------------------------------------
+
+export type ConsoleLevel =
+  | 'log'
+  | 'info'
+  | 'warn'
+  | 'error'
+  | 'debug'
+  | 'trace'
+  | 'dir'
+  | 'dirxml'
+  | 'table'
+  | 'group'
+  | 'groupCollapsed'
+  | 'groupEnd'
+  | 'assert'
+  | 'count'
+  | 'countReset'
+  | 'time'
+  | 'timeEnd'
+  | 'timeLog';
+
+// ---------------------------------------------------------------------------
+// Network-tab related
+// ---------------------------------------------------------------------------
+
+export type NetworkKind = 'fetch' | 'xhr' | 'beacon' | 'websocket' | 'resource';
+
+export interface NetworkTiming {
+  startTime: number;
+  endTime?: number;
+}
+
+/**
+ * Connection phases from PerformanceResourceTiming, in performance-timeline
+ * milliseconds. All zero for cross-origin resources without Timing-Allow-Origin.
+ */
+export interface ResourceTimingPhases {
+  fetchStart: number;
+  domainLookupStart: number;
+  domainLookupEnd: number;
+  connectStart: number;
+  secureConnectionStart: number;
+  connectEnd: number;
+  requestStart: number;
+  responseStart: number;
+  responseEnd: number;
+}
+
+/** A PerformanceResourceTiming entry, trimmed. Headers/bodies are not visible here. */
+export interface ResourceEntry {
+  name: string;
+  initiatorType: string;
+  /** performance-timeline ms */
+  startTime: number;
+  duration: number;
+  /** epoch ms, comparable with `ts` on fetch/xhr events */
+  startedAt: number;
+  transferSize: number;
+  encodedBodySize: number;
+  decodedBodySize: number;
+  responseStatus?: number;
+  timing?: ResourceTimingPhases;
+}
+
+// ---------------------------------------------------------------------------
+// Agent -> Server
+// ---------------------------------------------------------------------------
+
+/** Events the agent emits on its own. These are what gets persisted and replayed. */
+export type AgentEvent =
+  | {
+      type: 'console.message';
+      ts: number;
+      level: ConsoleLevel;
+      args: SerializedValue[];
+      stack?: string;
+      /** nesting level produced by console.group */
+      groupDepth: number;
+    }
+  | { type: 'console.clear'; ts: number }
+  | {
+      type: 'error.uncaught';
+      ts: number;
+      message: string;
+      stack?: string;
+      source?: string;
+      line?: number;
+      col?: number;
+      /** the Error's `cause`, serialised */
+      cause?: SerializedValue;
+    }
+  | { type: 'error.unhandledrejection'; ts: number; reason: SerializedValue }
+  | {
+      type: 'network.request';
+      ts: number;
+      requestId: string;
+      kind: NetworkKind;
+      method: string;
+      url: string;
+      headers: Record<string, string>;
+      body?: string | null;
+      bodyTruncated?: boolean;
+      /**
+       * The body, held in the blob store by content hash, when it was too big
+       * to keep inline. Read it from `/body/{sessionId}/{bodyRef}`. Only ever
+       * on a recorded event: a live one carries the body itself.
+       */
+      bodyRef?: string;
+      /** decoded size of the body, kept when `bodyRef` took the body itself away */
+      bodyBytes?: number;
+      initiator?: string;
+      /** call stack at fetch()/XHR send()/new WebSocket(), agent frames stripped */
+      stack?: string;
+    }
+  | {
+      type: 'network.response';
+      ts: number;
+      requestId: string;
+      status: number;
+      statusText: string;
+      headers: Record<string, string>;
+      mimeType?: string;
+      body?: string | null;
+      bodyTruncated?: boolean;
+      bodyEncoding?: 'text' | 'base64';
+      /** as on network.request: the body lives in the blob store under this hash */
+      bodyRef?: string;
+      /** decoded size of the body, kept when `bodyRef` took the body itself away */
+      bodyBytes?: number;
+      encodedLength?: number;
+      /** ms from request start until response headers arrived (TTFB) */
+      waitMs?: number;
+      /** fetch Response.type: 'opaque' means a no-cors request whose status/body scripts cannot see */
+      responseType?: 'basic' | 'cors' | 'default' | 'error' | 'opaque' | 'opaqueredirect';
+    }
+  | { type: 'network.finished'; ts: number; requestId: string; durationMs: number }
+  | { type: 'network.failed'; ts: number; requestId: string; error: string }
+  | { type: 'network.resource'; ts: number; entry: ResourceEntry }
+  /** an <img>/<script>/<link>/<video> element fired `error`: the resource at `url` genuinely failed to load */
+  | { type: 'network.resourceFailed'; ts: number; url: string; tag: string }
+  /** one WebSocket frame; `data` is text or a short description for binary */
+  | {
+      type: 'network.wsFrame';
+      ts: number;
+      requestId: string;
+      direction: 'sent' | 'received';
+      opcode: 'text' | 'binary';
+      data: string;
+      length: number;
+      truncated?: boolean;
+    }
+  | { type: 'network.wsClosed'; ts: number; requestId: string; code: number; reason: string; wasClean: boolean }
+  /** document milestones as epoch ms, for the overview markers and status bar */
+  | { type: 'page.timing'; ts: number; navigationStart: number; domContentLoaded?: number; load?: number }
+  | { type: 'page.title'; ts: number; title: string }
+  // ---- History tab: what the user did, light performance observations, app annotations
+  | { type: 'interaction.click'; ts: number; selector: string; tag: string; text?: string; x: number; y: number; button: number }
+  | { type: 'interaction.input'; ts: number; selector: string; tag: string; inputType?: string; value: string }
+  /** non-printable keys only (Enter, Escape, Tab, arrows…); typed text is covered by interaction.input */
+  | { type: 'interaction.key'; ts: number; key: string; selector: string }
+  | { type: 'interaction.scroll'; ts: number; x: number; y: number }
+  | { type: 'interaction.submit'; ts: number; selector: string; action?: string; method?: string }
+  | { type: 'perf.longtask'; ts: number; durationMs: number }
+  | { type: 'perf.layoutShift'; ts: number; value: number; hadRecentInput: boolean }
+  | { type: 'perf.paint'; ts: number; name: string; startTime: number }
+  /** DOM mutation counts per ~500ms bucket, for the History DOM-density lane (not the DOM itself) */
+  | { type: 'dom.activity'; ts: number; mutations: number; added: number; removed: number }
+  /** window.__bxconsole.mark(name, data) */
+  | { type: 'mark.custom'; ts: number; name: string; data?: SerializedValue }
+  /** `load`: a fresh document (clears the panels unless preserve log). `history`: pushState/popstate. */
+  | { type: 'page.navigated'; ts: number; url: string; title: string; kind: 'load' | 'history' }
+  | { type: 'page.visibility'; ts: number; hidden: boolean };
+
+/** Replies to something the console asked for. Not persisted. */
+export type AgentReply =
+  | {
+      type: 'eval.result';
+      commandId: string;
+      result?: SerializedValue;
+      exception?: SerializedValue;
+      durationMs: number;
+    }
+  | {
+      type: 'object.properties';
+      requestId: string;
+      objectId: ObjectId;
+      /** null when the object was garbage collected or the id is unknown */
+      properties: PropertyPreview[] | null;
+    }
+  /** property names of `expression` (global scope when empty), for prompt autocomplete */
+  | { type: 'completions.result'; requestId: string; names: string[] }
+  /** a getter evaluated on demand */
+  | { type: 'object.property'; requestId: string; objectId: ObjectId; name: string; value: SerializedValue }
+  /** "Store object as global variable": the name it got (temp1, temp2…) */
+  | { type: 'object.stored'; requestId: string; name: string | null }
+  /** JSON.stringify of the live object, null when not serialisable */
+  | { type: 'object.json'; requestId: string; text: string | null }
+  /** screen node id of a logged DOM node, for highlighting it in the mirror; null when unknown or not streaming */
+  | { type: 'node.located'; requestId: string; screenId: number | null }
+  /** Styles / Computed for an element of the screen tree; null when the node is unknown */
+  | { type: 'dom.styles'; requestId: string; id: number; styles: ElementStyles | null }
+  | { type: 'sources.list'; requestId: string; sources: SourceEntry[] }
+  | { type: 'sources.text'; requestId: string; source: SourceText }
+  | { type: 'asset.data'; requestId: string; asset: AssetData };
+
+export type AgentToServer =
+  | { type: 'session.hello'; v: typeof PROTOCOL_VERSION; hello: SessionHello }
+  | AgentEvent
+  | AgentReply
+  | ScreenEvent;
+
+// ---------------------------------------------------------------------------
+// Server -> Agent
+// ---------------------------------------------------------------------------
+
+export type ServerToAgent =
+  /** `tabId` is the window id the relay settled on, which may differ from the one asked for */
+  | { type: 'session.ack'; sessionId: string; tabId?: string }
+  /** `context.selectedNodeId` is the Elements selection (a screen node id): exposed to the expression as `$0` */
+  | { type: 'eval.request'; commandId: string; expression: string; context?: { selectedNodeId?: number } }
+  | { type: 'object.getProperties'; requestId: string; objectId: ObjectId }
+  | { type: 'completions.request'; requestId: string; expression: string }
+  | { type: 'object.invokeGetter'; requestId: string; objectId: ObjectId; name: string }
+  | { type: 'object.storeGlobal'; requestId: string; objectId: ObjectId }
+  | { type: 'object.toJSON'; requestId: string; objectId: ObjectId }
+  | { type: 'node.locate'; requestId: string; objectId: ObjectId }
+  | { type: 'node.scrollIntoView'; objectId: ObjectId }
+  /** Elements tab edits; `id` is a screen node id. value null removes the attribute */
+  | { type: 'dom.setAttribute'; id: number; name: string; value: string | null }
+  | { type: 'dom.setText'; id: number; text: string }
+  | { type: 'dom.removeNode'; id: number }
+  | { type: 'dom.scrollIntoView'; id: number }
+  | { type: 'dom.getStyles'; requestId: string; id: number }
+  /** "Store as global variable" for an Elements node; replies object.stored */
+  | { type: 'dom.storeGlobal'; requestId: string; id: number }
+  | { type: 'sources.list'; requestId: string }
+  | { type: 'sources.get'; requestId: string; url: string }
+  /**
+   * Fetch one subresource from inside the page, for the relay's asset cache.
+   * The console must never load a debugged page's images, styles or fonts
+   * itself: the page may be on a network the console cannot reach, behind a
+   * login the console has no cookies for, or — worst — on a `localhost` that
+   * means a different machine entirely.
+   */
+  | { type: 'asset.get'; requestId: string; url: string }
+  /** fetch/XHR behaviour the console can toggle: blocked URL patterns (substring match) and cache bypass */
+  | { type: 'network.configure'; blocked?: string[]; disableCache?: boolean }
+  /** (re)start screen streaming: always answered with a fresh screen.snapshot */
+  | { type: 'screen.start' }
+  /** snapshot the current document for the recording's keyframe, without disturbing the stream */
+  | { type: 'screen.keyframe' }
+  | { type: 'screen.stop' }
+  | { type: 'screen.input'; input: ScreenInput };
+
+// ---------------------------------------------------------------------------
+// Console -> Server
+// ---------------------------------------------------------------------------
+
+/**
+ * Commands carry an optional `tabId`: which window of the session to run in.
+ * Omitted means the session's most recently active window.
+ */
+export type ConsoleToServer =
+  /** watch for connectivity probes carrying this token (see ping.ts) */
+  | { type: 'ping.subscribe'; token: string }
+  | { type: 'ping.unsubscribe'; token: string }
+  | { type: 'sessions.list' }
+  | { type: 'session.subscribe'; sessionId: string; replay: boolean }
+  | { type: 'session.unsubscribe'; sessionId: string }
+  /** move to the trash: keeps the recording, hides it from the main list */
+  | { type: 'session.trash'; sessionId: string }
+  /** take it back out of the trash */
+  | { type: 'session.restore'; sessionId: string }
+  /** delete sessions/session-{id}/ from disk and forget it, for good */
+  | { type: 'session.forget'; sessionId: string }
+  | { type: 'eval.request'; sessionId: string; tabId?: string; commandId: string; expression: string; context?: { selectedNodeId?: number } }
+  | { type: 'object.getProperties'; sessionId: string; tabId?: string; requestId: string; objectId: ObjectId }
+  | { type: 'completions.request'; sessionId: string; tabId?: string; requestId: string; expression: string }
+  | { type: 'object.invokeGetter'; sessionId: string; tabId?: string; requestId: string; objectId: ObjectId; name: string }
+  | { type: 'object.storeGlobal'; sessionId: string; tabId?: string; requestId: string; objectId: ObjectId }
+  | { type: 'object.toJSON'; sessionId: string; tabId?: string; requestId: string; objectId: ObjectId }
+  | { type: 'node.locate'; sessionId: string; tabId?: string; requestId: string; objectId: ObjectId }
+  | { type: 'node.scrollIntoView'; sessionId: string; tabId?: string; objectId: ObjectId }
+  | { type: 'dom.setAttribute'; sessionId: string; tabId?: string; id: number; name: string; value: string | null }
+  | { type: 'dom.setText'; sessionId: string; tabId?: string; id: number; text: string }
+  | { type: 'dom.removeNode'; sessionId: string; tabId?: string; id: number }
+  | { type: 'dom.scrollIntoView'; sessionId: string; tabId?: string; id: number }
+  | { type: 'dom.getStyles'; sessionId: string; tabId?: string; requestId: string; id: number }
+  | { type: 'dom.storeGlobal'; sessionId: string; tabId?: string; requestId: string; id: number }
+  | { type: 'sources.list'; sessionId: string; tabId?: string; requestId: string }
+  | { type: 'sources.get'; sessionId: string; tabId?: string; requestId: string; url: string }
+  /**
+   * Everything the relay is holding for this session, asked once on subscribe.
+   * The agent never sees this: it is the relay's own bookkeeping.
+   */
+  | { type: 'files.list'; sessionId: string }
+  | { type: 'network.configure'; sessionId: string; tabId?: string; blocked?: string[]; disableCache?: boolean }
+  | { type: 'screen.subscribe'; sessionId: string; tabId?: string }
+  | { type: 'screen.unsubscribe'; sessionId: string; tabId?: string }
+  | { type: 'screen.refresh'; sessionId: string; tabId?: string }
+  | { type: 'screen.input'; sessionId: string; tabId?: string; input: ScreenInput }
+  /**
+   * DOM time travel: the recorded screen around `ts`. `seek` answers with the
+   * keyframe at or before `ts` plus the ops after it; `continue` answers with
+   * the ops after `ts` alone, so playback keeps running without a reload.
+   */
+  | { type: 'screen.replay'; sessionId: string; requestId: string; ts: number; mode: 'seek' | 'continue' };
+
+// ---------------------------------------------------------------------------
+// Server -> Console
+// ---------------------------------------------------------------------------
+
+export interface SequencedEvent {
+  seq: number;
+  event: AgentEvent;
+  /** which window in the session produced it; absent in recordings made before tabs */
+  tabId?: string;
+}
+
+export type ServerToConsole =
+  /** a connectivity probe reached the relay, and which one */
+  | { type: 'ping.arrived'; arrival: ProbeArrival }
+  /** `retentionDays`: after how long an untouched recording is deleted; 0 or absent means never */
+  | { type: 'sessions.snapshot'; sessions: SessionMeta[]; retentionDays?: number }
+  | { type: 'session.updated'; session: SessionMeta }
+  | { type: 'session.removed'; sessionId: string }
+  | { type: 'session.event'; sessionId: string; seq: number; event: AgentEvent; tabId?: string }
+  | { type: 'session.reply'; sessionId: string; reply: AgentReply; tabId?: string }
+  | { type: 'session.history'; sessionId: string; events: SequencedEvent[]; done: boolean }
+  /** screen.* events; only to consoles that sent screen.subscribe */
+  | { type: 'screen.event'; sessionId: string; event: ScreenEvent; tabId?: string }
+  /** answer to screen.replay, read back from sessions/session-{id}/screen.ndjson */
+  | { type: 'screen.replaySegment'; sessionId: string; requestId: string; segment: ScreenSegment }
+  /** answer to files.list: every file the relay is holding for this session */
+  | { type: 'files.list'; sessionId: string; files: KeptFile[] }
+  | { type: 'error'; message: string };
+
+// Reserved for later: `dom.*` (Elements tab). Keep new namespaces to `<area>.<verb>`.

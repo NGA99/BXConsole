@@ -1,0 +1,330 @@
+/**
+ * The Screen recording: sessions/session-{id}/screen.ndjson.
+ *
+ * One `ScreenRecord` per line, keyframes interleaved with op batches, so any
+ * moment can be restored from one keyframe plus the ops after it. The relay
+ * asks the agent for a keyframe every `KEYFRAME_*` (see relay.ts); nothing
+ * here decides when they happen, it only indexes them.
+ *
+ * Writes are buffered (op batches arrive every ~16 ms) and appended through a
+ * per-session chain, so lines land on disk in order. Keyframe byte offsets are
+ * indexed in memory — built once per session by scanning the file, then kept
+ * up to date by appends — which is what makes a seek a single ranged read
+ * instead of a replay from the beginning.
+ *
+ * Retention: SCREEN_LOG_MAX_BYTES per session. Over budget, the oldest whole
+ * segments are dropped by rewriting the file from a later keyframe, so what is
+ * left always starts at one.
+ */
+import fs from 'node:fs/promises';
+import { createReadStream, createWriteStream } from 'node:fs';
+import { pipeline } from 'node:stream/promises';
+import path from 'node:path';
+import readline from 'node:readline';
+import { SCREEN_LOG_FILE, SCREEN_LOG_MAX_BYTES, type ScreenRecord, type ScreenSegment } from '@bxconsole/protocol';
+
+/** flush the write buffer at least this often */
+const FLUSH_MS = 250;
+/** …or as soon as it holds this much */
+const FLUSH_BYTES = 256 * 1024;
+/** after compaction, keep roughly this share of the budget so it does not run on every append */
+const COMPACT_TARGET = 0.75;
+/** how much of the recording a single seek/continue answer covers */
+const SEGMENT_MS = 30_000;
+/** hard ceiling on one answer, for a page that churns the DOM far faster than that */
+const SEGMENT_MAX_BYTES = 8 * 1024 * 1024;
+
+interface Keyframe {
+  ts: number;
+  offset: number;
+  /** op batches recorded before this keyframe, so a seek knows its absolute position */
+  before: number;
+}
+
+interface Index {
+  /** byte offset of every keyframe line, oldest first */
+  keyframes: Keyframe[];
+  size: number;
+  firstTs: number | null;
+  lastTs: number | null;
+  /** op batches in the whole file */
+  batches: number;
+}
+
+interface Buffered {
+  lines: string[];
+  bytes: number;
+  timer: NodeJS.Timeout | null;
+}
+
+export class ScreenLog {
+  private readonly index = new Map<string, Index>();
+  /** the in-flight (or finished) scan per session: one promise, so appends keep their order */
+  private readonly indexing = new Map<string, Promise<Index>>();
+  private readonly buffers = new Map<string, Buffered>();
+  private readonly chains = new Map<string, Promise<void>>();
+
+  constructor(
+    private readonly dirFor: (sessionId: string) => string,
+    /** per-session budget; the default is the one in the protocol */
+    private readonly maxBytes: number = SCREEN_LOG_MAX_BYTES,
+  ) {}
+
+  private fileFor(sessionId: string): string {
+    return path.join(this.dirFor(sessionId), SCREEN_LOG_FILE);
+  }
+
+  /** Queue a record. Lines are flushed in batches; the index moves forward right away. */
+  append(sessionId: string, record: ScreenRecord): void {
+    const line = JSON.stringify(record) + '\n';
+    const bytes = Buffer.byteLength(line);
+
+    void this.ensureIndex(sessionId).then((idx) => {
+      if (record.k === 1) idx.keyframes.push({ ts: record.ts, offset: idx.size, before: idx.batches });
+      else idx.batches++;
+      idx.size += bytes;
+      idx.firstTs ??= record.ts;
+      idx.lastTs = record.ts;
+
+      const buf = this.buffers.get(sessionId) ?? { lines: [], bytes: 0, timer: null };
+      this.buffers.set(sessionId, buf);
+      buf.lines.push(line);
+      buf.bytes += bytes;
+      if (buf.bytes >= FLUSH_BYTES) {
+        this.flush(sessionId);
+      } else if (buf.timer === null) {
+        buf.timer = setTimeout(() => this.flush(sessionId), FLUSH_MS);
+      }
+    });
+  }
+
+  /** What the recording covers, for the replay scrubber. */
+  async bounds(sessionId: string): Promise<{ start: number; end: number } | null> {
+    const idx = await this.ensureIndex(sessionId);
+    if (idx.firstTs === null || idx.lastTs === null) return null;
+    return { start: idx.firstTs, end: Math.max(idx.lastTs, idx.firstTs + 1) };
+  }
+
+  /**
+   * `seek`: the keyframe at or before `ts` and the ops recorded after it.
+   * `continue`: the ops after `ts` alone, for playback that is already running.
+   */
+  async segment(sessionId: string, ts: number, mode: 'seek' | 'continue'): Promise<ScreenSegment> {
+    await this.flushAndSettle(sessionId);
+    const idx = await this.ensureIndex(sessionId);
+    const bounds = await this.bounds(sessionId);
+    if (!bounds || idx.keyframes.length === 0) return { bounds, batches: [], done: true, changes: idx.batches, from: 0 };
+
+    const kf = keyframeAtOrBefore(idx.keyframes, mode === 'seek' ? ts : ts) ?? idx.keyframes[0]!;
+    const until = (mode === 'seek' ? Math.max(ts, kf.ts) : ts) + SEGMENT_MS;
+
+    const out: ScreenSegment = { bounds, batches: [], done: false, changes: idx.batches, from: kf.before };
+    let bytes = 0;
+    let reachedEnd = true;
+    /** batches the caller does not already have; the window never cuts before the first one */
+    let fresh = 0;
+
+    for await (const { record, length } of this.readFrom(sessionId, kf.offset)) {
+      if (record.k === 1) {
+        // The first line read is the keyframe this seek starts from. Later ones
+        // are redundant: the op stream between keyframes is complete on its own.
+        if (mode === 'seek' && !out.snapshot && out.batches.length === 0) out.snapshot = record.snapshot;
+        continue;
+      }
+      // `continue` is exclusive of what the caller has, but batches can share a
+      // millisecond, so the boundary ones come along and the caller drops the
+      // ones it already holds.
+      if (mode === 'continue' && record.ts < ts) continue;
+      // The window bounds how much comes back, but it must never come back with
+      // nothing: a page can sit still for longer than one window, and an empty
+      // answer would leave the player asking from the same spot forever. So the
+      // first new batch is always included, however far ahead it is — that gap
+      // is exactly what playback skips over.
+      if ((record.ts > until && fresh > 0) || bytes > SEGMENT_MAX_BYTES) {
+        reachedEnd = false;
+        break;
+      }
+      bytes += length;
+      out.batches.push({ ts: record.ts, ops: record.ops });
+      if (mode === 'seek' || record.ts > ts) fresh++;
+    }
+    out.done = reachedEnd;
+    return out;
+  }
+
+  /** Drop a session's recording from memory (its directory is removed elsewhere). */
+  forget(sessionId: string): void {
+    const buf = this.buffers.get(sessionId);
+    if (buf?.timer) clearTimeout(buf.timer);
+    this.buffers.delete(sessionId);
+    this.index.delete(sessionId);
+    this.indexing.delete(sessionId);
+    this.chains.delete(sessionId);
+  }
+
+  // ------------------------------------------------------------------ writing
+
+  private flush(sessionId: string): void {
+    const buf = this.buffers.get(sessionId);
+    if (!buf || buf.lines.length === 0) return;
+    if (buf.timer) clearTimeout(buf.timer);
+    buf.timer = null;
+    const text = buf.lines.join('');
+    buf.lines = [];
+    buf.bytes = 0;
+    this.enqueue(sessionId, async () => {
+      const file = this.fileFor(sessionId);
+      await fs.mkdir(path.dirname(file), { recursive: true });
+      await fs.appendFile(file, text);
+      await this.compactIfNeeded(sessionId);
+    });
+  }
+
+  /** Make sure everything queued is on disk before a read. */
+  private async flushAndSettle(sessionId: string): Promise<void> {
+    // `append` only reaches the buffer once the scan it waits on has resolved,
+    // so wait for that first: otherwise a read that arrives while the index is
+    // still being built flushes nothing and answers from an empty file.
+    await this.ensureIndex(sessionId);
+    this.flush(sessionId);
+    await (this.chains.get(sessionId) ?? Promise.resolve());
+  }
+
+  private enqueue(sessionId: string, task: () => Promise<void>): void {
+    const prev = this.chains.get(sessionId) ?? Promise.resolve();
+    const next = prev.then(task).catch((err: unknown) => console.warn('[bxconsole] screen log write failed', err));
+    this.chains.set(sessionId, next);
+  }
+
+  /**
+   * Over budget: rewrite the file from the oldest keyframe that brings it back
+   * under the target, so the recording keeps its newest segments and still
+   * starts at a keyframe.
+   */
+  private async compactIfNeeded(sessionId: string): Promise<void> {
+    const idx = this.index.get(sessionId);
+    if (!idx || idx.size <= this.maxBytes || idx.keyframes.length < 2) return;
+
+    const target = this.maxBytes * COMPACT_TARGET;
+    let cut = idx.keyframes[idx.keyframes.length - 1]!;
+    for (const kf of idx.keyframes) {
+      if (idx.size - kf.offset <= target) {
+        cut = kf;
+        break;
+      }
+    }
+    if (cut.offset === 0) return;
+
+    const file = this.fileFor(sessionId);
+    const tmp = `${file}.compact`;
+    await pipeline(createReadStream(file, { start: cut.offset }), createWriteStream(tmp));
+    await fs.rename(tmp, file);
+
+    idx.size -= cut.offset;
+    idx.batches -= cut.before;
+    idx.keyframes = idx.keyframes
+      .filter((k) => k.offset >= cut.offset)
+      .map((k) => ({ ts: k.ts, offset: k.offset - cut.offset, before: k.before - cut.before }));
+    idx.firstTs = idx.keyframes[0]?.ts ?? idx.firstTs;
+  }
+
+  // ------------------------------------------------------------------ reading
+
+  private async *readFrom(sessionId: string, offset: number): AsyncGenerator<{ record: ScreenRecord; length: number }> {
+    const file = this.fileFor(sessionId);
+    try {
+      await fs.access(file);
+    } catch {
+      return;
+    }
+    const rl = readline.createInterface({ input: createReadStream(file, { start: offset, encoding: 'utf8' }), crlfDelay: Infinity });
+    for await (const line of rl) {
+      if (!line.trim()) continue;
+      let record: ScreenRecord;
+      try {
+        record = JSON.parse(line) as ScreenRecord;
+      } catch {
+        continue; // torn last line after a crash
+      }
+      yield { record, length: line.length };
+    }
+  }
+
+  /**
+   * The keyframe index, scanned once. Every caller awaits the same promise, so
+   * appends queued while the first scan runs keep the order they arrived in.
+   */
+  private ensureIndex(sessionId: string): Promise<Index> {
+    const known = this.indexing.get(sessionId);
+    if (known) return known;
+    const pending = this.scan(sessionId).then((idx) => {
+      this.index.set(sessionId, idx);
+      return idx;
+    });
+    this.indexing.set(sessionId, pending);
+    return pending;
+  }
+
+  /**
+   * One pass over the file for keyframe offsets and the time bounds. Only each
+   * line's first bytes are looked at (`{"k":1,"ts":…`), so a keyframe holding a
+   * whole document is never parsed just to be indexed.
+   */
+  private async scan(sessionId: string): Promise<Index> {
+    const idx: Index = { keyframes: [], size: 0, firstTs: null, lastTs: null, batches: 0 };
+    const file = this.fileFor(sessionId);
+    try {
+      idx.size = (await fs.stat(file)).size;
+    } catch {
+      return idx;
+    }
+    let base = 0;
+    let leftover: Uint8Array = new Uint8Array(0);
+    for await (const chunk of createReadStream(file)) {
+      const buf = Buffer.from(leftover.length ? Buffer.concat([leftover, chunk as Uint8Array]) : (chunk as Uint8Array));
+      let pos = 0;
+      for (;;) {
+        const nl = buf.indexOf(0x0a, pos);
+        if (nl === -1) break;
+        const head = parseHead(buf, pos);
+        if (head) {
+          idx.firstTs ??= head.ts;
+          idx.lastTs = head.ts;
+          if (head.keyframe) idx.keyframes.push({ ts: head.ts, offset: base + pos, before: idx.batches });
+          else idx.batches++;
+        }
+        pos = nl + 1;
+      }
+      leftover = buf.subarray(pos);
+      base += pos;
+    }
+    return idx;
+  }
+}
+
+// Tolerant of whitespace: the relay writes these with JSON.stringify, but a
+// hand-written or pretty-printed fixture should still be readable.
+const HEAD_RE = /^\{\s*"k"\s*:\s*([01])\s*,\s*"ts"\s*:\s*(\d+)/;
+
+/** `{"k":1,"ts":123…` -> kind + time, read from the first bytes of a line. */
+function parseHead(buf: Buffer, pos: number): { keyframe: boolean; ts: number } | null {
+  const m = HEAD_RE.exec(buf.subarray(pos, pos + 40).toString('latin1'));
+  return m ? { keyframe: m[1] === '1', ts: Number(m[2]) } : null;
+}
+
+function keyframeAtOrBefore(keyframes: Keyframe[], ts: number): Keyframe | null {
+  let lo = 0;
+  let hi = keyframes.length - 1;
+  let found: Keyframe | null = null;
+  while (lo <= hi) {
+    const mid = (lo + hi) >> 1;
+    const kf = keyframes[mid]!;
+    if (kf.ts <= ts) {
+      found = kf;
+      lo = mid + 1;
+    } else {
+      hi = mid - 1;
+    }
+  }
+  return found;
+}

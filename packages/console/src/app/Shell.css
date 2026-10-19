@@ -1,0 +1,212 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--sys-color-cdt-base-container);
+  color: var(--sys-color-on-surface);
+}
+.shell-body {
+  flex: 1;
+  min-height: 0;
+  position: relative;
+}
+.shell-panel {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+.shell-panel[hidden] {
+  display: none;
+}
+
+/* top bar */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--tabbar-height);
+  padding: 0 8px;
+  background: var(--sys-color-surface2);
+  border-bottom: 1px solid var(--sys-color-divider);
+  flex-shrink: 0;
+  user-select: none;
+}
+.topbar-title {
+  font-weight: 600;
+}
+.topbar-back {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--sys-color-primary);
+  font: inherit;
+  padding: 0 4px;
+  cursor: default;
+  white-space: nowrap;
+}
+.topbar-back:hover {
+  text-decoration: underline;
+}
+.relay-status {
+  font-size: 11px;
+  color: var(--sys-color-token-subtle);
+}
+.relay-status.on {
+  color: var(--sys-color-green);
+}
+
+/* session picker */
+.session-picker {
+  position: relative;
+}
+.session-picker-button,
+.session-picker-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--sys-color-on-surface);
+  font: inherit;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: 4px;
+  cursor: default;
+  white-space: nowrap;
+}
+.session-picker-button:hover,
+.session-picker-item:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+.session-picker-name {
+  font-weight: 500;
+}
+.session-picker-url {
+  color: var(--sys-color-token-subtle);
+  max-width: 320px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.session-picker-caret {
+  font-size: 9px;
+  color: var(--sys-color-token-subtle);
+}
+.session-picker-popup {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 20;
+  min-width: 280px;
+  padding: 4px;
+  background: var(--sys-color-surface);
+  border: 1px solid var(--sys-color-divider);
+  border-radius: 6px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  display: flex;
+  flex-direction: column;
+}
+.session-picker-item {
+  width: 100%;
+  height: 26px;
+}
+.session-picker-item.current {
+  background: var(--sys-color-tonal-container);
+}
+.session-picker-empty {
+  padding: 8px;
+  color: var(--sys-color-token-subtle);
+}
+
+/* dock layout */
+.dock {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+}
+.dock-left,
+.dock-right {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.dock-strip {
+  width: 28px;
+  flex-shrink: 0;
+  border-right: 1px solid var(--sys-color-divider);
+  background: var(--sys-color-surface2);
+  display: flex;
+  justify-content: center;
+  padding-top: 6px;
+}
+/* The same strip on the other edge, for the pane that folded to the right. */
+.dock-strip.right {
+  border-right: 0;
+  border-left: 1px solid var(--sys-color-divider);
+}
+.dock-strip-button {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--sys-color-on-surface-subtle);
+  font: inherit;
+  writing-mode: vertical-rl;
+  padding: 6px 2px;
+  border-radius: 4px;
+  cursor: default;
+  white-space: nowrap;
+}
+.dock-strip-button:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sys-color-state-disabled);
+  flex-shrink: 0;
+}
+.dot.on {
+  background: var(--sys-color-green);
+}
+
+.topbar-theme {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--sys-color-on-surface-subtle);
+  font: inherit;
+  font-size: 13px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  cursor: default;
+}
+.topbar-theme:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+.issue-badges {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px;
+  font-size: 11px;
+  cursor: default;
+}
+.issue-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+.issue-badge.error {
+  color: var(--sys-color-error);
+}
+.issue-badge.warning {
+  color: var(--sys-color-yellow-outline);
+}
+.issue-badge.warning svg {
+  color: var(--sys-color-yellow-outline);
+}

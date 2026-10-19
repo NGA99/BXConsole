@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>BXConsole launcher (window supervisor)</title>
+    <style>
+      body { font: 13px system-ui, sans-serif; margin: 20px; max-width: 720px; }
+      h2 { font-weight: 500; }
+      label { display: block; margin: 10px 0 3px; color: #555; }
+      input { width: 100%; padding: 5px 7px; font: inherit; box-sizing: border-box; }
+      button { font: inherit; padding: 6px 14px; margin-top: 12px; }
+      #log { font-family: Menlo, monospace; font-size: 11px; white-space: pre-wrap; background: #f6f6f6; padding: 8px; margin-top: 14px; max-height: 40vh; overflow: auto; }
+      p.note { color: #666; }
+      code { background: #eee; padding: 1px 4px; }
+    </style>
+  </head>
+  <body>
+    <h2>BXConsole launcher</h2>
+    <p class="note">
+      This page stays put and acts as a supervisor. It injects the agent into the window you open below, and into any window that one opens in turn.
+      Use it to check that several windows show up as tabs within one session. Open it in real Chrome; it needs popups.
+    </p>
+
+    <label for="target">URL to open</label>
+    <input id="target" value="http://localhost:8099/nav/b.html" />
+    <label for="relay">Relay</label>
+    <input id="relay" value="http://localhost:7331" />
+    <button id="go">Open a window and supervise it</button>
+
+    <div id="log"></div>
+
+    <script>
+      const logEl = document.getElementById('log');
+      const watched = [];
+
+      function log(...p) {
+        logEl.textContent += `[${new Date().toLocaleTimeString()}] ${p.join(' ')}\n`;
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+
+      /** Injected into each window so the ones it opens reach this supervisor too. */
+      function childHook(w) {
+        if (w.__bxcHooked) return;
+        w.__bxcHooked = true;
+        const nativeOpen = w.open;
+        w.open = function () {
+          const child = nativeOpen.apply(w, arguments);
+          if (child) {
+            log('adopting a window a child opened');
+            supervise(child);
+          }
+          return child;
+        };
+        w.document.addEventListener(
+          'click',
+          (e) => {
+            const a = e.target && e.target.closest && e.target.closest('a[target="_blank"]');
+            if (!a) return;
+            // A plain target="_blank" gets implicit noopener, which would orphan the
+            // window; opening it ourselves keeps it in the session.
+            e.preventDefault();
+            const child = nativeOpen.call(w, a.href);
+            if (child) {
+              log('intercepted target=_blank and adopted:', a.getAttribute('href'));
+              supervise(child);
+            }
+          },
+          true,
+        );
+      }
+
+      function supervise(w) {
+        if (!w || watched.includes(w)) return;
+        watched.push(w);
+        let lastHref = null;
+        const relay = document.getElementById('relay').value.replace(/\/$/, '');
+
+        const timer = setInterval(() => {
+          let doc, href;
+          try {
+            if (w.closed) {
+              clearInterval(timer);
+              log('window closed');
+              return;
+            }
+            doc = w.document;
+            href = w.location.href;
+          } catch (err) {
+            return; // cross-origin for now; it may come back
+          }
+          if (!doc || !doc.head || href === lastHref || href === 'about:blank') return;
+          lastHref = href;
+
+          childHook(w);
+          if (w.__bxconsole) return;
+          const s = doc.createElement('script');
+          s.src = relay + '/agent.js?name=flow';
+          s.onload = () =>
+            setTimeout(() => {
+              const b = w.__bxconsole;
+              log('injected:', href.split('/').pop(), b ? `session ${b.sessionId} / tab ${b.tabId}` : '');
+            }, 400);
+          s.onerror = () => log('injection failed — check the relay address');
+          doc.head.appendChild(s);
+        }, 30);
+      }
+
+      document.getElementById('go').onclick = () => {
+        const url = document.getElementById('target').value;
+        const w = window.open(url, '_blank');
+        if (!w) return log('The popup was blocked. Allow popups for this site.');
+        log('opened:', url);
+        supervise(w);
+      };
+    </script>
+  </body>
+</html>
