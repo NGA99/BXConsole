@@ -37,6 +37,8 @@ export function TabStrip({ sessionId }: { sessionId: string }) {
   const tabs = useSessionsStore((s) => s.byId[sessionId]?.tabs) ?? [];
   const active = useActiveTab(sessionId);
   const depth = useMemo(() => depths(tabs), [tabs]);
+  // The host the run started on, so only the hops away from it are spelled out.
+  const baseHost = hostOf(tabs[0]?.url ?? '');
 
   // Pick a window when there is none, and leave a window the user chose alone
   // even after it closes: its recorded output is still worth reading. Only a
@@ -64,17 +66,39 @@ export function TabStrip({ sessionId }: { sessionId: string }) {
           onClick={() => setActiveTab(sessionId, t.tabId)}
         >
           <span className={`tabstrip-dot${t.connected ? ' on' : ''}`} />
-          <span className="tabstrip-label">{t.title || nameOf(t.url)}</span>
+          <span className="tabstrip-label">{t.title || hostOf(t.url) || t.url}</span>
+          <span className="tabstrip-where">{whereOf(t.url, baseHost)}</span>
         </button>
       ))}
     </div>
   );
 }
 
-function nameOf(url: string): string {
+function hostOf(url: string): string {
+  try {
+    return new URL(url).host;
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Which page this window is on, next to its title.
+ *
+ * The title alone is what a browser shows, and for one window that is right.
+ * A run is not one window: it is several, often on the same app and sometimes
+ * on different hosts, and "Dashboard" three times over says nothing about
+ * which is which. So the path is always shown, and the host only when it
+ * differs from the window the run started in — where a cross-origin hop is
+ * the thing worth noticing, and repeating the same host on every tab would
+ * bury it.
+ */
+function whereOf(url: string, baseHost: string): string {
   try {
     const u = new URL(url);
-    return (u.pathname.split('/').filter(Boolean).pop() || u.host) + u.search;
+    const path = (u.pathname === '/' ? '' : u.pathname) + u.search;
+    if (u.host !== baseHost) return u.host + path;
+    return path;
   } catch {
     return url;
   }

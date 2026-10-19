@@ -32,8 +32,16 @@ export interface Setup extends Options {
  * Everything on except the pre-payload, which runs code of its own in
  * someone else's browser and so is never something to arrive switched on.
  */
-export const DEFAULTS: Setup = { name: 'my-app', record: true, bodies: true, adopt: true, frame: true, collect: true, pre: false };
-export const SETUP_KEY = 'bxconsole.agent.setup';
+export const DEFAULTS: Setup = {
+  name: "my-app",
+  record: true,
+  bodies: true,
+  adopt: true,
+  frame: true,
+  collect: true,
+  pre: false,
+};
+export const SETUP_KEY = "bxconsole.agent.setup";
 
 /**
  * Read the saved setup, falling back to the defaults for anything missing.
@@ -42,15 +50,23 @@ export const SETUP_KEY = 'bxconsole.agent.setup';
  * the tab is absent from their stored object, and taking it as `false` would
  * silently turn off something that defaults to on.
  */
-export function loadSetup(storage: Pick<Storage, 'getItem'> = localStorage): Setup {
+export function loadSetup(
+  storage: Pick<Storage, "getItem"> = localStorage,
+): Setup {
   try {
-    return { ...DEFAULTS, ...(JSON.parse(storage.getItem(SETUP_KEY) ?? '{}') as Partial<Setup>) };
+    return {
+      ...DEFAULTS,
+      ...(JSON.parse(storage.getItem(SETUP_KEY) ?? "{}") as Partial<Setup>),
+    };
   } catch {
     return DEFAULTS;
   }
 }
 
-export function saveSetup(setup: Setup, storage: Pick<Storage, 'setItem'> = localStorage): void {
+export function saveSetup(
+  setup: Setup,
+  storage: Pick<Storage, "setItem"> = localStorage,
+): void {
   try {
     storage.setItem(SETUP_KEY, JSON.stringify(setup));
   } catch {
@@ -66,27 +82,29 @@ export function saveSetup(setup: Setup, storage: Pick<Storage, 'setItem'> = loca
  */
 export function paramsFor(setup: Setup): Array<[string, string]> {
   const out: Array<[string, string]> = [];
-  if (setup.name.trim()) out.push(['name', setup.name.trim()]);
+  if (setup.name.trim()) out.push(["name", setup.name.trim()]);
   // Only the switches that are off: a parameter in the snippet should mean
   // "this run is not the usual one", so that reading it tells you what the
   // person chose rather than restating the defaults back at them.
-  if (!setup.record) out.push(['screen', 'viewer']);
-  if (!setup.bodies) out.push(['bodies', '0']);
-  if (!setup.adopt) out.push(['adopt', '0']);
-  if (!setup.collect) out.push(['collect', '0']);
-  if (!setup.frame) out.push(['frame', 'off']);
+  if (!setup.record) out.push(["screen", "viewer"]);
+  if (!setup.bodies) out.push(["bodies", "0"]);
+  if (!setup.adopt) out.push(["adopt", "0"]);
+  if (!setup.collect) out.push(["collect", "0"]);
+  if (!setup.frame) out.push(["frame", "off"]);
   // The exception to the rule above: off is the default here, so this one
   // appears when it is turned ON. It also only ever travels in the query —
   // the relay has to see it to know to send the script, and it never sees a
   // data attribute.
-  if (setup.pre) out.push(['pre', '1']);
+  if (setup.pre) out.push(["pre", "1"]);
   return out;
 }
 
 /** `?a=b&c=d`, or nothing at all when every choice is the default. */
 export function queryFor(setup: Setup): string {
   const params = paramsFor(setup);
-  return params.length ? `?${params.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')}` : '';
+  return params.length
+    ? `?${params.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&")}`
+    : "";
 }
 
 /**
@@ -95,56 +113,63 @@ export function queryFor(setup: Setup): string {
  */
 export function attrsFor(setup: Setup): string {
   return paramsFor(setup)
-    .filter(([k]) => k !== 'pre')
+    .filter(([k]) => k !== "pre")
     .map(([k, v]) => ` data-${k}="${escapeAttr(v)}"`)
-    .join('');
+    .join("");
 }
 
 /** What a script tag puts on its `src`, which today is only the pre-payload. */
 export function srcQueryFor(setup: Setup): string {
-  return setup.pre ? '?pre=1' : '';
+  return setup.pre ? "?pre=1" : "";
 }
 
 /** A session name is free text, and it is being pasted into markup. */
 function escapeAttr(value: string): string {
-  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return value
+    .replace(/&/g, "&amp;")
+    .replace(/"/g, "&quot;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }
 
 /** Every way of putting the agent into a page, built from one set of choices. */
-export function snippetsFor(setup: Setup, origin: string): Array<{ id: string; title: string; hint: string; code: string }> {
+export function snippetsFor(
+  setup: Setup,
+  origin: string,
+): Array<{ id: string; title: string; hint: string; code: string }> {
   const q = queryFor(setup);
   // Everything but the script tag loads the file by URL, so they all share the
   // same two lines of DOM work; spelling it once keeps them comparable.
   const load = `var s=document.createElement('script');s.src='${origin}/agent.js${q}';document.head.appendChild(s)`;
   return [
     {
-      id: 'script',
-      title: 'Script tag',
-      hint: 'In the page’s <head>, before its own scripts.',
+      id: "script",
+      title: "Script tag",
+      hint: "In the page’s <head>, before its own scripts.",
       code: `<script src="${origin}/agent.js${srcQueryFor(setup)}"${attrsFor(setup)}></script>`,
     },
     {
-      id: 'img',
-      title: 'Img tag',
-      hint: 'For a field that takes HTML but strips <script>. It runs from an inline handler, so it gets past a sanitiser, never past a CSP.',
+      id: "img",
+      title: "Img tag",
+      hint: "For a field that takes HTML but strips <script>. It runs from an inline handler, so it gets past a sanitiser, never past a CSP.",
       code: `<img src="x" onerror="${load}">`,
     },
     {
-      id: 'import',
-      title: 'Import call',
-      hint: 'In the page’s own devtools console, or anywhere the page runs code.',
+      id: "import",
+      title: "Import call",
+      hint: "In the page’s own devtools console, or anywhere the page runs code.",
       code: `import("${origin}/agent.js${q}")`,
     },
     {
-      id: 'fetch',
-      title: 'Fetch call',
-      hint: 'The same thing where a console refuses import(): one expression, no module policy to satisfy.',
+      id: "fetch",
+      title: "Fetch call",
+      hint: "Where a console refuses import(): one expression, no module policy to satisfy.",
       code: `fetch("${origin}/agent.js${q}").then(r=>r.text()).then(eval)`,
     },
     {
-      id: 'bookmarklet',
-      title: 'Bookmarklet',
-      hint: 'Save as a bookmark’s URL, then click it on the page you want to debug.',
+      id: "bookmarklet",
+      title: "Bookmarklet",
+      hint: "Save as a bookmark’s URL, then click it on the page you want to debug.",
       code: `javascript:(function(){${load}})()`,
     },
   ];

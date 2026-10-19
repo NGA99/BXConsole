@@ -42,6 +42,16 @@
   padding: 0 5px;
   border-radius: 50%;
   cursor: default;
+  /* Centre the label itself, rather than letting an inherited line height
+     decide where it lands inside a box of a fixed height. In a row that sets
+     its own line height — the session list sets one to centre a line of text
+     in the row — a button inheriting it put its glyph a few pixels low and
+     over the bottom edge. Owning the alignment makes the button look the same
+     wherever it is used. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
 .toolbar-button:hover {
   background: color-mix(in srgb, var(--sys-color-on-surface) 8%, transparent);

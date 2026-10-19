@@ -5,57 +5,73 @@
  * The choices and the snippets they produce live in agent-setup.ts, which has
  * no React in it and can therefore be tested; this file is the controls.
  */
-import { useState } from 'react';
-import { copyText } from '../network/copy';
-import { AgentSource } from './AgentSource';
-import { PrePayloadEditor } from './PrePayloadEditor';
-import { loadSetup, saveSetup, snippetsFor, type Options, type Setup } from './agent-setup';
+import { useState } from "react";
+import { copyText } from "../network/copy";
+import { AgentSource } from "./AgentSource";
+import { PrePayloadEditor } from "./PrePayloadEditor";
+import {
+  loadSetup,
+  saveSetup,
+  snippetsFor,
+  type Options,
+  type Setup,
+} from "./agent-setup";
 
-const OPTION_TEXT: Array<{ key: keyof Options; name: string; label: string; hint: string }> = [
+const OPTION_TEXT: Array<{
+  key: keyof Options;
+  name: string;
+  label: string;
+  hint: string;
+}> = [
   {
-    key: 'record',
+    key: "record",
     // A flight recorder: it runs whether or not anyone is watching, which is
     // the whole difference from the default.
-    name: 'Blackbox',
-    label: 'Record the screen from boot',
-    hint: 'History can then replay any moment of the run, at the cost of CPU in the page throughout. Off, the screen records only while a Screen tab is open.',
+    name: "Blackbox",
+    label: "Record the screen from boot",
+    hint: "History can replay any moment of the run, at the cost of CPU in the page throughout. Off, it records only while a Screen tab is open.",
   },
   {
-    key: 'bodies',
+    key: "bodies",
     // The contents, not just the envelope. "Bodies" alone reads as a riddle.
-    name: 'Payloads',
-    label: 'Capture request and response bodies',
-    hint: 'Off, Network keeps headers and timing but no contents — worth it on a page that moves large or sensitive data.',
+    name: "Payloads",
+    label: "Capture request and response bodies",
+    hint: "Off, Network keeps headers and timing but no contents, which is what you want on a page that moves large or sensitive data.",
   },
   {
-    key: 'adopt',
+    key: "adopt",
     // It spreads by contact: a window this one touches catches the agent.
-    name: 'Spread',
-    label: 'Follow the run into other windows',
-    hint: 'Installs into the windows this page opens and the one that opened it, so a flow across several windows lands in one session.',
+    name: "Spread",
+    label: "Follow the run into other windows",
+    hint: "Installs into the windows this page opens and the one that opened it, so a flow across several windows is one session.",
   },
   {
-    key: 'collect',
+    key: "collect",
     // It gathers the page's files in and keeps them, which is what a magpie
     // is for. The alternative names all described the mechanism instead.
-    name: 'Magpie',
-    label: 'Keep the code the page loads',
-    hint: 'Fetches each script, stylesheet and document as the page loads it, so they are still readable once the run has ended — which is the only time they cannot be fetched any more. Only files the browser already loaded, never an API call.',
+    name: "Magpie",
+    label: "Keep the code the page loads",
+    hint: "Fetches each script, stylesheet and document as the page loads it, so they are still readable after the run ends, when they can no longer be fetched. Only what the browser already loaded, never an API call.",
   },
   {
-    key: 'pre',
-    // It goes in before anyone is looking, which is the point of it.
-    name: 'Primer',
-    label: 'Run a script the moment the agent lands',
-    hint: 'For the window that is open for eight seconds and gone before anyone opens a console to type into. It runs after the hooks, so whatever it fetches lands in Network with its body and whatever it logs lands in Console; what it returns is marked into History. The script is stored on the relay and only sent to payloads that ask for it.',
-  },
-  {
-    key: 'frame',
+    key: "frame",
     // The app sits inside a frame the agent owns. Not "shell": in a tool for
     // programmers that word is a command line before it is anything else.
-    name: 'Nest',
-    label: 'Host the page in an iframe',
-    hint: 'Puts the app one level down, in a frame the agent keeps, so navigating no longer ends the run. It changes the page: window.top is not the app, frame-busting code undoes it, and the address bar keeps the first URL. Check the page allows framing in Webhook first.',
+    name: "Nest",
+    label: "Host the page in an iframe",
+    hint: "Puts the app one level down, in a frame the agent keeps, so navigating no longer ends the run. It changes the page: window.top is not the app, frame-busting code undoes it, and the address bar keeps the first URL. Webhook says whether a page allows framing.",
+  },
+  {
+    key: "pre",
+    // It goes in before anyone is looking, which is the point of it.
+    //
+    // Last in the list, and not where it reads most naturally in prose: the
+    // only option here that opens an editor should be the one the editor
+    // appears under. Anywhere else and the script box turns up below two
+    // unrelated checkboxes, with nothing saying which one put it there.
+    name: "Primer",
+    label: "Run a script the moment the agent lands",
+    hint: "For the window that is gone before anyone can open a console to type into. It runs after the hooks, so what it fetches lands in Network with its body and what it logs lands in Console; what it returns is marked into History. The script lives on the relay, not in the payload.",
   },
 ];
 
@@ -86,57 +102,93 @@ export function AgentPanel({ onDiagnose }: { onDiagnose?: () => void }) {
       <div className="install-head">
         <span className="install-title">Install the agent</span>
         <label className="install-name">
-          Session name <input value={setup.name} onChange={(e) => setSetup({ name: e.target.value })} spellCheck={false} />
+          Session name{" "}
+          <input
+            value={setup.name}
+            onChange={(e) => setSetup({ name: e.target.value })}
+            spellCheck={false}
+          />
         </label>
         <div className="install-head-spacer" />
-        <button className="detail-link" onClick={() => setShowSource((v) => !v)}>
-          {showSource ? 'hide source' : 'view source'}
+        <button
+          className="detail-link"
+          onClick={() => setShowSource((v) => !v)}
+        >
+          {showSource ? "hide source" : "view source"}
         </button>
       </div>
 
-      {/* The options are the agent's own; every snippet below follows them. */}
-      <div className="install-options">
-        {OPTION_TEXT.map(({ key, name, label, hint }) => (
-          <label key={key} className="install-option">
-            <input type="checkbox" checked={setup[key]} onChange={(e) => setSetup({ [key]: e.target.checked })} />
-            <span>
-              <span className="install-option-name">{name}</span>
-              <span className="install-option-label">{label}</span>
-              <span className="install-option-hint">{hint}</span>
-            </span>
-          </label>
-        ))}
-      </div>
-
-      {setup.pre && <PrePayloadEditor />}
-
-      {showSource && <AgentSource origin={origin} />}
-      {snippets.map((s) => (
-        <div key={s.id} className="install-snippet">
-          <div className="install-snippet-head">
-            <span>{s.title}</span>
-            <button className="detail-link" onClick={() => void copy(s.id, s.code)}>
-              {copied === s.id ? 'copied' : 'copy'}
-            </button>
+      {/*
+        Two columns: what the agent will do on the left, what to paste on the
+        right. They were stacked, which put the payload you came for below a
+        screenful of checkboxes — and worse, hid the thing that makes the
+        options worth reading, which is that every snippet changes as you tick
+        them. Side by side, the change is in view while you make it.
+      */}
+      <div className="install-body">
+        <div className="install-left">
+          {/* The options are the agent's own; every snippet opposite follows them. */}
+          <div className="install-options">
+            {OPTION_TEXT.map(({ key, name, label, hint }) => (
+              <label key={key} className="install-option">
+                <input
+                  type="checkbox"
+                  checked={setup[key]}
+                  onChange={(e) => setSetup({ [key]: e.target.checked })}
+                />
+                <span>
+                  <span className="install-option-name">{name}</span>
+                  <span className="install-option-label">{label}</span>
+                  <span className="install-option-hint">{hint}</span>
+                </span>
+              </label>
+            ))}
           </div>
-          <pre className="mono">{s.code}</pre>
-          <div className="install-hint">{s.hint}</div>
+
+          {/* Always here, whether or not Primer is on. A script worth writing
+              is worth keeping while the option is off — it is stored on the
+              relay either way, and hiding the box threw away what was typed
+              in it the moment the checkbox was cleared. The editor says so
+              itself when nothing is asking for it. */}
+          <PrePayloadEditor armed={setup.pre} />
         </div>
-      ))}
-      <div className="install-hint">
-        A page on https needs the relay on https/wss too — put it behind a TLS proxy and set <code>PUBLIC_ORIGIN</code>. A strict CSP has to allow this
-        origin in <code>script-src</code> and <code>connect-src</code>
-        {onDiagnose ? (
-          <>
-            ;{' '}
-            <button className="detail-link" onClick={onDiagnose}>
-              Webhook
-            </button>{' '}
-            shows which way in a page is blocking.
-          </>
-        ) : (
-          '.'
-        )}
+
+        <div className="install-right">
+          {showSource && <AgentSource origin={origin} />}
+          {snippets.map((s) => (
+            <div key={s.id} className="install-snippet">
+              <div className="install-snippet-head">
+                <span>{s.title}</span>
+                <button
+                  className="detail-link"
+                  onClick={() => void copy(s.id, s.code)}
+                >
+                  {copied === s.id ? "copied" : "copy"}
+                </button>
+              </div>
+              <pre className="mono">{s.code}</pre>
+              <div className="install-hint">{s.hint}</div>
+            </div>
+          ))}
+          <div className="install-hint">
+            A page on https needs the relay on https/wss too: put it behind a
+            TLS proxy and set <code>PUBLIC_ORIGIN</code>. A strict CSP has to
+            allow this origin in <code>script-src</code> and{" "}
+            <code>connect-src</code>
+            {onDiagnose ? (
+              <>
+                {" "}
+                —{" "}
+                <button className="detail-link" onClick={onDiagnose}>
+                  Webhook
+                </button>{" "}
+                tells you which one a page blocks.
+              </>
+            ) : (
+              "."
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );

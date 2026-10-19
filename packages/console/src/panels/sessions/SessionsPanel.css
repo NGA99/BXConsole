@@ -13,105 +13,156 @@
   border-radius: 4px;
   user-select: all;
 }
-/* Fixed columns, so the counts, environment and times line up down the list
-   instead of landing wherever each row's text happens to end. The last one is
-   `auto`, not a fixed width: the trash rows carry two buttons where the others
-   carry one, and a track sized for one let the second overflow left and draw
-   itself on top of the timestamp. */
+/* Fixed columns, so the counts, user agents and times line up down the list
+   instead of landing wherever each row's text happens to end. */
 .session-row {
   display: grid;
-  grid-template-columns: 8px 16px minmax(0, 1fr) 42px 150px 136px auto;
-  align-items: center;
+  /* One line per session, and a header naming the columns. The name and the
+     two long strings share the width; everything else is fixed.
+
+     Every track here is a fixed size or a fraction, and none of them is
+     `auto`. That matters more than it looks: each row is its own grid, so a
+     content-sized track is measured against that row's own content — and the
+     header, whose last cell is empty, sized it to nothing and shifted every
+     column left of it. The fractions then divided a different amount of free
+     space and drifted too, which is how a header ends up nine pixels off the
+     column it names.
+
+     The last track is wide enough for two buttons because the trash rows
+     carry two where the others carry one. The spare space on an ordinary row
+     costs nothing; a track measured per row costs the alignment. */
+  grid-template-columns: 8px 16px minmax(96px, 170px) minmax(110px, 1fr) minmax(150px, 1.6fr) 48px 152px 88px 62px;
+  /* Stretch, not centre. Centring sizes each cell to its own content, and a
+     cell with no content — the window count on a run that only ever had one
+     window — collapsed to nothing and took its divider with it, so the rule
+     between two columns appeared and vanished down the list. Stretched cells
+     are all the height of the row whether or not they hold anything, and the
+     text inside is centred by its line height instead. */
+  align-items: stretch;
   gap: 10px;
-  padding: 8px 12px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--sys-color-divider);
+}
+.session-row > * {
+  /* The row's height, and what centres a single line of text inside it. */
+  line-height: 32px;
+}
+/* The two that are not text and must not be stretched into ovals. */
+.session-row > .dot,
+.session-row > .session-favicon {
+  align-self: center;
+}
+.session-row > * {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* A rule between the columns, from the fourth on — that is, between every
+   pair the header names, and not between the dot, the favicon and the name,
+   which read as one thing.
+
+   The buttons get one too. They are a column like any other, and without it
+   the trash rows end in ↩ ✕ floating against the timestamp with nothing to
+   say the two belong to different things.
+
+   The 10px of padding matches the column gap, so the line sits halfway
+   between the two columns it separates rather than crowding the right one. */
+.session-row > :nth-child(n + 4) {
+  border-left: 1px solid var(--sys-color-divider);
+  padding-left: 10px;
 }
 .session-row:hover {
   background: var(--sys-color-state-hover-on-subtle);
   cursor: default;
 }
-.session-row.offline .session-title {
+.session-row.offline .session-name {
   color: var(--sys-color-token-subtle);
 }
-.session-main {
-  min-width: 0;
+
+/* The header. Sticky, because a column name that scrolls away stops being a
+   column name on the first screenful. */
+.session-head {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--sys-color-surface2);
+  color: var(--sys-color-token-subtle);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.03em;
 }
-/* Name, page title, id: the id sits at the column's right edge so every row's
-   id starts at the same place. */
-.session-title {
-  display: grid;
-  /* A fixed first track, not `auto`. Each row is its own grid, so an
-     auto-sized name column lines the page title up with nothing — it lands
-     wherever that row's name happens to end, a few pixels off every
-     neighbour. A name longer than this truncates, which is the cheaper loss. */
-  grid-template-columns: 132px minmax(0, 1fr) auto;
-  gap: 8px;
-  align-items: baseline;
+.session-head > * {
+  line-height: 26px;
+}
+.session-head:hover {
+  background: var(--sys-color-surface2);
+  cursor: default;
+}
+
+.session-name {
   font-weight: 500;
-}
-.session-title > span,
-.session-title > * {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.session-id {
-  color: var(--sys-color-token-subtle);
-  font-weight: normal;
 }
 .session-url {
   color: var(--sys-color-token-subtle);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* Two lines, matching the timestamp across the row. */
-.session-env {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  line-height: 1.3;
-}
-.session-env-platform {
-  font-size: 11px;
-}
-.session-env > span {
-  max-width: 100%;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
-.session-env,
-.session-time {
+/*
+ * The user agent, cut from the left.
+ *
+ * Every user agent opens with the same fifty-odd characters and carries what
+ * tells it apart at the end, so an ordinary ellipsis fills the column with
+ * "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWe…" on every row and
+ * says nothing. A right-to-left box puts the ellipsis at the start instead.
+ *
+ * The <bdi> inside is not optional: it isolates the string so it still reads
+ * left to right. Without it the bidi algorithm moves trailing neutrals, and a
+ * user agent ending in `)` renders with the bracket at the front.
+ */
+.session-ua {
   color: var(--sys-color-token-subtle);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  text-align: right;
+  opacity: 0.85;
+  direction: rtl;
+  text-align: left;
+}
+.session-ua > bdi {
+  direction: ltr;
+}
+/* The header's cell shares the class so the breakpoints hide both at once,
+   but a label is a label: it reads from the left and is not dimmed. */
+.session-head .session-ua {
+  direction: ltr;
+  opacity: 1;
+  color: inherit;
+}
+
+/* Each column's alignment is set on the class its header cell shares, so a
+   label can never drift away from the column it names. */
+.session-windows-cell {
+  text-align: center;
+  color: var(--sys-color-token-subtle);
+}
+.session-started,
+.session-when {
+  color: var(--sys-color-token-subtle);
   font-variant-numeric: tabular-nums;
 }
-
-/* Two lines, matching the title and url on the left. */
-.session-time {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.35;
+.session-started {
+  text-align: left;
 }
-.session-time-rel {
-  opacity: 0.8;
-}
-
-.session-windows-cell {
+.session-when {
   text-align: right;
 }
+
 .session-actions {
   display: flex;
-  justify-content: flex-end;
+  /* Centred, not pushed right. The sessions list carries one button where the
+     trash carries two, and against the right edge the single one sat in a
+     column that looked half empty. Centred, one button and two both read as
+     the column's content. */
+  justify-content: center;
   align-items: center;
   gap: 2px;
-  /* one button still holds the slot it always had, so the two lists line up */
-  min-width: 24px;
 }
 .session-actions a {
   color: var(--sys-color-primary);
@@ -136,18 +187,76 @@
   border-radius: 3px;
   background: var(--sys-color-surface3);
 }
-.session-page-title {
-  color: var(--sys-color-on-surface-subtle);
-  font-weight: normal;
-}
-
 .install {
-  margin: 16px 12px;
-  padding: 12px 14px;
+  margin: 24px 28px;
+  padding: 16px 18px;
   border: 1px solid var(--sys-color-divider);
   border-radius: 8px;
   background: var(--sys-color-surface1);
-  max-width: 820px;
+  /* The panel takes the width it is given. The cap it used to have left a
+     third of a wide window empty while the snippets opposite wrapped onto
+     two lines — the one thing here that genuinely wants the room, since a
+     payload broken across lines is harder to read and to check before it is
+     pasted somewhere it cannot be taken back from.
+
+     The prose is bounded instead, on the column that holds it. */
+}
+
+/*
+ * What the agent will do, beside what to paste.
+ *
+ * Stacked, the payload sat below a screenful of checkboxes, so the thing the
+ * tab exists for needed a scroll to reach. Side by side also shows the part
+ * that is easy to miss: every snippet is rewritten as the options change, and
+ * now that happens in view.
+ */
+.install-body {
+  display: grid;
+  /* Two equal halves that shrink with the window. `minmax(0, 1fr)` and not
+     plain `1fr`: a grid track's floor is its content, so a long payload would
+     otherwise hold its column open and push the other one narrow instead of
+     both giving way together. */
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+  align-items: start;
+}
+.install-left,
+.install-right {
+  min-width: 0;
+}
+/*
+ * Prose keeps its measure even where the column does not.
+ *
+ * Taking the cap off the panel gave the snippets the room they wanted and
+ * handed the note under them the same room, which they do not want: the line
+ * about TLS and CSP ran the full width of a wide window as one unbroken
+ * sentence. Code wants the width; sentences want a measure.
+ */
+.install-hint {
+  max-width: 78ch;
+}
+/* The same rule the session list draws between its columns, for the same
+   reason: two things that are not the same thing. */
+.install-right {
+  padding-left: 20px;
+  border-left: 1px solid var(--sys-color-divider);
+}
+/* Nothing starts with a gap above it at the top of its column. */
+.install-left > :first-child,
+.install-right > :first-child {
+  margin-top: 0;
+}
+
+/* Stacked only where two columns stop being columns at all. Above this they
+   keep halving the width between them. */
+@container (max-width: 640px) {
+  .install-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .install-right {
+    padding-left: 0;
+    border-left: none;
+  }
 }
 .install-head {
   display: flex;
@@ -225,6 +334,10 @@
   color: var(--sys-color-token-subtle);
   font-variant-numeric: tabular-nums;
   font-size: 11px;
+  /* Its own, not the row's. An inline-block inherits the line height that
+     centres the row's text, and then adds its border to it — which made the
+     one row carrying a badge two pixels taller than every other. */
+  line-height: 16px;
 }
 
 .sessions-link {
@@ -242,21 +355,35 @@
   container-type: inline-size;
 }
 
-@container (max-width: 620px) {
+/* Narrow docks drop columns rather than squeezing every one. The header cell
+   has to go with its column, or it labels the one that took its place. */
+@container (max-width: 1040px) {
+  /* The clock time goes before the user agent: the relative age left behind
+     answers the same question less precisely, where dropping the user agent
+     leaves nothing in its place. */
   .session-row {
-    grid-template-columns: 8px 16px minmax(0, 1fr) 42px 136px auto;
+    grid-template-columns: 8px 16px minmax(96px, 170px) minmax(110px, 1fr) minmax(150px, 1.6fr) 48px 88px 62px;
   }
-  .session-env {
+  .session-started {
+    display: none;
+  }
+}
+
+@container (max-width: 760px) {
+  .session-row {
+    grid-template-columns: 8px 16px minmax(96px, 170px) minmax(110px, 1fr) 48px 88px 62px;
+  }
+  .session-ua {
     display: none;
   }
 }
 
 @container (max-width: 460px) {
   .session-row {
-    grid-template-columns: 8px 16px minmax(0, 1fr) auto;
+    grid-template-columns: 8px 16px minmax(96px, 170px) minmax(110px, 1fr) 62px;
   }
   .session-windows-cell,
-  .session-time {
+  .session-when {
     display: none;
   }
 }

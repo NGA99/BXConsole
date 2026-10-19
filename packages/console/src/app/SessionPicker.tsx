@@ -57,10 +57,24 @@ export function SessionPicker({ sessionId, panel }: { sessionId: string; panel: 
   );
 }
 
+/**
+ * The window's address, as this line is meant to read like one.
+ *
+ * It used to stop at the path, which threw away the query — and the query is
+ * often the only thing telling two windows of a run apart. Three tabs all
+ * titled "Example Domain" on `/?1`, `/?2` and `/?3` showed as the same host
+ * three times, which is worse than showing nothing.
+ *
+ * The scheme is dropped on https, where it says nothing, and kept on anything
+ * else: a run on plain http is a fact about the engagement.
+ */
 function shortUrl(url: string): string {
   try {
     const u = new URL(url);
-    return u.host + (u.pathname === '/' ? '' : u.pathname);
+    const scheme = u.protocol === 'https:' ? '' : `${u.protocol}//`;
+    // A bare "/" is noise, but not once there is a query hanging off it.
+    const path = u.pathname === '/' && !u.search && !u.hash ? '' : u.pathname;
+    return scheme + u.host + path + u.search + u.hash;
   } catch {
     return url;
   }

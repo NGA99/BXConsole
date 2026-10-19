@@ -27,6 +27,19 @@ export function fullTimestamp(ts: number): string {
   return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())} ${clockTime(ts)}`;
 }
 
+/**
+ * "2026.10.19 21:03:27" — the date and the clock, always, whatever the age.
+ *
+ * `friendlyTimestamp` is the better read for something that happened a minute
+ * ago, and the worse one for a column: "today" and "yesterday" change meaning
+ * overnight while the page is still open, and neither can be matched against
+ * a server log without doing the arithmetic yourself.
+ */
+export function absoluteTimestamp(ts: number): string {
+  const d = new Date(ts);
+  return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())} ${clockTimeShort(ts)}`;
+}
+
 /** "today 14:03:27", "yesterday 23:11:02", or the full stamp for anything older. */
 export function friendlyTimestamp(ts: number): string {
   const d = new Date(ts);

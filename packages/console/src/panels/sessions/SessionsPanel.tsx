@@ -10,11 +10,10 @@
  */
 import { useState } from 'react';
 import { assetPath, type SessionMeta } from '@bxconsole/protocol';
-import { browserInfo, browserLabel, platformLabel } from './browser-info';
 import { useSessionList } from '../../state/sessions';
 import { forgetSession, trashSession, restoreSession } from '../../transport/client';
 import { navigate, navigateToView, type SessionView } from '../../app/router';
-import { fullTimestamp, friendlyTimestamp } from '../../devtools-ui/time';
+import { absoluteTimestamp, fullTimestamp } from '../../devtools-ui/time';
 import { Toolbar, ToolbarButton, ToolbarDivider, ToolbarInput } from '../../devtools-ui/Toolbar';
 import { TabBar } from '../../devtools-ui/TabBar';
 import { AgentPanel } from './AgentPanel';
@@ -143,6 +142,25 @@ function SessionList({
             )}
           </div>
         )}
+        {/* The header is what makes this a table rather than a wall of text:
+            it names the two columns that are otherwise guesswork, and it is
+            the only thing standing between the reader and a row of numbers.
+            Hidden with an empty list, where it would label nothing. */}
+        {sessions.length > 0 && (
+          <div className="session-row session-head" aria-hidden="true">
+            <span />
+            <span />
+            <span>Session</span>
+            <span>URL</span>
+            {/* Each header cell carries its column's class, so a breakpoint
+                that hides the column takes its label with it. */}
+            <span className="session-ua">User agent</span>
+            <span className="session-windows-cell">Tab</span>
+            <span className="session-started">Started</span>
+            <span className="session-when">Activity</span>
+            <span />
+          </div>
+        )}
         {sessions.map((s) => (
           <div
             key={s.sessionId}
@@ -151,43 +169,76 @@ function SessionList({
           >
             <span className={`dot ${s.connected ? 'on' : 'off'}`} />
             <Favicon url={s.url} sessionId={s.sessionId} />
-            <div className="session-main">
-              {/* Always three cells, even when there is no page title: with two
-                  the id slides into the middle column and stops lining up. */}
-              <div className="session-title">
-                <span className="session-name">{s.name ?? s.title ?? '(untitled)'}</span>
-                <span className="session-page-title">{s.name && s.title ? s.title : ''}</span>
-                <span className="session-id mono">session-{s.sessionId}</span>
-              </div>
-              <div className="session-url mono" title={s.url}>
-                {shortenUrl(s.url)}
-              </div>
-            </div>
-            {/* Each of these is its own grid cell, so the columns line up down
-                the list instead of landing wherever the text happens to end. */}
-            <div className="session-windows-cell">
-              {windowCount(s) > 1 && (
-                <span className="session-windows" title={`${windowCount(s)} windows in this run, ${liveWindows(s)} still open`}>
-                  {liveWindows(s)}/{windowCount(s)}
-                </span>
-              )}
-            </div>
-            {/* Two lines, like the timestamp opposite it: which browser ran
-                the payload, and where. On a blind XSS run that is most of
-                what is known about whose browser this was. */}
-            <div className="session-env" title={s.userAgent}>
-              <span>{browserLabel(browserInfo(s.userAgent))}</span>
-              <span className="session-env-platform">{platformLabel(browserInfo(s.userAgent), s.viewport)}</span>
-            </div>
-            <div
-              className="session-time"
-              title={s.connected ? `Agent installed at ${fullTimestamp(s.startedAt)}` : `Last event at ${fullTimestamp(s.lastSeenAt)}`}
-            >
-              <span>{friendlyTimestamp(s.connected ? s.startedAt : s.lastSeenAt)}</span>
-              <span className="session-time-rel">
-                {s.connected ? 'started' : 'last seen'} · {relative(s.connected ? s.startedAt : s.lastSeenAt)}
+            {/* The page title and the session id used to have columns of their
+                own. One line per session has no room for them, and they are
+                the two that are least often what you are scanning for, so they
+                moved into the tooltip rather than off the screen. The filter
+                still searches both. */}
+            <span className="session-name" title={identity(s)}>
+              {s.name ?? s.title ?? '(untitled)'}
+            </span>
+            <span className="session-url mono" title={s.url}>
+              {shortenUrl(s.url)}
+            </span>
+            {/* The user agent as the browser sent it.
+                This used to be parsed down to "Chrome 152", which threw away
+                the thing you came for. A run recorded through Claude's in-app
+                browser sends `… Claude/2.42304.0 Chrome/152.0.7977.149 …` and
+                read as plain Chrome, because the token that said otherwise was
+                not one the parser knew — and a parser can only ever know the
+                tokens that existed when it was written.
+
+                It is cut from the left, which is the whole reason this fits on
+                one line. Every user agent opens with the same fifty characters
+                of boilerplate and carries what distinguishes it at the end, so
+                truncating the usual way fills the column and says nothing. The
+                <bdi> keeps the text itself reading left to right inside the
+                right-to-left box that moves the ellipsis; without it, a string
+                ending in `)` renders with the bracket at the front. */}
+            <span className="session-ua mono" title={agentTitle(s)}>
+              <bdi>{s.userAgent || 'no user agent reported'}</bdi>
+            </span>
+            {/* Always a count, even for the ordinary one-window run.
+                It used to appear only above one window, which left a hole in
+                the column on most rows and made the badge read as a warning
+                rather than a fact. A single run reads `0/1` or `1/1` — not
+                `0/0`, which would say the payload never opened a window. */}
+            <span className="session-windows-cell">
+              <span
+                className="session-windows"
+                title={
+                  windowCount(s) === 1
+                    ? `One window, ${liveWindows(s) === 1 ? 'still open' : 'closed'}`
+                    : `${windowCount(s)} windows in this run, ${liveWindows(s)} still open`
+                }
+              >
+                {liveWindows(s)}/{windowCount(s)}
               </span>
-            </div>
+            </span>
+            {/* When the payload fired, on the clock.
+                A relative age answers "is this still warm", which is what you
+                scan a list for, but it is useless for the thing this tool is
+                for: lining a run up against a request log, a ticket, or what
+                somebody says they were doing at the time. That needs a
+                timestamp, so both are here rather than one of them in a
+                tooltip nobody hovers. */}
+            <span className="session-started" title={`Agent installed at ${fullTimestamp(s.startedAt)}`}>
+              {absoluteTimestamp(s.startedAt)}
+            </span>
+            {/* A live run is dated from when it fired, which is the fact worth
+                having; a dead one from its last event, which is when it
+                stopped being worth watching. The tooltip says which, since one
+                column cannot. */}
+            <span
+              className="session-when"
+              title={
+                s.connected
+                  ? `Still connected\nLast event at ${fullTimestamp(s.lastSeenAt)}`
+                  : `Last event at ${fullTimestamp(s.lastSeenAt)}`
+              }
+            >
+              {relative(s.connected ? s.startedAt : s.lastSeenAt)}
+            </span>
             {/* No panel links here: clicking the row opens the session, and the
                 tabs are right there once you are inside. */}
             <div className="session-actions" onClick={(e) => e.stopPropagation()}>
@@ -224,6 +275,24 @@ function SessionList({
  * everything else out. Cut the middle, not the end: the origin says which site
  * it is and the tail usually says which page. The full URL is in the tooltip.
  */
+/** Everything the row calls this session, for the tooltip the name carries. */
+function identity(s: SessionMeta): string {
+  return [s.name, s.title, `session-${s.sessionId}`].filter(Boolean).join('\n');
+}
+
+/**
+ * The user agent, plus the viewport under it.
+ *
+ * The viewport is not in the user agent and is worth knowing — a 390-wide
+ * window is a phone whatever the string claims. It had a column of its own
+ * until the row became one line. Zero is what a recording made before the
+ * window reported its size looks like, and "0×0" would state something false.
+ */
+function agentTitle(s: SessionMeta): string {
+  const size = s.viewport.width > 0 && s.viewport.height > 0 ? `${s.viewport.width}×${s.viewport.height}` : null;
+  return [s.userAgent || 'no user agent reported', size].filter(Boolean).join('\n');
+}
+
 function shortenUrl(url: string, max = 100): string {
   if (url.length <= max) return url;
   const head = Math.ceil((max - 1) * 0.6);
