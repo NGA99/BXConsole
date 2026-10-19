@@ -30,6 +30,8 @@ import { SessionStore } from './store';
 import { Relay } from './relay';
 import { createStaticHandler } from './static';
 import { createAgentHandler } from './agent-handler';
+import { ConsoleAuth, isVictimPath, loginPage, refuse } from './auth';
+import { RateLimit, limitKey } from './limit';
 import { AssetCache } from './assets';
 import { BlobStore } from './blobs';
 import { AssetCollector } from './collect';
@@ -41,10 +43,11 @@ const PORT = Number(process.env.PORT ?? 7331);
 const RETENTION_DAYS = Number(process.env.SESSION_RETENTION_DAYS ?? 0);
 /**
  * Still every interface by default: the point of this relay is that pages on
- * other machines connect to it. The console socket has no authentication, so
- * that also means anyone who can reach this port can read the recordings and
- * evaluate expressions in the debugged pages — there is a warning at startup,
- * and the browser-origin check below closes the easier half of it.
+ * other machines connect to it. The operator's half needs the password and
+ * the console socket needs it too, so what is exposed on this port is the
+ * victim's half: /agent.js, the agent socket and the probes. Those cannot be
+ * authenticated — nobody is at the keyboard — so keep this on a network you
+ * trust and read the startup warning.
  */
 const HOST = process.env.HOST ?? '0.0.0.0';
 /** Browser origins allowed to open the console socket; the agent is not restricted. */
@@ -340,10 +343,77 @@ function consoleOriginAllowed(origin: string | undefined): boolean {
   }
 }
 
+const passwdPath = process.env.PASSWD_FILE ?? path.join(repoRoot, '.passwd');
+const auth = new ConsoleAuth({
+  file: passwdPath,
+  warn: (message) => console.log(`[bxconsole] ${message}`),
+});
+
+/*
+ * Guessing the password is only limited by how fast it can be tried, so this
+ * is the lockout: five wrong answers a minute from one address. A correct one
+ * clears the count, so an operator who mistypes twice is not locked out of
+ * their own relay.
+ */
+const loginLimit = new RateLimit(5, 60_000);
+
+/*
+ * The agent socket cannot be authenticated. The agent runs in a browser that
+ * is not ours, so anything we put in it to prove itself is readable by anyone
+ * who can read the payload — which is the point of a blind XSS payload being
+ * where it is. What is left is to bound it: a session is created by whoever
+ * opens this socket and says hello, and each one is a file on disk and a row
+ * in the console's list.
+ *
+ * The allowance is generous because every navigation re-injects the agent and
+ * opens a new socket, and a whole office can share one address. It is here to
+ * turn an unbounded flood into a trickle, not to stop a determined caller.
+ */
+const agentLimit = new RateLimit(120, 60_000);
+
+/** Take a password from the sign-in form and hand back the cookie. */
+async function serveLogin(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += (chunk as Buffer).length;
+    if (size > 4096) return void plain(res, 413, 'too long');
+    chunks.push(chunk as Buffer);
+  }
+  const key = limitKey(req.socket.remoteAddress);
+  if (!loginLimit.allow(key)) {
+    res.writeHead(429, { 'Content-Type': 'text/html; charset=utf-8', 'Retry-After': '60', 'Cache-Control': 'no-store' });
+    return void res.end(loginPage(false, true));
+  }
+  const password = new URLSearchParams(Buffer.concat(chunks).toString('utf8')).get('password') ?? '';
+  const setCookie = await auth.cookieFor(password);
+  if (!setCookie) {
+    // Slow as well as limited: the pause costs a human one mistype and costs a
+    // script the only thing it has, which is attempts per second.
+    await new Promise((r) => setTimeout(r, 400));
+    res.writeHead(401, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
+    return void res.end(loginPage(true));
+  }
+  loginLimit.clear(key);
+  res.writeHead(303, { 'Set-Cookie': setCookie, Location: '/', 'Cache-Control': 'no-store' });
+  res.end();
+}
+
 const server = http.createServer((req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
   const requested = new URL(req.url ?? '/', 'http://localhost');
   const { pathname } = requested;
+
+  if (pathname === '/login' && req.method === 'POST') {
+    return void serveLogin(req, res).catch(() => plain(res, 500, 'login error'));
+  }
+  /*
+   * Everything that is not reached by a victim's browser needs the password.
+   * Closed by default on purpose: a route added later is protected without
+   * anyone remembering to protect it.
+   */
+  if (!isVictimPath(pathname) && !auth.allows(req)) return void refuse(req, res);
+
   if (pathname === '/agent.js') return void serveAgent(req, res);
   if (pathname === '/pre-payload') {
     return void servePrePayload(req, res).catch(() => plain(res, 500, 'pre-payload error'));
@@ -368,11 +438,15 @@ const consoleWss = new WebSocketServer({ noServer: true });
 
 server.on('upgrade', (req, socket, head) => {
   const { pathname } = new URL(req.url ?? '/', 'http://localhost');
-  if (pathname === WS_PATH.console && !consoleOriginAllowed(req.headers.origin)) {
-    // WebSocket handshakes ignore CORS, so without this any page the user
-    // visits could open this socket and evaluate code in their debugged pages.
-    socket.destroy();
-    return;
+  if (pathname === WS_PATH.console) {
+    // WebSocket handshakes ignore CORS, so without the origin check any page
+    // the user visits could open this socket and evaluate code in their
+    // debugged pages. The cookie rides along on the handshake by itself,
+    // which is why the password is a cookie and not a header.
+    if (!consoleOriginAllowed(req.headers.origin) || !auth.allows(req)) {
+      socket.destroy();
+      return;
+    }
   }
   if (pathname.startsWith('/ping/websocket/')) {
     /*
@@ -396,6 +470,18 @@ server.on('upgrade', (req, socket, head) => {
     return;
   }
   if (pathname === WS_PATH.agent) {
+    /*
+     * A browser always sends Origin on a WebSocket handshake; curl and wscat
+     * do not. The value is not checked and cannot be — a blind XSS payload
+     * fires on pages we have not been told about, which is the whole premise,
+     * so there is no list to check it against. Only its presence is, which
+     * costs nothing and turns away the casual probe that found the port.
+     *
+     * Anyone who sets the header walks past this. It is a filter, not a
+     * boundary, and the limit below is what actually bounds the damage.
+     */
+    if (req.headers.origin === undefined) return void socket.destroy();
+    if (!agentLimit.allow(limitKey(req.socket.remoteAddress))) return void socket.destroy();
     agentWss.handleUpgrade(req, socket, head, (ws) => {
       armHeartbeat(ws);
       relay.attachAgent(ws);
@@ -458,6 +544,17 @@ try {
   process.exit(1);
 }
 
+/*
+ * Read .passwd before listening. A file the operator has to fix should stop
+ * the relay now, with the reason, rather than at the first sign-in attempt.
+ */
+try {
+  auth.load();
+} catch (err) {
+  console.error(`[bxconsole] ${(err as Error).message}`);
+  process.exit(1);
+}
+
 await registry.loadFromDisk();
 relay.startRetention(RETENTION_DAYS);
 
@@ -467,7 +564,18 @@ server.listen(PORT, HOST, () => {
   console.log(`[bxconsole] agent:   <script src="${origin}/agent.js" data-name="..."></script>  or  import("${origin}/agent.js?name=...")`);
   console.log(`[bxconsole] console: http://localhost:${PORT}/  (dev: http://localhost:5173/)`);
   if (HOST !== '127.0.0.1' && HOST !== 'localhost') {
-    console.log(`[bxconsole] reachable on the network (HOST=${HOST}) and unauthenticated: anyone who can reach this port can read`);
-    console.log(`[bxconsole] every recording and evaluate expressions in the debugged pages. Keep it on a trusted network.`);
+    /*
+     * These two used to print together and contradicted each other, one
+     * saying the console was protected and the next that it was open. What is
+     * true is that the operator's half is protected and the victim's half
+     * cannot be, so say exactly that.
+     */
+    console.log(
+      auth.source === 'file'
+        ? `[bxconsole] operator access: the accounts in ${path.relative(repoRoot, passwdPath) || passwdPath}`
+        : `[bxconsole] operator access: CONSOLE_PASSWORD${auth.isDefault ? ' — still the default from the repository. Run: npm run passwd' : ''}`,
+    );
+    console.log(`[bxconsole] reachable on the network (HOST=${HOST}). /agent.js, ${WS_PATH.agent} and /ping cannot ask for a`);
+    console.log(`[bxconsole] password — nobody is at the keyboard — so keep this on a network you trust.`);
   }
 });

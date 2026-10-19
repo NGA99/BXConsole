@@ -14,6 +14,10 @@ sessions/*
 .env.*
 !.env.example
 
+# Operator accounts. Hashed with scrypt, but a hash is still a credential at
+# rest and the relay refuses to start if this is readable by anyone else.
+.passwd
+
 # TLS material, because the README tells people to put the relay behind a
 # proxy and the keys end up next to the project.
 *.pem

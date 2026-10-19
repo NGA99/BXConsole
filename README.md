@@ -66,6 +66,52 @@ no configuration unless you turn something off.
 
 ---
 
+## Who can reach what
+
+The relay has two kinds of caller and only one of them can be asked for
+anything.
+
+A victim's browser fetches `/agent.js`, opens `/ws/agent` and fires the
+`/ping` probes with nobody at the keyboard. Those stay open — there is no one
+there to type a password, and closing them would mean the tool does not work.
+
+Everything else is yours: the console and its socket, the recordings, the
+asset and body proxies, the pre-payload. Those need a password, and anything
+added later is closed until someone opens it.
+
+### Setting the password
+
+```bash
+npm run passwd            # or: npm run passwd -- <user>
+```
+
+That writes `.passwd` at mode 600 and the relay re-reads it when it changes —
+**no restart.** This matters more here than it looks: restarting drops every
+agent socket, and a blind XSS run cannot be started again because the admin
+who opened that ticket will not open it twice.
+
+Changing the password invalidates every cookie issued under the old one, so
+rotating it is also how you sign other people out.
+
+Without a `.passwd`, the relay falls back to `CONSOLE_PASSWORD`, and without
+that to a default printed in this repository — which is a lock on the door,
+not a secret. The startup banner says which one is in use.
+
+One account for now. The file format holds more and the relay ignores the
+extras rather than honouring them.
+
+### What the password does not protect
+
+`/agent.js` and `/ws/agent` cannot be authenticated. The agent runs in a
+browser that is not yours, so anything put in it to prove itself is readable
+by anyone who can read the payload — which is sitting in someone else's
+application, where you put it. The socket requires an `Origin` header, which
+turns away `curl` and `wscat`, and is rate-limited per address so one caller
+cannot fill the disk with sessions. Neither is a boundary. Keep the relay on
+a network you trust.
+
+---
+
 ## Getting the agent in
 
 The Agent tab generates each of these against your relay's address:
@@ -230,6 +276,8 @@ what no other run still points at.
 | `CONSOLE_ORIGINS` | loopback only | extra origins allowed to open the console socket |
 | `SESSION_RETENTION_DAYS` | `0` | `0` keeps recordings forever |
 | `ASSET_MAX_BYTES` | 50 MB | per-run budget for collected files and stored bodies |
+| `PASSWD_FILE` | `.passwd` | operator accounts; see [Who can reach what](#who-can-reach-what) |
+| `CONSOLE_PASSWORD` | a default in this repo | used only when there is no `.passwd` |
 
 A target on `https` needs the relay on `https`/`wss` too — put it behind a TLS
 proxy and set `PUBLIC_ORIGIN`.
