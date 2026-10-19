@@ -59,7 +59,7 @@ export function getHandle(win: Window): PageHandle | undefined {
 }
 
 export function setHandle(win: Window, value: PageHandle): void {
-  bag(win)[markName()] = value;
+  put(win, markName(), value);
 }
 
 export function getFlag(win: Window, suffix: string): unknown {
@@ -67,5 +67,37 @@ export function getFlag(win: Window, suffix: string): unknown {
 }
 
 export function setFlag(win: Window, suffix: string, value: unknown): void {
-  bag(win)[flagName(suffix)] = value;
+  put(win, flagName(suffix), value);
+}
+
+/**
+ * Put a value on a window without adding it to the list of its globals.
+ *
+ * A plain assignment makes an enumerable own property, so `Object.keys(window)`
+ * hands every one of these to the page — which costs `data-mark` most of its
+ * point. Renaming the traces is only worth something if finding them takes
+ * knowing the name; a page that can list them does not have to guess. Defined
+ * this way they answer to the name and to nothing else.
+ *
+ * `configurable: false` so the page cannot `delete` them either, and
+ * `writable: true` because these are flags the agent sets more than once —
+ * the second write is an assignment, which is why `put` re-assigns rather
+ * than redefining when the property is already ours.
+ */
+function put(win: Window, key: string, value: unknown): void {
+  const o = bag(win);
+  try {
+    if (Object.getOwnPropertyDescriptor(o, key)) {
+      o[key] = value;
+      return;
+    }
+    Object.defineProperty(o, key, { value, writable: true, enumerable: false, configurable: false });
+  } catch {
+    // A page that locked this name first. Better a visible trace than none.
+    try {
+      o[key] = value;
+    } catch {
+      /* nothing more to try */
+    }
+  }
 }

@@ -26,8 +26,8 @@
  *     know before they start.
  */
 import type { AgentConfig } from '../config';
-import { flagName } from '../mark';
-import { watchWindow } from './adopt';
+import { flagName, getFlag, setFlag } from '../mark';
+import { adoptChildren, adoptOpeners, askOpenerToWatch, watchWindow } from './adopt';
 
 /**
  * The frame's name, so the document inside it can tell where it is.
@@ -64,10 +64,9 @@ export function hostInIframe(config: AgentConfig, sessionId: string, carryOn: ()
   }
   // The top window never sets __bxconsole (it returns before that), so a
   // second load of the script would otherwise wrap the wrapper.
-  const w = window as unknown as Record<string, unknown>;
-  const hosting = flagName('Hosting');
-  if (w[hosting]) return true;
-  w[hosting] = true;
+  // Through setFlag like every other trace, so it is not enumerable either.
+  if (getFlag(window, 'Hosting')) return true;
+  setFlag(window, 'Hosting', true);
 
   /*
    * The snippet belongs in <head>, where there is no body yet.
@@ -82,11 +81,41 @@ export function hostInIframe(config: AgentConfig, sessionId: string, carryOn: ()
    * part of the run.
    */
   const start = () => wrap(config, sessionId, () => {
-    w[hosting] = false;
+    setFlag(window, 'Hosting', false);
     carryOn();
   });
   if (document.body) start();
   else whenBodyExists(start);
+
+  /*
+   * The supervisor installs no hooks — but it still has to adopt the windows
+   * opened from it.
+   *
+   * Everything the page does happens inside the frame, where `window.open` is
+   * patched, so the page's own popups were never the problem. The operator's
+   * own commands were: a devtools console defaults to the top frame, which is
+   * this one, so `window.open("/")` typed there went through an unpatched
+   * function and the new window left the run with nothing to say why.
+   *
+   * `adoptChildren` is all that is needed and no more. Its click interceptor
+   * finds nothing here, because this document holds one iframe and no links.
+   */
+  if (config.adopt) {
+    adoptChildren(config, sessionId);
+    /*
+     * Upwards is the supervisor's job too, and for a sharper reason: an
+     * iframe has no opener. The agent that runs the ordinary boot lives
+     * inside the frame, where `window.opener` is null, so a run that reached
+     * C through A -> B -> C could not climb one step. The window holding that
+     * chain is this one.
+     *
+     * Asking the opener to watch us matters as much. The window above booted
+     * before we existed, so its own `window.open` hook never saw us, and
+     * without this our next navigation would drop the agent for good.
+     */
+    adoptOpeners(config, sessionId);
+    askOpenerToWatch();
+  }
   return true;
 }
 
@@ -118,9 +147,29 @@ function wrap(config: AgentConfig, sessionId: string, giveUp: () => void): void 
   const url = location.href;
   const doc = document;
 
-  const style = doc.createElement('style');
-  style.textContent = 'html,body{margin:0;padding:0;height:100%;overflow:hidden}';
-  (doc.head || doc.documentElement).appendChild(style);
+  /*
+   * The page's own margins, written straight onto the two elements.
+   *
+   * This used to be a <style> element, which a page with a strict `style-src`
+   * refuses: the stylesheet is dropped and nothing says so except a CSP
+   * report. The frame still filled the viewport — an element's own `style` is
+   * applied where a stylesheet is not — so what was left was the body's 8px
+   * margin around it, a scrollbar on each axis from the 16px of overflow, and
+   * a violation report sent to whoever collects them. A visible border and a
+   * line in the target's security log is not a quiet way to sit in a page.
+   *
+   * Setting the properties individually is allowed under the same policy, so
+   * this works where the stylesheet did not and is no louder where both do.
+   */
+  const reset: Array<{ el: HTMLElement; css: string }> = [];
+  for (const el of [doc.documentElement, doc.body]) {
+    if (!(el instanceof HTMLElement)) continue;
+    reset.push({ el, css: el.style.cssText });
+    el.style.margin = '0';
+    el.style.padding = '0';
+    el.style.height = '100%';
+    el.style.overflow = 'hidden';
+  }
 
   /*
    * Hide what the page had drawn rather than deleting it.
@@ -155,7 +204,7 @@ function wrap(config: AgentConfig, sessionId: string, giveUp: () => void): void 
     clearTimeout(timer);
     stopWatching();
     frame.remove();
-    style.remove();
+    for (const { el, css } of reset) el.style.cssText = css;
     for (const { el, display } of hidden) el.style.display = display;
     giveUp();
   };
