@@ -8,6 +8,7 @@
 import { useState } from 'react';
 import { copyText } from '../network/copy';
 import { AgentSource } from './AgentSource';
+import { PrePayloadEditor } from './PrePayloadEditor';
 import { loadSetup, saveSetup, snippetsFor, type Options, type Setup } from './agent-setup';
 
 const OPTION_TEXT: Array<{ key: keyof Options; name: string; label: string; hint: string }> = [
@@ -40,6 +41,13 @@ const OPTION_TEXT: Array<{ key: keyof Options; name: string; label: string; hint
     name: 'Magpie',
     label: 'Keep the code the page loads',
     hint: 'Fetches each script, stylesheet and document as the page loads it, so they are still readable once the run has ended — which is the only time they cannot be fetched any more. Only files the browser already loaded, never an API call.',
+  },
+  {
+    key: 'pre',
+    // It goes in before anyone is looking, which is the point of it.
+    name: 'Primer',
+    label: 'Run a script the moment the agent lands',
+    hint: 'For the window that is open for eight seconds and gone before anyone opens a console to type into. It runs after the hooks, so whatever it fetches lands in Network with its body and whatever it logs lands in Console; what it returns is marked into History. The script is stored on the relay and only sent to payloads that ask for it.',
   },
   {
     key: 'frame',
@@ -99,6 +107,8 @@ export function AgentPanel({ onDiagnose }: { onDiagnose?: () => void }) {
           </label>
         ))}
       </div>
+
+      {setup.pre && <PrePayloadEditor />}
 
       {showSource && <AgentSource origin={origin} />}
       {snippets.map((s) => (

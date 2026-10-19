@@ -354,7 +354,11 @@ html:not([data-theme='light']) .hist-body {
 }
 
 .hist-row-kind {
-  flex: 0 1 72px;
+  /* Not shrinkable: rows carrying a duration are wider, so a shrinkable kind
+     gave way on those alone and the labels beside it stopped lining up. The
+     label absorbs the pressure instead, and below 400px the container query
+     takes this column away entirely. */
+  flex: 0 0 72px;
   min-width: 0;
   color: var(--sys-color-on-surface-subtle);
   overflow: hidden;

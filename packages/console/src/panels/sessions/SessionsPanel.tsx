@@ -10,6 +10,7 @@
  */
 import { useState } from 'react';
 import { assetPath, type SessionMeta } from '@bxconsole/protocol';
+import { browserInfo, browserLabel, platformLabel } from './browser-info';
 import { useSessionList } from '../../state/sessions';
 import { forgetSession, trashSession, restoreSession } from '../../transport/client';
 import { navigate, navigateToView, type SessionView } from '../../app/router';
@@ -151,9 +152,11 @@ function SessionList({
             <span className={`dot ${s.connected ? 'on' : 'off'}`} />
             <Favicon url={s.url} sessionId={s.sessionId} />
             <div className="session-main">
+              {/* Always three cells, even when there is no page title: with two
+                  the id slides into the middle column and stops lining up. */}
               <div className="session-title">
-                {s.name ?? s.title ?? '(untitled)'}
-                {s.name && s.title && <span className="session-page-title">{s.title}</span>}
+                <span className="session-name">{s.name ?? s.title ?? '(untitled)'}</span>
+                <span className="session-page-title">{s.name && s.title ? s.title : ''}</span>
                 <span className="session-id mono">session-{s.sessionId}</span>
               </div>
               <div className="session-url mono" title={s.url}>
@@ -169,8 +172,12 @@ function SessionList({
                 </span>
               )}
             </div>
+            {/* Two lines, like the timestamp opposite it: which browser ran
+                the payload, and where. On a blind XSS run that is most of
+                what is known about whose browser this was. */}
             <div className="session-env" title={s.userAgent}>
-              {browserOf(s.userAgent)} · {s.viewport.width}×{s.viewport.height}
+              <span>{browserLabel(browserInfo(s.userAgent))}</span>
+              <span className="session-env-platform">{platformLabel(browserInfo(s.userAgent), s.viewport)}</span>
             </div>
             <div
               className="session-time"
@@ -252,14 +259,6 @@ function Favicon({ url, sessionId }: { url: string; sessionId: string }) {
   return <img className="session-favicon" src={src} alt="" onError={() => setFailed(true)} />;
 }
 
-function browserOf(ua: string): string {
-  if (/Edg\//.test(ua)) return 'Edge';
-  if (/OPR\//.test(ua)) return 'Opera';
-  if (/Chrome\//.test(ua)) return /Mobile/.test(ua) ? 'Chrome Mobile' : 'Chrome';
-  if (/Firefox\//.test(ua)) return 'Firefox';
-  if (/Safari\//.test(ua)) return /iPhone|iPad/.test(ua) ? 'Safari iOS' : 'Safari';
-  return 'Browser';
-}
 
 function relative(ts: number): string {
   const d = Date.now() - ts;

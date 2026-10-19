@@ -27,7 +27,7 @@ function fakeStorage(seed: Record<string, string> = {}) {
  * the same as the tab. So a run with nothing turned off needs no parameters,
  * and the snippet is a bare script tag.
  */
-const AGENT_DEFAULTS: Omit<Setup, 'name'> = { record: true, bodies: true, adopt: true, frame: true, collect: true };
+const AGENT_DEFAULTS: Omit<Setup, 'name'> = { record: true, bodies: true, adopt: true, frame: true, collect: true, pre: false };
 const asAgent = (over: Partial<Setup> = {}): Setup => ({ name: 'my-app', ...AGENT_DEFAULTS, ...over });
 
 describe('the choices', () => {
@@ -147,14 +147,14 @@ describe('every parameter a snippet can emit is one the agent reads', () => {
     // The gap that let `frame=off` be ignored: the console wrote a name the
     // relay did not forward, and the only symptom was an option that quietly
     // did nothing in every snippet except the script tag.
-    const allOff: Setup = { name: 'n', record: false, bodies: false, adopt: false, frame: false, collect: false };
+    const allOff: Setup = { name: 'n', record: false, bodies: false, adopt: false, frame: false, collect: false, pre: false };
     for (const [key] of paramsFor(allOff)) {
       assert.ok((AGENT_PARAMS as readonly string[]).includes(key), `the agent does not read "${key}"`);
     }
   });
 
   test('and every switch is represented, so none is unreachable', () => {
-    const allOff: Setup = { name: 'n', record: false, bodies: false, adopt: false, frame: false, collect: false };
+    const allOff: Setup = { name: 'n', record: false, bodies: false, adopt: false, frame: false, collect: false, pre: false };
     const written = paramsFor(allOff).map(([k]) => k);
     assert.deepEqual(written.sort(), ['adopt', 'bodies', 'collect', 'frame', 'name', 'screen']);
   });

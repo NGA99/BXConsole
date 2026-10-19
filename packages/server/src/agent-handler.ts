@@ -12,6 +12,11 @@
  * one shared list — this used to be a second copy of the names, and it fell
  * four short, so `frame`, `adopt` and `collect` did nothing at all when the
  * agent was loaded by `import()` or a bookmarklet rather than a script tag.
+ *
+ * `pre` is the one that is not passed through. A payload asks for the stored
+ * pre-payload with `pre=1` and gets the script in its place, so that a page
+ * which can shape its own agent's URL still cannot choose what that agent
+ * runs. A payload that does not ask never receives it.
  */
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import fs from 'node:fs/promises';
@@ -19,7 +24,14 @@ import { AGENT_PARAMS, INJECT_GLOBAL, type InjectedConfig } from '@bxconsole/pro
 
 export type { InjectedConfig };
 
-export function createAgentHandler(bundlePath: string, opts: { publicOrigin?: string | undefined }) {
+export function createAgentHandler(
+  bundlePath: string,
+  opts: {
+    publicOrigin?: string | undefined;
+    /** The stored pre-payload, read fresh so editing it needs no restart. */
+    prePayload?: () => Promise<string | null>;
+  },
+) {
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
     let bundle: string;
     try {
@@ -32,8 +44,13 @@ export function createAgentHandler(bundlePath: string, opts: { publicOrigin?: st
     const url = new URL(req.url ?? '/', 'http://localhost');
     const config: InjectedConfig = { origin: opts.publicOrigin ?? requestOrigin(req) };
     for (const key of AGENT_PARAMS) {
+      if (key === 'pre') continue; // asked for below, never forwarded as-is
       const v = url.searchParams.get(key);
       if (v) config[key] = v;
+    }
+    if (url.searchParams.get('pre') === '1' && opts.prePayload) {
+      const source = await opts.prePayload();
+      if (source) config.pre = source;
     }
     const header = `self.${INJECT_GLOBAL}=${JSON.stringify(config)};\n`;
     res.writeHead(200, {

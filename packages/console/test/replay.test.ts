@@ -243,3 +243,86 @@ describe('ScreenReplayer', () => {
 function settle(): Promise<void> {
   return new Promise((resolve) => setImmediate(resolve));
 }
+
+/**
+ * The recorded cursor.
+ *
+ * Live, the pointer is drawn from a stream of events; in a recording it has to
+ * be reconstructed from samples, and the one rule that matters is that it is
+ * never shown somewhere it has not reached yet. A cursor that runs ahead of
+ * the DOM it is supposed to be acting on tells the reader the wrong story
+ * about what the person was doing.
+ */
+function relayWithPointer(points: Array<{ ts: number; x: number; y: number; pressed?: boolean }>): Fetch {
+  const bounds = { start: T, end: T + 60_000 };
+  const snap = snapshot(T);
+  return (_sessionId, ts, mode) =>
+    Promise.resolve({
+      bounds,
+      ...(mode === 'seek' ? { snapshot: snap } : {}),
+      batches: [],
+      done: true,
+      changes: 0,
+      from: 0,
+      pointer: points
+        .filter((p) => (mode === 'seek' ? true : p.ts >= ts))
+        .map((p) => ({ ts: p.ts, x: p.x, y: p.y, pressed: p.pressed ?? false })),
+    });
+}
+
+describe('the recorded cursor', () => {
+  const trail = [
+    { ts: T + 1000, x: 10, y: 10 },
+    { ts: T + 2000, x: 20, y: 20 },
+    { ts: T + 3000, x: 30, y: 30, pressed: true },
+    { ts: T + 4000, x: 40, y: 40 },
+  ];
+
+  test('a seek shows where the pointer was at that moment, not where it ends up', async () => {
+    const { replayer, status } = makeReplayer(relayWithPointer(trail));
+    await replayer.seek(T + 2500);
+    assert.deepEqual({ x: status().pointer?.x, y: status().pointer?.y }, { x: 20, y: 20 });
+  });
+
+  test('it never runs ahead of the playhead', async () => {
+    const { replayer, status } = makeReplayer(relayWithPointer(trail));
+    await replayer.seek(T + 1500);
+    assert.equal(status().pointer?.x, 10, 'the sample at 2000 has not happened yet');
+  });
+
+  test('before the first sample there is nothing to draw', async () => {
+    const { replayer, status } = makeReplayer(relayWithPointer(trail));
+    await replayer.seek(T + 500);
+    assert.equal(status().pointer, null);
+  });
+
+  test('a press is reported as pressed, and only while it is', async () => {
+    const { replayer, status } = makeReplayer(relayWithPointer(trail));
+    await replayer.seek(T + 3000);
+    assert.equal(status().pointer?.pressed, true);
+    await replayer.seek(T + 4000);
+    assert.equal(status().pointer?.pressed, false);
+  });
+
+  test('seeking backwards finds where it used to be', async () => {
+    // The trail is kept whole rather than consumed, so going back is not a
+    // rebuild — it is a lookup.
+    const { replayer, status } = makeReplayer(relayWithPointer(trail));
+    await replayer.seek(T + 4000);
+    assert.equal(status().pointer?.x, 40);
+    await replayer.seek(T + 1000);
+    assert.equal(status().pointer?.x, 10);
+  });
+
+  test('a recording with no cursor samples replays without one', async () => {
+    const { replayer, status } = makeReplayer(relayFor([T], [T + 1000]));
+    await replayer.seek(T + 1000);
+    assert.equal(status().pointer, null);
+  });
+
+  test('samples land on the exact millisecond they were recorded at', async () => {
+    const { replayer, status } = makeReplayer(relayWithPointer(trail));
+    await replayer.seek(T + 2000);
+    assert.equal(status().pointer?.x, 20, 'at or before, so the boundary sample counts');
+  });
+});

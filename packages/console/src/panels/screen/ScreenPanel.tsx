@@ -33,16 +33,8 @@ const MODES: Array<{ id: ViewMode; label: string; title: string }> = [
   { id: 'fit', label: 'Fit', title: 'Remote viewport, scaled to fit' },
   { id: 'actual', label: '1:1', title: 'Remote viewport at actual size' },
 ];
-import {
-  useEffect,
-  useRef,
-  useState,
-  type ClipboardEvent as ReactClipboardEvent,
-  type KeyboardEvent as ReactKeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
-  type WheelEvent as ReactWheelEvent,
-} from 'react';
-import type { ScreenEvent, ScreenOp, ScreenSnapshot } from '@bxconsole/protocol';
+import { useCallback, useEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type WheelEvent as ReactWheelEvent } from 'react';
+import type { PointerSample, ScreenEvent, ScreenOp, ScreenSnapshot } from '@bxconsole/protocol';
 import { subscribeScreen, refreshScreen, sendScreenInput } from '../../transport/client';
 import { useActiveTab } from '../../state/active-tab';
 import { useSessionsStore } from '../../state/sessions';
@@ -105,6 +97,31 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
   const [interact, setInteract] = useState(true);
   /** null while live; the player's state while showing the recording */
   const [replay, setReplay] = useState<ReplayStatus | null>(null);
+
+  /**
+   * Put the remote cursor where the page had it, live or recorded.
+   *
+   * The anchor is preferred over raw coordinates: it is exact even when the
+   * mirror has reflowed to a different width, which it usually has. Pixel
+   * offsets for a box that is still its recorded size, fractions for one that
+   * is not. Passing null hides the cursor.
+   */
+  const drawCursor = useCallback((at: PointerSample | null) => {
+    const el = cursorRef.current;
+    if (!el) return;
+    if (!at) {
+      el.style.opacity = '0';
+      return;
+    }
+    el.style.opacity = '1';
+    const a = at.anchor;
+    const r = a ? mirror.current?.rectOf(a.id) : null;
+    const sameSize = r && a && Math.abs(r.width - a.w) < 2 && Math.abs(r.height - a.h) < 2;
+    const x = r && a ? (sameSize ? r.left + a.dx : r.left + r.width * a.fx) : at.x;
+    const y = r && a ? (sameSize ? r.top + a.dy : r.top + r.height * a.fy) : at.y;
+    el.style.transform = `translate(${x * layoutRef.current.scale}px, ${y * layoutRef.current.scale}px)`;
+    el.classList.toggle('pressed', at.pressed);
+  }, []);
   /*
    * The ended-run notice, once it has been read.
    *
@@ -211,20 +228,10 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
         }
         case 'screen.cursor': {
           // Direct DOM update: mousemove is far too frequent for React state.
-          const el = cursorRef.current;
-          if (!el) break;
-          // While the viewer's own pointer is over the mirror, it IS the cursor: don't draw the echo.
+          // While the viewer's own pointer is over the mirror, it IS the
+          // cursor: don't draw the echo.
           const localRecently = Date.now() - lastLocalMove.current < 1500;
-          el.style.opacity = event.visible && !localRecently ? '1' : '0';
-          // Prefer the element anchor: exact even when the mirror reflowed to another width.
-          // Same-sized boxes use pixel offsets; reflowed boxes fall back to fractions.
-          const a = event.anchor;
-          const r = a ? mirror.current?.rectOf(a.id) : null;
-          const sameSize = r && a && Math.abs(r.width - a.w) < 2 && Math.abs(r.height - a.h) < 2;
-          const x = r && a ? (sameSize ? r.left + a.dx : r.left + r.width * a.fx) : event.x;
-          const y = r && a ? (sameSize ? r.top + a.dy : r.top + r.height * a.fy) : event.y;
-          el.style.transform = `translate(${x * layoutRef.current.scale}px, ${y * layoutRef.current.scale}px)`;
-          el.classList.toggle('pressed', event.pressed);
+          drawCursor(event.visible && !localRecently ? event : null);
           break;
         }
         case 'screen.stopped':
@@ -290,7 +297,13 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
       sessionId,
       loadSnapshot: (snapshot) => loadSnapshot(snapshot, 'replay'),
       applyOps: (ops) => void applyOps(ops),
-      onStatus: setReplay,
+      onStatus: (next) => {
+        setReplay(next);
+        // Recorded runs put the cursor back where the page had it. Doing it
+        // here rather than in a render effect keeps it off React's path, the
+        // same reason the live stream writes to the element directly.
+        drawCursor(next.pointer);
+      },
     });
     // No moment asked for means the Replay button, which opens the recording
     // at its beginning. A moment asked for comes from the History timeline,
@@ -302,6 +315,7 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
     replayer.current?.dispose();
     replayer.current = null;
     setReplay(null);
+    drawCursor(null);
     useScreenReplay.getState().setPlayhead(null);
     setStatus((s) => ({ ...s, state: 'connecting' }));
     // A fresh snapshot, or the last recorded frame when the session is offline.

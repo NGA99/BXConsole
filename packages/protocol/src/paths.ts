@@ -49,6 +49,25 @@ export const SCREEN_LOG_FILE = 'screen.ndjson';
 /** Pre-timeline single frame, still read so older session dirs keep working. */
 export const SCREEN_FRAME_FILE = 'screen.json';
 
+/**
+ * Script every agent runs the moment it installs, held on the relay.
+ *
+ * A blind XSS window may be open for eight seconds. By the time anyone has
+ * noticed the session and opened a console, the page is gone — so whatever
+ * you wanted from it has to be taken without a person in the loop. This is
+ * that: arbitrary JS, run once per agent, after the hooks are in place so
+ * whatever it fetches or logs is captured like any other page activity.
+ *
+ * It is global, which is the thing to be careful about. The relay has no
+ * authentication, so anyone who can reach it can set this, and every agent
+ * that connects afterwards will run it — in every engagement on that relay.
+ * Reading recordings is one thing; this is code execution in someone else's
+ * browser. Do not expose a relay that has one of these set.
+ */
+export const PRE_PAYLOAD_FILE = 'pre-payload.js';
+/** Nothing longer is served: it travels inline with every agent.js request. */
+export const PRE_PAYLOAD_MAX_BYTES = 64 * 1024;
+
 /** Per-session retention budget for the Screen recording; oldest keyframes go first. */
 export const SCREEN_LOG_MAX_BYTES = 50 * 1024 * 1024;
 

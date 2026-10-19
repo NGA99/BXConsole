@@ -81,7 +81,9 @@ export class ScreenLog {
 
     void this.ensureIndex(sessionId).then((idx) => {
       if (record.k === 1) idx.keyframes.push({ ts: record.ts, offset: idx.size, before: idx.batches });
-      else idx.batches++;
+      // A cursor sample is neither: it annotates the recording without being a
+      // change to it, so it must not move the batch counter the scrubber reads.
+      else if (record.k === 0) idx.batches++;
       idx.size += bytes;
       idx.firstTs ??= record.ts;
       idx.lastTs = record.ts;
@@ -125,6 +127,12 @@ export class ScreenLog {
     let fresh = 0;
 
     for await (const { record, length } of this.readFrom(sessionId, kf.offset)) {
+      if (record.k === 2) {
+        // Carried along with whatever window the caller asked for; the viewer
+        // sorts out which ones are at or before its playhead.
+        (out.pointer ??= []).push({ ts: record.ts, ...record.pointer });
+        continue;
+      }
       if (record.k === 1) {
         // The first line read is the keyframe this seek starts from. Later ones
         // are redundant: the op stream between keyframes is complete on its own.

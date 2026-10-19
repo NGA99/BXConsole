@@ -192,10 +192,18 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/*
+ * Two fixed slots, not a right-aligned flex row.
+ *
+ * `tag` only exists for the probes that have a markup form, so flexing to
+ * the right put `url` in one place on those rows and 38px further over on
+ * the others — a link you are reaching for should not move between rows.
+ */
 .diag-row-actions {
-  display: flex;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
   gap: 8px;
-  justify-content: flex-end;
+  justify-items: end;
 }
 .diag-matrix th {
   color: var(--sys-color-token-subtle);

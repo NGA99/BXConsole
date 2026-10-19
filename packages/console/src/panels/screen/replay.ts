@@ -10,7 +10,7 @@
  * Ops are not invertible, so going backwards means rebuilding: from the
  * keyframe we already hold when possible, otherwise by seeking again.
  */
-import type { ScreenOp, ScreenSegment, ScreenSnapshot } from '@bxconsole/protocol';
+import type { PointerSample, ScreenOp, ScreenSegment, ScreenSnapshot } from '@bxconsole/protocol';
 import { requestScreenSegment } from '../../transport/client';
 
 export const SPEEDS = [0.5, 1, 2, 4] as const;
@@ -51,7 +51,14 @@ export interface ReplayStatus {
   step: number;
   /** batches in the whole recording, known from the first answer the relay gives */
   total: number;
+  /**
+   * Where the recorded pointer was at the playhead, or null before the first
+   * sample. The panel draws this the way it draws the live cursor.
+   */
+  pointer: PointerAt | null;
 }
+
+export type PointerAt = { ts: number } & PointerSample;
 
 /** The frame clock playback runs on; the browser's, unless a test drives it by hand. */
 interface Frames {
@@ -91,6 +98,12 @@ export class ScreenReplayer {
   private skipSeq = 0;
   /** applied batches dropped by trim(), so the counters do not jump backwards */
   private trimmed = 0;
+  /**
+   * Recorded cursor positions, time-ordered. Kept apart from `batches`
+   * because they are not changes: trimming applied batches must not drop the
+   * pointer's history, and a seek backwards has to find where it used to be.
+   */
+  private pointer: PointerAt[] = [];
   /** batches recorded before the segment in hand, so the position is the recording's, not the window's */
   private base = 0;
   private changes = 0;
@@ -108,6 +121,7 @@ export class ScreenReplayer {
     url: '',
     step: 0,
     total: 0,
+      pointer: null,
   };
 
   constructor(private readonly hooks: Hooks) {
@@ -166,6 +180,7 @@ export class ScreenReplayer {
     }
     this.snapshot = segment.snapshot;
     this.batches = segment.batches;
+    this.pointer = segment.pointer ?? [];
     this.cursor = 0;
     this.trimmed = 0;
     this.base = segment.from;
@@ -317,6 +332,22 @@ export class ScreenReplayer {
     }
   }
 
+  /**
+   * The last sample at or before `ts`.
+   *
+   * Walked from the end because playback moves forward and a seek lands near
+   * where it was asked to; the loop almost always stops on the first or
+   * second try. Returning the last one before the playhead rather than the
+   * nearest is deliberate — a cursor must never be shown somewhere it has not
+   * reached yet.
+   */
+  private pointerAt(ts: number): PointerAt | null {
+    for (let i = this.pointer.length - 1; i >= 0; i--) {
+      if (this.pointer[i]!.ts <= ts) return this.pointer[i]!;
+    }
+    return null;
+  }
+
   /** Keep the applied history bounded; dropping it costs the local rebuild. */
   private trim(): void {
     if (this.cursor <= TRIM_AT) return;
@@ -351,6 +382,10 @@ export class ScreenReplayer {
     let skip = 0;
     while (skip < held && segment.batches[skip]?.ts === edge) skip++;
     this.batches.push(...segment.batches.slice(skip));
+    if (segment.pointer?.length) {
+      const seen = this.pointer.length ? this.pointer[this.pointer.length - 1]!.ts : -Infinity;
+      this.pointer.push(...segment.pointer.filter((p) => p.ts > seen));
+    }
     this.hasAllToEnd = segment.done;
     this.changes = segment.changes;
     this.setStatus({ loading: false, bounds: segment.bounds ?? this.status.bounds });
@@ -359,12 +394,15 @@ export class ScreenReplayer {
   private setStatus(patch: Partial<ReplayStatus>): void {
     // The counters follow the batch list, so they are recomputed on every
     // update rather than remembered in a dozen places.
-    this.status = {
+    const next = {
       ...this.status,
       step: this.base + this.trimmed + this.cursor,
       total: Math.max(this.changes, this.base + this.trimmed + this.cursor),
       ...patch,
     };
+    // Derived from the playhead rather than patched in by each caller, so
+    // every path that moves time — play, seek, step — moves the cursor too.
+    this.status = { ...next, pointer: this.pointerAt(next.ts) };
     if (!this.disposed) this.hooks.onStatus(this.status);
   }
 }

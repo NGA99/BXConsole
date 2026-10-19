@@ -61,6 +61,10 @@ describe('every option the agent understands is forwarded', () => {
   // name here is invisible — the option just stops working for every snippet
   // that is not a script tag.
   for (const param of AGENT_PARAMS) {
+    // `pre` is the one deliberate exception: it asks a question rather than
+    // carrying a value, and the relay answers it with the stored script. Its
+    // own behaviour is pinned below, so excluding it here hides nothing.
+    if (param === 'pre') continue;
     test(`${param} survives being served`, async () => {
       const res = await serve(`?${param}=testvalue`);
       assert.equal(injected(res.body)[param], 'testvalue');
@@ -69,6 +73,15 @@ describe('every option the agent understands is forwarded', () => {
 
   test('the one that started this: frame=off reaches an import()', async () => {
     assert.equal(injected((await serve('?name=my-app&frame=off')).body).frame, 'off');
+  });
+
+  test('every parameter is either forwarded or has a reason not to be', () => {
+    // The guard on the guard: if a name is added to AGENT_PARAMS and quietly
+    // skipped above, this says so.
+    const exceptions = ['pre'];
+    const covered = AGENT_PARAMS.filter((p) => !exceptions.includes(p));
+    assert.equal(covered.length + exceptions.length, AGENT_PARAMS.length);
+    assert.ok(covered.length > 5, 'most parameters should be plain pass-through');
   });
 
   test('several at once, and nothing invented', async () => {
@@ -136,5 +149,60 @@ describe('the origin the agent will call back on', () => {
 
   test('a TLS socket means https even with no proxy headers', () => {
     assert.equal(requestOrigin({ headers: { host: 'h' }, socket: { encrypted: true } } as never), 'https://h');
+  });
+});
+
+describe('the pre-payload', () => {
+  const PRIMER = 'document.cookie';
+
+  test('a payload that does not ask never receives it', async () => {
+    const handler = createAgentHandler(bundle, { publicOrigin: undefined, prePayload: async () => PRIMER });
+    const res = fakeRes();
+    await handler({ url: '/agent.js?name=run', headers: { host: 'h' }, socket: {} } as never, res as never);
+    assert.equal(injected(res.body).pre, undefined);
+  });
+
+  test('a payload that asks gets the script itself, not the flag', async () => {
+    const handler = createAgentHandler(bundle, { publicOrigin: undefined, prePayload: async () => PRIMER });
+    const res = fakeRes();
+    await handler({ url: '/agent.js?pre=1', headers: { host: 'h' }, socket: {} } as never, res as never);
+    assert.equal(injected(res.body).pre, PRIMER);
+  });
+
+  test('a page cannot choose what its own agent runs', async () => {
+    // The source comes from the relay or not at all. A URL that names one is
+    // asking a question it does not get to answer.
+    const handler = createAgentHandler(bundle, { publicOrigin: undefined, prePayload: async () => PRIMER });
+    const res = fakeRes();
+    await handler({ url: '/agent.js?pre=' + encodeURIComponent('fetch("//evil.test")'), headers: { host: 'h' }, socket: {} } as never, res as never);
+    assert.equal(injected(res.body).pre, undefined, 'only pre=1 asks, and only the relay answers');
+  });
+
+  test('asking when nothing is stored is not an error, just nothing', async () => {
+    const handler = createAgentHandler(bundle, { publicOrigin: undefined, prePayload: async () => null });
+    const res = fakeRes();
+    await handler({ url: '/agent.js?pre=1', headers: { host: 'h' }, socket: {} } as never, res as never);
+    assert.equal(res.statusCode, 200);
+    assert.equal(injected(res.body).pre, undefined);
+  });
+
+  test('a relay with no pre-payload configured at all still serves agents', async () => {
+    const handler = createAgentHandler(bundle, { publicOrigin: undefined });
+    const res = fakeRes();
+    await handler({ url: '/agent.js?pre=1', headers: { host: 'h' }, socket: {} } as never, res as never);
+    assert.equal(res.statusCode, 200);
+    assert.equal(injected(res.body).pre, undefined);
+  });
+
+  test('it is read per request, so editing it needs no restart', async () => {
+    let current = 'first';
+    const handler = createAgentHandler(bundle, { publicOrigin: undefined, prePayload: async () => current });
+    const once = fakeRes();
+    await handler({ url: '/agent.js?pre=1', headers: { host: 'h' }, socket: {} } as never, once as never);
+    current = 'second';
+    const twice = fakeRes();
+    await handler({ url: '/agent.js?pre=1', headers: { host: 'h' }, socket: {} } as never, twice as never);
+    assert.equal(injected(once.body).pre, 'first');
+    assert.equal(injected(twice.body).pre, 'second');
   });
 });

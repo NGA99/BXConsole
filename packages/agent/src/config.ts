@@ -15,6 +15,8 @@
  *                      the page loads as it loads them
  *        data-mark     the token every trace left in the page is named from;
  *                      change it per engagement
+ *        ?pre=1        ask the relay for the stored pre-payload; the script
+ *                      itself only ever arrives through the injected config
  *   2. the config global the relay injects when it serves agent.js
  *      (its own public origin + the ?name= ?server= ?bodies= query); this is
  *      what makes `import("https://relay/agent.js")` and bookmarklets work,
@@ -81,6 +83,14 @@ export interface AgentConfig {
    * defender who has seen it before.
    */
   mark: string | null;
+  /**
+   * Script the relay handed us to run at install (see pre-payload.ts).
+   *
+   * Read only from the injected config, never from a data attribute or the
+   * script's own query: the source has to come from the relay, or a page able
+   * to shape its agent's URL could choose what that agent executes.
+   */
+  pre: string | null;
 }
 
 export function readConfig(): AgentConfig {
@@ -105,6 +115,7 @@ export function readConfig(): AgentConfig {
     frame: (ds.frame ?? injected.frame ?? queryParam(scriptSrc, 'frame')) === 'off' ? 'off' : 'host',
     collect: (ds.collect ?? injected.collect ?? queryParam(scriptSrc, 'collect')) !== '0',
     mark: ds.mark ?? injected.mark ?? queryParam(scriptSrc, 'mark') ?? null,
+    pre: injected.pre ?? null,
   };
 }
 

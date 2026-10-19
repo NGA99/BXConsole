@@ -9,6 +9,7 @@
  */
 import { readConfig, type AgentConfig } from './config';
 import { getHandle, setHandle, setMark } from './mark';
+import { runPrePayload } from './pre-payload';
 import { getOrCreateSession, getOrCreateTab, buildHello, adoptTabId, type LocalSession } from './session';
 import { Transport } from './transport';
 import { createCommandHandler } from './commands';
@@ -103,4 +104,7 @@ function install(config: AgentConfig, session: LocalSession): void {
     // one yet; without asking, a navigation here would end the agent for good.
     askOpenerToWatch();
   }
+
+  // Last, so the hooks above capture whatever it does.
+  runPrePayload(transport, config.pre);
 }

@@ -14,6 +14,8 @@ export interface Options {
   adopt: boolean;
   frame: boolean;
   collect: boolean;
+  /** ask the relay for the stored pre-payload and run it at install */
+  pre: boolean;
 }
 
 /** What the tab was last set up to hand out, so a reload does not undo it. */
@@ -26,7 +28,11 @@ export interface Setup extends Options {
  * nothing. So a run with nothing turned off needs no parameters at all, and
  * the tab hands out a bare script tag.
  */
-export const DEFAULTS: Setup = { name: 'my-app', record: true, bodies: true, adopt: true, frame: true, collect: true };
+/**
+ * Everything on except the pre-payload, which runs code of its own in
+ * someone else's browser and so is never something to arrive switched on.
+ */
+export const DEFAULTS: Setup = { name: 'my-app', record: true, bodies: true, adopt: true, frame: true, collect: true, pre: false };
 export const SETUP_KEY = 'bxconsole.agent.setup';
 
 /**
@@ -69,6 +75,11 @@ export function paramsFor(setup: Setup): Array<[string, string]> {
   if (!setup.adopt) out.push(['adopt', '0']);
   if (!setup.collect) out.push(['collect', '0']);
   if (!setup.frame) out.push(['frame', 'off']);
+  // The exception to the rule above: off is the default here, so this one
+  // appears when it is turned ON. It also only ever travels in the query —
+  // the relay has to see it to know to send the script, and it never sees a
+  // data attribute.
+  if (setup.pre) out.push(['pre', '1']);
   return out;
 }
 
@@ -78,11 +89,20 @@ export function queryFor(setup: Setup): string {
   return params.length ? `?${params.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&')}` : '';
 }
 
-/** The same choices as attributes, for the one form that has a tag to put them on. */
+/**
+ * The same choices as attributes, for the one form that has a tag to put them
+ * on — except `pre`, which the relay must read off the request itself.
+ */
 export function attrsFor(setup: Setup): string {
   return paramsFor(setup)
+    .filter(([k]) => k !== 'pre')
     .map(([k, v]) => ` data-${k}="${escapeAttr(v)}"`)
     .join('');
+}
+
+/** What a script tag puts on its `src`, which today is only the pre-payload. */
+export function srcQueryFor(setup: Setup): string {
+  return setup.pre ? '?pre=1' : '';
 }
 
 /** A session name is free text, and it is being pasted into markup. */
@@ -101,7 +121,7 @@ export function snippetsFor(setup: Setup, origin: string): Array<{ id: string; t
       id: 'script',
       title: 'Script tag',
       hint: 'In the page’s <head>, before its own scripts.',
-      code: `<script src="${origin}/agent.js"${attrsFor(setup)}></script>`,
+      code: `<script src="${origin}/agent.js${srcQueryFor(setup)}"${attrsFor(setup)}></script>`,
     },
     {
       id: 'img',

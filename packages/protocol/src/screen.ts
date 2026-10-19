@@ -121,7 +121,25 @@ export function isScreenEvent(msg: { type: string }): msg is ScreenEvent {
  */
 export type ScreenRecord =
   | { k: 1; ts: number; snapshot: ScreenSnapshot }
-  | { k: 0; ts: number; ops: ScreenOp[] };
+  | { k: 0; ts: number; ops: ScreenOp[] }
+  /**
+   * Where the pointer was. Neither a keyframe nor a change to the DOM, so it
+   * does not move the batch counter — a recording with a hundred cursor
+   * samples and no mutations is still "no changes yet".
+   *
+   * Sampled rather than recorded as it arrives: the page sends one of these
+   * per animation frame, and at sixty a second they would fill the recording's
+   * budget and evict the keyframes they were meant to annotate.
+   */
+  | { k: 2; ts: number; pointer: PointerSample };
+
+/** A cursor position, with the anchor that survives the mirror being resized. */
+export interface PointerSample {
+  x: number;
+  y: number;
+  pressed: boolean;
+  anchor?: ScreenCursor['anchor'];
+}
 
 /**
  * What the viewer needs to show a moment in the past: the keyframe at or
@@ -146,4 +164,9 @@ export interface ScreenSegment {
   changes: number;
   /** batches recorded before this segment's keyframe, which is where `seek` puts the playhead */
   from: number;
+  /**
+   * Cursor positions in this window, oldest first. The viewer applies the
+   * ones at or before the playhead, the same way it applies op batches.
+   */
+  pointer?: Array<{ ts: number } & PointerSample>;
 }
