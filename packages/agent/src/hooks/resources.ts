@@ -8,6 +8,7 @@
  */
 import type { ResourceEntry } from '@bxconsole/protocol';
 import type { Transport } from '../transport';
+import { hookedOtherUrls } from './reported';
 
 export function installResourceHook(transport: Transport): void {
   if (typeof PerformanceObserver === 'undefined') return;
@@ -15,7 +16,7 @@ export function installResourceHook(transport: Transport): void {
   const report = (entries: PerformanceEntryList) => {
     for (const e of entries) {
       const r = e as PerformanceResourceTiming & { responseStatus?: number };
-      if (r.initiatorType === 'fetch' || r.initiatorType === 'xmlhttprequest') continue;
+      if (alreadyReported(r.initiatorType, r.name)) continue;
       const entry: ResourceEntry = {
         name: r.name,
         initiatorType: r.initiatorType,
@@ -61,4 +62,23 @@ export function installResourceHook(transport: Transport): void {
     },
     true,
   );
+}
+
+/**
+ * Whether a request hook in network.ts has already reported this entry.
+ *
+ * Reporting it twice puts two rows in the panel for one call — one with the
+ * body, the stack and the real status, one with none of them — and the reader
+ * has no way to tell they are the same request. `fetch` and `xmlhttprequest`
+ * are exactly what patchFetch and patchXhr cover, and `beacon` what
+ * patchBeacon covers, so their initiator type is enough.
+ *
+ * An EventSource is the awkward one: the browser files it under `other`,
+ * which is also where a good deal that nothing else reports ends up, so the
+ * type cannot decide it. The URLs are matched instead, and only for `other` —
+ * a page that fetches the same address by another means still gets its row.
+ */
+export function alreadyReported(initiatorType: string, name: string): boolean {
+  if (initiatorType === 'fetch' || initiatorType === 'xmlhttprequest' || initiatorType === 'beacon') return true;
+  return initiatorType === 'other' && hookedOtherUrls.has(name);
 }

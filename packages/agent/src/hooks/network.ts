@@ -16,12 +16,14 @@
 import { isTextualMime, type NetworkKind } from '@bxconsole/protocol';
 import type { AgentConfig } from '../config';
 import { captureStack } from '../stack';
+import { hookedOtherUrls } from './reported';
 import type { Transport } from '../transport';
 
 let nextRequestId = 1;
 import { scopedId } from '../ids';
 
 export const newRequestId = (): string => scopedId(`r${nextRequestId++}`);
+
 
 /** The page's original fetch, captured before patching: used by the agent itself so its own requests stay out of the Network tab. */
 export const rawFetch: typeof fetch = window.fetch.bind(window);
@@ -521,6 +523,8 @@ function patchEventSource(transport: Transport, config: AgentConfig): void {
     const start = performance.now();
     const absolute = absoluteUrl(url);
     const stack = captureStack(config);
+    // So the resource hook does not file a second row for this same stream.
+    hookedOtherUrls.add(absolute);
 
     transport.send({
       type: 'network.request',

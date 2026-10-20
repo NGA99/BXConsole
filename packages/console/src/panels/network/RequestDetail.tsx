@@ -168,11 +168,22 @@ export function RequestDetail({ entry, sessionId, onClose }: { entry: NetworkEnt
     { id: 'timing' as const, label: 'Timing' },
   ];
 
+  /*
+   * The selection follows the reader from row to row, which is what you want
+   * for Headers or Timing and impossible for the rest: Messages is not there
+   * at all on a row that does not stream, and Preview and Response are
+   * disabled on a row that does. Left as it was, picking Messages on a socket
+   * and then clicking a fetch row showed an empty "0 messages" table under a
+   * tab strip with nothing selected in it.
+   */
+  const available = new Set(tabs.filter((t) => !('disabled' in t && t.disabled)).map((t) => t.id));
+  const active: TabId = available.has(tab) ? tab : 'headers';
+
   return (
     <div className="request-detail">
       <TabBar
         tabs={tabs}
-        active={tab}
+        active={active}
         onSelect={setTab}
         trailing={
           <button className="toolbar-button request-detail-close" title="Close" onClick={onClose}>
@@ -181,13 +192,13 @@ export function RequestDetail({ entry, sessionId, onClose }: { entry: NetworkEnt
         }
       />
       <div className="request-detail-body">
-        {tab === 'headers' && <HeadersTab entry={entry} />}
-        {tab === 'payload' && <PayloadTab entry={entry} sessionId={sessionId} />}
-        {tab === 'preview' && <PreviewTab entry={entry} sessionId={sessionId} />}
-        {tab === 'response' && <ResponseTab entry={entry} sessionId={sessionId} />}
-        {tab === 'initiator' && <InitiatorTab entry={entry} />}
-        {tab === 'timing' && <TimingTab entry={entry} />}
-        {tab === 'messages' && <MessagesTab entry={entry} />}
+        {active === 'headers' && <HeadersTab entry={entry} />}
+        {active === 'payload' && <PayloadTab entry={entry} sessionId={sessionId} />}
+        {active === 'preview' && <PreviewTab entry={entry} sessionId={sessionId} />}
+        {active === 'response' && <ResponseTab entry={entry} sessionId={sessionId} />}
+        {active === 'initiator' && <InitiatorTab entry={entry} />}
+        {active === 'timing' && <TimingTab entry={entry} />}
+        {active === 'messages' && <MessagesTab entry={entry} />}
       </div>
     </div>
   );

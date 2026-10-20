@@ -92,6 +92,35 @@ describe('the snippets', () => {
     }
   });
 
+  test('a name with an apostrophe does not end the string it sits in', () => {
+    /*
+     * encodeURIComponent leaves ' alone, which is right for a URL and wrong
+     * for three of these: img, bookmarklet and the fetch form all put the
+     * address in single quotes. A run called "client's site" produced a
+     * payload that was a syntax error — copied, pasted, and silently doing
+     * nothing on a tool that usually gets one attempt.
+     */
+    const byId = new Map(snippetsFor(asAgent({ name: "client's site" }), ORIGIN).map((s) => [s.id, s.code]));
+    assert.equal(queryFor(asAgent({ name: "client's site" })), '?name=client%27s%20site');
+    // No form may carry the apostrophe raw: each one quotes the address.
+    for (const id of ['img', 'import', 'fetch', 'bookmarklet']) {
+      assert.ok(!byId.get(id)!.includes("client's"), `${id} still carries a bare apostrophe`);
+    }
+    // The handler has to survive being parsed as an attribute and then as JS.
+    const onerror = /onerror="([^"]*)"/.exec(byId.get('img')!)![1]!;
+    assert.doesNotThrow(() => new Function(onerror), 'the img handler is not valid JavaScript');
+    assert.doesNotThrow(() => new Function(byId.get('bookmarklet')!.replace(/^javascript:/, '')), 'the bookmarklet is not valid JavaScript');
+    // And the name must still arrive intact at the other end.
+    assert.equal(new URL(`${ORIGIN}/agent.js${queryFor(asAgent({ name: "client's site" }))}`).searchParams.get('name'), "client's site");
+  });
+
+  test('parentheses in a name do not close a bookmarklet early', () => {
+    const name = 'acme (staging)';
+    const byId = new Map(snippetsFor(asAgent({ name }), ORIGIN).map((s) => [s.id, s.code]));
+    assert.doesNotThrow(() => new Function(byId.get('bookmarklet')!.replace(/^javascript:/, '')));
+    assert.equal(new URL(`${ORIGIN}/agent.js${queryFor(asAgent({ name }))}`).searchParams.get('name'), name);
+  });
+
   test('a tagless form is still a single pasteable expression', () => {
     const byId = new Map(snippetsFor(asAgent(), ORIGIN).map((s) => [s.id, s.code]));
     assert.ok(!byId.get('bookmarklet')!.includes('\n'));

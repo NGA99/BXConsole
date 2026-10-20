@@ -261,15 +261,31 @@ function moreLabel(value: Extract<SerializedValue, { t: 'string' }>): string {
   return `Show more (${here.toLocaleString()} chars, truncated by agent)`;
 }
 
-/** Strings over LONG_STRING characters collapse with a Show more toggle. */
+/**
+ * Strings over LONG_STRING characters collapse with a Show more toggle.
+ *
+ * Collapsed, the cut is by height as well as by character count, and the
+ * height is what the reader feels. A character count cannot be fair to both
+ * alphabets: 500 characters is five or six lines of English and twenty-five
+ * of Korean or Chinese in the same column, so one long log line was burying
+ * everything around it in exactly the places this tool is pointed at. The
+ * slice still bounds what goes into the DOM; the clamp decides what is seen.
+ */
 function LongString({ value, mode }: { value: Extract<SerializedValue, { t: 'string' }>; mode: 'top' | 'nested' }) {
   const [open, setOpen] = useState(false);
   const text = open ? value.v : value.v.slice(0, LONG_STRING);
   return (
     <span className={mode === 'top' ? 'tok' : 'tok tok-string'}>
-      {mode === 'top' ? text : `'${text}`}
-      {!open && '…'}
-      {open && mode !== 'top' && "'"}
+      {open ? (
+        <>
+          {mode === 'top' ? text : `'${text}'`}
+        </>
+      ) : (
+        <span className="otree-str-clamp">
+          {mode === 'top' ? text : `'${text}`}
+          {'…'}
+        </span>
+      )}
       <button className="otree-more" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}>
         {open ? 'Show less' : moreLabel(value)}
       </button>

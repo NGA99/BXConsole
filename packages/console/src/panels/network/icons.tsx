@@ -58,6 +58,19 @@ export function TypeIcon({ type, failed }: { type: ResourceType; failed?: boolea
           <path d="M2 5h7l-2-2M12 9H5l2 2" fill="none" stroke="currentColor" strokeWidth="1.3" />
         </svg>
       );
+    /*
+     * One arrow to the websocket's two, because that is the difference that
+     * matters about it: the server sends and the page only listens. Without
+     * its own glyph it fell to the empty box every unknown type gets, which
+     * made giving it a type of its own pointless in the one column a reader
+     * actually scans.
+     */
+    case 'eventsource':
+      return (
+        <svg className="type-icon eventsource" width="14" height="14" viewBox="0 0 14 14">
+          <path d="M11 7H3l2.5-2.5M3 7l2.5 2.5" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+        </svg>
+      );
     case 'fetch':
     case 'xhr':
       return (

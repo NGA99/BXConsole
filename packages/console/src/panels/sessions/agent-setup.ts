@@ -99,11 +99,27 @@ export function paramsFor(setup: Setup): Array<[string, string]> {
   return out;
 }
 
+/**
+ * Percent-encoding for a URL that will sit inside a JavaScript string.
+ *
+ * `encodeURIComponent` leaves an apostrophe alone, which is correct for a URL
+ * and wrong here: three of the snippets below are JavaScript with the address
+ * in single quotes, so a run named `client\'s site` closed the string early
+ * and the payload became a syntax error. It was copied, pasted into whatever
+ * field the engagement had, and silently did nothing — on a tool that often
+ * gets one attempt. `%27` means the same thing to the relay and ends no
+ * string. The parenthesis pair goes too: they are legal in a URL and end an
+ * argument list in a bookmarklet.
+ */
+function encodeForSnippet(value: string): string {
+  return encodeURIComponent(value).replace(/['()]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
+}
+
 /** `?a=b&c=d`, or nothing at all when every choice is the default. */
 export function queryFor(setup: Setup): string {
   const params = paramsFor(setup);
   return params.length
-    ? `?${params.map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join("&")}`
+    ? `?${params.map(([k, v]) => `${k}=${encodeForSnippet(v)}`).join("&")}`
     : "";
 }
 

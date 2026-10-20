@@ -118,3 +118,21 @@
   background: color-mix(in srgb, var(--sys-color-primary-bright) 14%, transparent);
   border-radius: 2px;
 }
+
+/*
+ * A collapsed long string is capped by height, not only by character count.
+ *
+ * The slice is 500 characters, which is five or six lines of English and
+ * twenty-five of Korean in the same column — so one logged string pushed the
+ * rest of the run off the screen, and only for some alphabets. Three lines is
+ * enough to see what the value is; Show more is right there for the rest.
+ */
+.otree-str-clamp {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  /* The box is a block, so it does not inherit the row's wrapping rules. */
+  white-space: pre-wrap;
+  word-break: break-word;
+}
