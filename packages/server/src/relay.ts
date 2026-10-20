@@ -37,8 +37,12 @@ import {
   type SourceText,
   PROTOCOL_VERSION,
   type SessionMeta,
+  type Project,
+  mayAdminister,
+  mayRead,
 } from '@bxconsole/protocol';
 import { agentFor, type SessionEntry, type SessionRegistry } from './registry';
+import type { ProjectStore } from './projects';
 import type { Account } from './passwd';
 import type { PingBoard } from './ping';
 import type { BlobStore } from './blobs';
@@ -103,6 +107,8 @@ export class Relay {
   private readonly networkConfig = new Map<string, { blocked?: string[]; disableCache?: boolean }>();
   /** days a recording is kept, so the console can say so; 0 means forever */
   private retentionDays = 0;
+  private projects: ProjectStore | null = null;
+  private knownAccountIds: () => Set<string> = () => new Set();
   /** consoles mid-replay, with the live events waiting for it to finish */
   private readonly replaying = new Map<WebSocket, ServerToConsole[]>();
   /** replies the relay itself is waiting for (the asset proxy), not a console */
@@ -373,6 +379,7 @@ export class Relay {
 
   attachConsole(ws: WebSocket, actor?: Account): void {
     this.consoles.set(ws, actor);
+    this.sendProjects(ws, actor);
     send(ws, { type: 'sessions.snapshot', sessions: this.visibleTo(actor), retentionDays: this.retentionDays });
 
     ws.on('message', (raw) => {
@@ -407,6 +414,30 @@ export class Relay {
     this.blobs = blobs;
   }
 
+  /**
+   * The project list, which is what decides who sees what.
+   *
+   * Without it every console sees every session, which is what the relay did
+   * before projects existed. Boot wires it in before the first socket is
+   * accepted, so that state is not reachable in practice; it is written this
+   * way round because the tests build a relay with only the pieces they are
+   * about.
+   */
+  useProjects(projects: ProjectStore): void {
+    this.projects = projects;
+  }
+
+  /**
+   * The account ids that exist, for checking the target of a transfer.
+   *
+   * A callback rather than the account list itself: `.passwd` is re-read when
+   * it changes, so an answer taken once at boot would go stale the first time
+   * somebody was added.
+   */
+  useAccountIds(ids: () => Set<string>): void {
+    this.knownAccountIds = ids;
+  }
+
   /** Fetch the files a page loads as it loads them, for sessions that asked. */
   useCollector(collector: AssetCollector): void {
     this.collector = collector;
@@ -431,6 +462,26 @@ export class Relay {
      * test. They all arrive here, so this is the place to ask.
      */
     if ('sessionId' in msg && typeof msg.sessionId === 'string' && !this.mayRead(ws, msg.sessionId)) return;
+    /*
+     * And the same for the ones that name a project instead of a session.
+     *
+     * A floor, not the whole check: every one of these handlers asks again
+     * for what it specifically needs, which for all but the list is being
+     * the owner rather than merely allowed to read. This is here so that the
+     * next project message added is refused before it is written rather than
+     * after somebody notices.
+     *
+     * The transfer is the exception, and it has to be here rather than in
+     * the handler. It is what an administrator does to a project they cannot
+     * read — reassigning what a removed account left behind, or taking one
+     * deliberately instead of being quietly exempt from the check — so
+     * requiring read access to send it would make it the one operation that
+     * cannot be performed by the only person who may perform it. Its handler
+     * asks for the admin role instead.
+     */
+    if (msg.type !== 'project.transfer' && 'projectId' in msg && typeof msg.projectId === 'string' && !this.projectFor(ws, msg.projectId)) {
+      return;
+    }
     switch (msg.type) {
       case 'ping.subscribe': {
         let watched = this.pingWatchers.get(ws);
@@ -457,6 +508,102 @@ export class Relay {
           retentionDays: this.retentionDays,
         });
         return;
+
+      case 'projects.list':
+        this.sendProjects(ws, this.consoles.get(ws));
+        return;
+
+      case 'project.create': {
+        const actor = this.consoles.get(ws);
+        if (!this.projects || !actor) return;
+        const made = await this.projects.create(msg.name, actor.id);
+        /*
+         * To everyone who may read it, which for a new project is its maker
+         * and nobody else — but that is still more than the socket it was
+         * asked on. Someone with the console open in two windows should see
+         * the project in both, and sending it back to the one that asked
+         * left the other one a refresh behind.
+         */
+        this.tellAboutProject(made);
+        return;
+      }
+
+      case 'project.rename': {
+        const project = this.mayAdministerFrom(ws, msg.projectId);
+        if (!project) return;
+        const next = await this.projects!.update(msg.projectId, { name: msg.name });
+        if (next) this.tellAboutProject(next);
+        return;
+      }
+
+      case 'project.trash':
+      case 'project.restore': {
+        if (!this.mayAdministerFrom(ws, msg.projectId)) return;
+        const next = await this.projects!.setTrashed(msg.projectId, msg.type === 'project.trash');
+        if (next) this.tellAboutProject(next);
+        return;
+      }
+
+      case 'project.forget': {
+        /*
+         * The project and every recording in it.
+         *
+         * The audiences are taken first, for the same reason a session's is:
+         * once the project is off the list nobody can see it, so asking then
+         * answers nobody and the consoles showing it never find out.
+         */
+        if (!this.mayAdministerFrom(ws, msg.projectId)) return;
+        // Before a single recording goes: the home project cannot be
+        // deleted, and learning that afterwards would leave it emptied.
+        if (!this.projects!.canRemove(msg.projectId)) return;
+        const audience = this.projectAudience(msg.projectId);
+        const inIt = this.visibleTo(this.consoles.get(ws)).filter((m) => this.homeAwareProject(m) === msg.projectId);
+        const perSession = inIt.map((m) => [m.sessionId, this.audienceFor(m.sessionId)] as const);
+        /*
+         * The recordings first, the project last.
+         *
+         * Which way round this goes decides what a relay killed in the
+         * middle of it leaves behind. Project first leaves recordings naming
+         * a project that no longer exists, and a recording whose project
+         * cannot be found is readable by nobody — invisible for good, with
+         * no way to ask for it again. Recordings first leaves a project with
+         * fewer runs in it, still listed, still deletable: asking again
+         * finishes the job.
+         */
+        for (const [sessionId, watching] of perSession) {
+          if (await this.registry.forget(sessionId)) {
+            this.networkConfig.delete(sessionId);
+            this.screenState.delete(sessionId);
+            this.lastCursor.delete(sessionId);
+            this.sendTo(watching, { type: 'session.removed', sessionId });
+          }
+        }
+        if (!(await this.projects!.remove(msg.projectId))) return;
+        this.sendTo(audience, { type: 'project.removed', projectId: msg.projectId });
+        return;
+      }
+
+      case 'project.transfer': {
+        /*
+         * An administrator's operation, and the only way to reach a project
+         * you do not own. Deliberately not a read exemption: the owner field
+         * changes, in a file, so the handover is a thing that happened rather
+         * than a permission nobody can see.
+         */
+        const actor = this.consoles.get(ws);
+        if (!this.projects || actor?.role !== 'admin') return;
+        const project = this.projects.get(msg.projectId);
+        if (!project) return;
+        if (!this.knownAccountIds().has(msg.toAccountId)) return;
+        const before = this.projectAudience(msg.projectId);
+        const next = await this.projects.update(msg.projectId, { owner: msg.toAccountId });
+        if (!next) return;
+        // Both sides: whoever could see it before, so the ones who just lost
+        // it hear that it is gone, and whoever can see it now.
+        this.sendTo(before, { type: 'project.removed', projectId: msg.projectId });
+        this.tellAboutProject(next);
+        return;
+      }
 
       case 'session.subscribe': {
         const entry = this.registry.get(msg.sessionId);
@@ -810,13 +957,79 @@ export class Relay {
   /**
    * The sessions an account may see.
    *
-   * Every account sees every session today, because there is nothing yet to
-   * divide them by — projects come next. It is a function rather than a
-   * constant so that there is one place to change when they do, and so the
-   * four places that need the answer are already asking for it.
+   * The project each run is in decides it, and a run with no project of its
+   * own is read as being in the home one — which is where the migration put
+   * the recordings that were here before projects were. Four things read
+   * this: the snapshot a console gets on connect, the same list asked for
+   * again, the updates pushed to it, and whether a message may name a
+   * session at all.
    */
-  protected visibleTo(_actor: Account | undefined): SessionMeta[] {
-    return this.registry.all();
+  protected visibleTo(actor: Account | undefined): SessionMeta[] {
+    const projects = this.projects;
+    if (!projects) return this.registry.all();
+    return this.registry.all().filter((m) => projects.maySeeSessionIn(m.projectId, actor?.id));
+  }
+
+  /** Whether this console may read this project, and the project itself. */
+  private projectFor(ws: WebSocket, projectId: string): Project | null {
+    const actor = this.consoles.get(ws);
+    const project = this.projects?.get(projectId);
+    if (!project || !mayRead(project, actor?.id)) return null;
+    return project;
+  }
+
+  /**
+   * The project, if this console may change it and not merely read it.
+   *
+   * Being shared a project is being shared its recordings. Renaming,
+   * trashing and deleting are the owner's, so someone invited to read an
+   * engagement cannot delete it.
+   */
+  private mayAdministerFrom(ws: WebSocket, projectId: string): Project | null {
+    const project = this.projectFor(ws, projectId);
+    if (!project) return null;
+    return mayAdminister(project, this.consoles.get(ws)?.id) ? project : null;
+  }
+
+  /** Which project a run counts as being in, home standing in for none. */
+  private homeAwareProject(meta: SessionMeta): string | undefined {
+    return meta.projectId ?? this.projects?.homeId() ?? undefined;
+  }
+
+  private sendProjects(ws: WebSocket, actor: Account | undefined): void {
+    if (!this.projects) return;
+    const mine = this.projects.visibleTo(actor?.id);
+    const home = this.projects.homeId();
+    send(ws, {
+      type: 'projects.snapshot',
+      projects: mine,
+      /*
+       * Only when it is one of theirs.
+       *
+       * This is where a new run lands, so a console that can see the home
+       * project needs to know which one it is. A console that cannot has no
+       * use for it and would be holding the id of someone else's engagement
+       * — which was going out to every account, including ones that own
+       * nothing at all.
+       */
+      homeProjectId: home !== null && mine.some((p) => p.id === home) ? home : '',
+    });
+  }
+
+  /** The consoles that may read this project, resolved now. */
+  private projectAudience(projectId: string): WebSocket[] {
+    const project = this.projects?.get(projectId);
+    if (!project) return [];
+    const out: WebSocket[] = [];
+    for (const [c, actor] of this.consoles) if (mayRead(project, actor?.id)) out.push(c);
+    return out;
+  }
+
+  /** A project changed: to everyone who may read it as it now stands. */
+  private tellAboutProject(project: Project): void {
+    for (const [c, actor] of this.consoles) {
+      if (mayRead(project, actor?.id)) send(c, { type: 'project.updated', project });
+    }
   }
 
   /** Whether a console may act on this session at all. */

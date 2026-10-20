@@ -1,5 +1,6 @@
 export * from './values';
 export * from './session';
+export * from './project';
 export * from './messages';
 export * from './paths';
 export * from './screen';

@@ -15,12 +15,13 @@ import os from 'node:os';
 import path from 'node:path';
 import type { WebSocket } from 'ws';
 import { SESSION_FILES, sessionDirName, PROTOCOL_VERSION } from '@bxconsole/protocol';
-import type { ConsoleToServer, SessionMeta } from '@bxconsole/protocol';
+import type { ConsoleToServer, Project, SessionMeta } from '@bxconsole/protocol';
 import type { Account } from '../src/passwd';
 import { SessionStore } from '../src/store';
 import { SessionRegistry } from '../src/registry';
 import { BlobStore } from '../src/blobs';
 import { Relay } from '../src/relay';
+import { ProjectStore } from '../src/projects';
 
 let dir: string;
 beforeEach(async () => {
@@ -392,30 +393,35 @@ describe('the collection choice', () => {
  * that carries the answer is covered before the answer is real, and so they
  * keep meaning the same thing once it is.
  */
-class ScopedRelay extends Relay {
-  /** Session ids each account id may see; an account missing from it sees none. */
-  readonly allowed = new Map<string | undefined, Set<string>>();
-
-  protected override visibleTo(actor: Account | undefined): SessionMeta[] {
-    const may = this.allowed.get(actor?.id);
-    return super.visibleTo(actor).filter((m) => may?.has(m.sessionId) ?? false);
-  }
-}
-
 describe('what one console may see', () => {
   const ana: Account = { user: 'ana', record: 'x', id: 'a1a1a1', role: 'member' };
   const bo: Account = { user: 'bo', record: 'x', id: 'b2b2b2', role: 'member' };
+  const root: Account = { user: 'root', record: 'x', id: 'c3c3c3', role: 'admin' };
 
-  /** A relay where ana can see sess01 and bo can see nothing, with sess01 live. */
+  /**
+   * A relay with two real projects: ana's, which the live run is in, and
+   * bo's, which is empty.
+   *
+   * These were written against a subclass that stubbed `visibleTo`, because
+   * there were no projects for it to answer from yet. There are now, so the
+   * stub is gone and the same tests run against the thing itself.
+   */
   async function scoped() {
     const store = new SessionStore(dir);
     const registry = new SessionRegistry(store);
-    const relay = new ScopedRelay(registry, store);
+    const relay = new Relay(registry, store);
     relay.useBlobs(new BlobStore(dir, Number.POSITIVE_INFINITY));
-    relay.allowed.set(ana.id, new Set(['sess01']));
-    relay.allowed.set(bo.id, new Set());
+    const projects = new ProjectStore(dir);
+    await projects.load();
+    // Ana's is first, so it is the home one and the run that says hello lands
+    // in it — which is what the relay does until a payload carries a key.
+    const hers = await projects.create('Ana’s', ana.id);
+    const his = await projects.create('Bo’s', bo.id);
+    relay.useProjects(projects);
+    relay.useAccountIds(() => new Set([ana.id, bo.id, root.id]));
+    registry.useProjectSource(() => projects.homeId() ?? undefined);
     const agent = await join(relay);
-    return { relay, agent };
+    return { relay, agent, projects, hers, his, registry };
   }
 
   test('the snapshot at sign-in holds only the sessions that account may see', async () => {
@@ -480,6 +486,7 @@ describe('what one console may see', () => {
       { type: 'session.trash', sessionId: 'sess01' },
       { type: 'session.forget', sessionId: 'sess01' },
     ];
+
     for (const msg of destructive) await his.deliver(msg);
     await settle();
 
@@ -524,5 +531,207 @@ describe('what one console may see', () => {
     assert.equal(his.received('session.event').length, 0);
     // The meta updates that ride alongside it are scoped the same way.
     assert.equal(his.received('session.updated').length, 0, 'bo was told the session changed');
+  });
+});
+
+describe('projects over the console socket', () => {
+  const ana: Account = { user: 'ana', record: 'x', id: 'a1a1a1', role: 'member' };
+  const bo: Account = { user: 'bo', record: 'x', id: 'b2b2b2', role: 'member' };
+  const root: Account = { user: 'root', record: 'x', id: 'c3c3c3', role: 'admin' };
+
+  /** A relay with a home project of ana's holding one live run. */
+  async function withProjects() {
+    const store = new SessionStore(dir);
+    const registry = new SessionRegistry(store);
+    const relay = new Relay(registry, store);
+    relay.useBlobs(new BlobStore(dir, Number.POSITIVE_INFINITY));
+    const projects = new ProjectStore(dir);
+    await projects.load();
+    const hers = await projects.create('Ana’s', ana.id);
+    relay.useProjects(projects);
+    relay.useAccountIds(() => new Set([ana.id, bo.id, root.id]));
+    registry.useProjectSource(() => projects.homeId() ?? undefined);
+    const agent = await join(relay);
+    return { relay, registry, projects, hers, agent };
+  }
+
+  /** Attach a console as this account and hand back its socket. */
+  function console_(relay: Relay, actor: Account): FakeSocket {
+    const ws = new FakeSocket();
+    relay.attachConsole(ws as unknown as WebSocket, actor);
+    return ws;
+  }
+  const projectsSeen = (ws: FakeSocket): Project[] =>
+    (ws.received('projects.snapshot').at(-1)?.['projects'] as Project[] | undefined) ?? [];
+
+  test('a console is told its projects before the sessions it has to group', async () => {
+    const { relay, hers } = await withProjects();
+    const hersSocket = console_(relay, ana);
+    // Order matters: the sessions are grouped by project, so a list that
+    // arrived first would have to be regrouped the moment it was drawn.
+    const types = hersSocket.sent.map((m) => m['type']);
+    assert.ok(types.indexOf('projects.snapshot') < types.indexOf('sessions.snapshot'), types.join(', '));
+    assert.deepEqual(projectsSeen(hersSocket).map((p) => p.id), [hers.id]);
+    assert.equal(hersSocket.received('projects.snapshot')[0]!['homeProjectId'], hers.id);
+    const hisSocket = console_(relay, bo);
+    assert.deepEqual(projectsSeen(hisSocket), [], 'bo owns none of them');
+    // Not even which one the home project is: it is where a new run lands,
+    // so a console that can see it needs the id and one that cannot would
+    // just be holding the id of somebody else's engagement.
+    assert.equal(hisSocket.received('projects.snapshot')[0]!['homeProjectId'], '');
+  });
+
+  test('a run that says hello lands in the home project', async () => {
+    const { registry, hers } = await withProjects();
+    assert.equal(registry.get('sess01')?.meta.projectId, hers.id);
+  });
+
+  test('a project is made for whoever asked, and nobody else hears about it', async () => {
+    const { relay } = await withProjects();
+    const hersSocket = console_(relay, ana);
+    const hisSocket = console_(relay, bo);
+    await hersSocket.deliver({ type: 'project.create', name: '  A new   engagement ' } satisfies ConsoleToServer);
+
+    const made = hersSocket.received('project.updated').at(-1)!['project'] as Project;
+    assert.equal(made.name, 'A new engagement');
+    assert.equal(made.owner, ana.id);
+    assert.equal(hisSocket.received('project.updated').length, 0);
+
+    // And to her other window, not only the socket that asked.
+    const herOtherSocket = console_(relay, ana);
+    await herOtherSocket.deliver({ type: 'project.create', name: 'From the other window' } satisfies ConsoleToServer);
+    await until(() => hersSocket.received('project.updated').length === 2, 'her first window to hear about it');
+    assert.equal((hersSocket.received('project.updated').at(-1)!['project'] as Project).name, 'From the other window');
+  });
+
+  test('a project nobody shared cannot be read, renamed or deleted by another account', async () => {
+    const { relay, hers, projects } = await withProjects();
+    const hisSocket = console_(relay, bo);
+    const asking: ConsoleToServer[] = [
+      { type: 'project.rename', projectId: hers.id, name: 'mine now' },
+      { type: 'project.trash', projectId: hers.id },
+      { type: 'project.forget', projectId: hers.id },
+      { type: 'project.transfer', projectId: hers.id, toAccountId: bo.id },
+    ];
+    const before = hisSocket.sent.length;
+    for (const msg of asking) await hisSocket.deliver(msg);
+    await settle();
+
+    assert.equal(hisSocket.sent.length, before, `answered with ${JSON.stringify(hisSocket.sent.slice(before))}`);
+    assert.equal(projects.get(hers.id)?.name, 'Ana’s');
+    assert.equal(projects.get(hers.id)?.owner, ana.id);
+    assert.equal(projects.get(hers.id)?.trashedAt, undefined);
+  });
+
+  test('being shared a project is being able to read it, not to delete it', async () => {
+    const { relay, registry, hers, projects } = await withProjects();
+    /*
+     * The second project, not the home one.
+     *
+     * The first version of this shared the home project, which `remove`
+     * refuses outright — so it survived bo's delete for a reason that had
+     * nothing to do with who owns it, and the test passed with the ownership
+     * check taken out.
+     */
+    const shared = await projects.create('Shared', ana.id);
+    await projects.update(shared.id, { sharedWith: [bo.id] });
+    const entry = registry.get('sess01')!;
+    entry.meta = { ...entry.meta, projectId: shared.id };
+
+    const hisSocket = console_(relay, bo);
+    assert.deepEqual(projectsSeen(hisSocket).map((p) => p.id), [shared.id], 'not ana’s other project');
+    // And the run inside it, which is the point of sharing one.
+    const sessions = hisSocket.received('sessions.snapshot')[0]!['sessions'] as SessionMeta[];
+    assert.deepEqual(sessions.map((m) => m.sessionId), ['sess01']);
+
+    for (const msg of [
+      { type: 'project.forget', projectId: shared.id },
+      { type: 'project.rename', projectId: shared.id, name: 'mine now' },
+      { type: 'project.trash', projectId: shared.id },
+    ] satisfies ConsoleToServer[]) {
+      await hisSocket.deliver(msg);
+    }
+    await settle();
+    assert.ok(projects.get(shared.id), 'someone shared a project deleted it');
+    assert.equal(projects.get(shared.id)?.name, 'Shared', 'someone shared a project renamed it');
+    assert.equal(projects.get(shared.id)?.trashedAt, undefined, 'someone shared a project trashed it');
+    assert.ok(registry.get('sess01'), 'the recordings went with it');
+    void hers;
+  });
+
+  test('the owner renames it, and everyone who may read it is told', async () => {
+    const { relay, hers, projects } = await withProjects();
+    await projects.update(hers.id, { sharedWith: [bo.id] });
+    const hersSocket = console_(relay, ana);
+    const hisSocket = console_(relay, bo);
+    await hersSocket.deliver({ type: 'project.rename', projectId: hers.id, name: 'Renamed' } satisfies ConsoleToServer);
+    await until(() => hisSocket.received('project.updated')[0], 'bo to hear the new name');
+    assert.equal((hisSocket.received('project.updated').at(-1)!['project'] as Project).name, 'Renamed');
+  });
+
+  test('deleting a project deletes the recordings in it', async () => {
+    const { relay, registry, projects } = await withProjects();
+    // A second project, because the home one is refused — the next agent to
+    // connect would have nowhere to go.
+    const second = await projects.create('Second', ana.id);
+    const entry = registry.get('sess01')!;
+    entry.meta = { ...entry.meta, projectId: second.id };
+
+    const hersSocket = console_(relay, ana);
+    await hersSocket.deliver({ type: 'session.subscribe', sessionId: 'sess01', replay: false } satisfies ConsoleToServer);
+    await hersSocket.deliver({ type: 'project.forget', projectId: second.id } satisfies ConsoleToServer);
+    await until(() => hersSocket.received('project.removed')[0], 'the project to go');
+
+    assert.equal(projects.get(second.id), undefined);
+    assert.equal(registry.get('sess01'), undefined, 'the recording outlived its project');
+    assert.deepEqual(
+      hersSocket.received('session.removed').map((m) => m['sessionId']),
+      ['sess01'],
+      'the console was not told the recording went',
+    );
+  });
+
+  test('the home project is refused, so there is always somewhere for a run to land', async () => {
+    const { relay, hers, projects, registry } = await withProjects();
+    const hersSocket = console_(relay, ana);
+    await hersSocket.deliver({ type: 'project.forget', projectId: hers.id } satisfies ConsoleToServer);
+    await settle();
+    assert.ok(projects.get(hers.id));
+    assert.ok(registry.get('sess01'), 'the recordings went with a refused delete');
+  });
+
+  test('only an administrator transfers one, and only to an account that exists', async () => {
+    const { relay, hers, projects } = await withProjects();
+    // Ana owns it, but owning it is not the same as being able to hand it on.
+    await console_(relay, ana).deliver({ type: 'project.transfer', projectId: hers.id, toAccountId: bo.id } satisfies ConsoleToServer);
+    await settle();
+    assert.equal(projects.get(hers.id)?.owner, ana.id, 'a member transferred a project');
+
+    // An administrator can, which is also how an administrator comes to read
+    // a project they do not own: by taking it, which is written down.
+    const rootSocket = console_(relay, root);
+    await rootSocket.deliver({ type: 'project.transfer', projectId: hers.id, toAccountId: 'not-an-account' } satisfies ConsoleToServer);
+    await settle();
+    assert.equal(projects.get(hers.id)?.owner, ana.id, 'a typo in the target orphaned the project');
+
+    await rootSocket.deliver({ type: 'project.transfer', projectId: hers.id, toAccountId: bo.id } satisfies ConsoleToServer);
+    await until(() => projects.get(hers.id)?.owner === bo.id, 'the handover');
+  });
+
+  test('a transfer tells the side that lost it as well as the side that gained it', async () => {
+    const { relay, hers, projects } = await withProjects();
+    const hersSocket = console_(relay, ana);
+    const hisSocket = console_(relay, bo);
+    const rootSocket = console_(relay, root);
+    await rootSocket.deliver({ type: 'project.transfer', projectId: hers.id, toAccountId: bo.id } satisfies ConsoleToServer);
+    await until(() => projects.get(hers.id)?.owner === bo.id, 'the handover');
+
+    assert.deepEqual(hersSocket.received('project.removed').map((m) => m['projectId']), [hers.id]);
+    assert.equal((hisSocket.received('project.updated').at(-1)!['project'] as Project).owner, bo.id);
+    // And her console can no longer reach what is in it.
+    const before = hersSocket.sent.length;
+    await hersSocket.deliver({ type: 'session.subscribe', sessionId: 'sess01', replay: true } satisfies ConsoleToServer);
+    await settle();
+    assert.equal(hersSocket.sent.length, before, 'the old owner still reads the recordings');
   });
 });

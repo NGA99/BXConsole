@@ -29,6 +29,7 @@ import {
 import { SessionRegistry } from './registry';
 import { SessionStore } from './store';
 import { Relay } from './relay';
+import { ProjectStore } from './projects';
 import { createStaticHandler } from './static';
 import { createAgentHandler } from './agent-handler';
 import { ConsoleAuth, isVictimPath, loginPage, refuse } from './auth';
@@ -61,6 +62,8 @@ const repoRoot = path.resolve(here, '..', '..', '..');
 const store = new SessionStore(path.join(repoRoot, 'sessions'));
 const registry = new SessionRegistry(store);
 const relay = new Relay(registry, store);
+/** Who owns which recordings. Read and migrated at boot, below. */
+const projects = new ProjectStore(path.join(repoRoot, SESSIONS_DIR), (m) => console.log(`[bxconsole] ${m}`));
 
 /**
  * Subresources of the debugged pages, fetched by the pages themselves.
@@ -92,17 +95,39 @@ registry.onRemoved = async (sessionId) => {
 };
 
 /**
+ * Whether the account behind this request may read this run.
+ *
+ * The console socket asks the relay the same question for every message that
+ * names a session. These two endpoints are the same data over HTTP — the
+ * bytes of one run's requests and the files its pages loaded — and they were
+ * only asking whether anybody was signed in, which on a relay with one
+ * operator was the same question and is not any more.
+ *
+ * 404 rather than 403 for the refusal, so the answer does not tell a caller
+ * which session ids exist.
+ */
+function mayReadSession(req: http.IncomingMessage, sessionId: string): boolean {
+  const meta = registry.get(sessionId)?.meta;
+  if (!meta) return false;
+  return projects.maySeeSessionIn(meta.projectId, auth.actorFor(req)?.id);
+}
+
+/**
  * A recorded request or response body, by content hash.
  *
- * Scoped to the session that recorded it. The hash alone would otherwise be a
- * key to any body any run on this relay ever stored, and the relay is already
- * unauthenticated enough without handing out one of those.
+ * Scoped to the session that recorded it, and now to the account as well.
+ * The hash alone would otherwise be a key to any body any run on this relay
+ * ever stored, and the relay is already unauthenticated enough without
+ * handing out one of those.
  */
-async function serveBody(res: http.ServerResponse, requested: URL): Promise<void> {
+async function serveBody(req: http.IncomingMessage, res: http.ServerResponse, requested: URL): Promise<void> {
   const [, , sessionId, sha] = requested.pathname.split('/');
   if (!sessionId || !sha || !isValidSessionId(sessionId) || !/^[0-9a-f]{64}$/.test(sha)) {
     return void plain(res, 400, 'bad body request');
   }
+  // Signed in is not enough: these are bytes out of one run's traffic, and
+  // the socket gate would refuse the same bytes asked for over the console.
+  if (!mayReadSession(req, sessionId)) return void plain(res, 404, 'no such body in this session');
   const record = await blobs.hasBody(sessionId, sha);
   if (!record) return void plain(res, 404, 'no such body in this session');
   const bytes = await blobs.read(sha);
@@ -119,6 +144,7 @@ async function serveBody(res: http.ServerResponse, requested: URL): Promise<void
 async function serveAsset(req: http.IncomingMessage, res: http.ServerResponse, requested: URL): Promise<void> {
   const [, , sessionId, encoded] = requested.pathname.split('/');
   if (!sessionId || !encoded || !isValidSessionId(sessionId)) return void plain(res, 400, 'bad asset request');
+  if (!mayReadSession(req, sessionId)) return void plain(res, 404, 'no such asset in this session');
   const url = decodeAssetUrl(encoded);
   if (!url) return void plain(res, 400, 'bad asset url');
   // Which window to ask: the one the mirror is showing, so a run spanning
@@ -427,7 +453,7 @@ const server = http.createServer((req, res) => {
     if (servePing(req, res, requested)) return;
   }
   if (pathname.startsWith('/body/')) {
-    return void serveBody(res, requested).catch(() => plain(res, 500, 'body error'));
+    return void serveBody(req, res, requested).catch(() => plain(res, 500, 'body error'));
   }
   if (pathname.startsWith('/asset/')) {
     void serveAsset(req, res, requested).catch(() => plain(res, 500, 'asset error'));
@@ -568,6 +594,25 @@ try {
 }
 
 await registry.loadFromDisk();
+
+/*
+ * Projects, and the one-time move of whatever is already here into one.
+ *
+ * After the registry, because the migration stamps the sessions it finds and
+ * the registry is what found them; before listening, because the first agent
+ * to connect needs a project to go into.
+ *
+ * The project is owned by the first account in `.passwd` — the administrator,
+ * on a file written by the CLI — because there is nobody else it could belong
+ * to: the recordings predate accounts, and the person who has been running
+ * this relay is the person whose password opens it.
+ */
+await projects.load();
+await projects.migrateInto(auth.ownerForMigration(), registry.all(), (meta) => store.writeMeta(meta));
+relay.useProjects(projects);
+relay.useAccountIds(() => auth.accountIds());
+registry.useProjectSource(() => projects.homeId() ?? undefined);
+
 relay.startRetention(RETENTION_DAYS);
 
 server.listen(PORT, HOST, () => {

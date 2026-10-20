@@ -1,5 +1,6 @@
 import type { ObjectId, PropertyPreview, SerializedValue } from './values';
 import type { SessionHello, SessionMeta } from './session';
+import type { Project } from './project';
 import type { ScreenEvent, ScreenInput, ScreenSegment } from './screen';
 import type { ElementStyles } from './dom';
 import type { AssetData, KeptFile, SourceEntry, SourceText } from './sources';
@@ -313,6 +314,23 @@ export type ConsoleToServer =
   | { type: 'ping.subscribe'; token: string }
   | { type: 'ping.unsubscribe'; token: string }
   | { type: 'sessions.list' }
+  | { type: 'projects.list' }
+  | { type: 'project.create'; name: string }
+  | { type: 'project.rename'; projectId: string; name: string }
+  /** to the trash, where it keeps its recordings until the purge */
+  | { type: 'project.trash'; projectId: string }
+  | { type: 'project.restore'; projectId: string }
+  /** delete the project and every recording in it, for good */
+  | { type: 'project.forget'; projectId: string }
+  /**
+   * Hand a project to another account, by account id.
+   *
+   * An administrator's operation, and the way an administrator reads a
+   * project they do not own: by taking it, which is written down, rather than
+   * by being exempt from the check. Removing an account leaves its projects
+   * behind with its id still on them, and this is what clears that up.
+   */
+  | { type: 'project.transfer'; projectId: string; toAccountId: string }
   | { type: 'session.subscribe'; sessionId: string; replay: boolean }
   | { type: 'session.unsubscribe'; sessionId: string }
   /** move to the trash: keeps the recording, hides it from the main list */
@@ -372,6 +390,16 @@ export type ServerToConsole =
   | { type: 'sessions.snapshot'; sessions: SessionMeta[]; retentionDays?: number }
   | { type: 'session.updated'; session: SessionMeta }
   | { type: 'session.removed'; sessionId: string }
+  /**
+   * The projects this console may read, and which of them new runs land in.
+   *
+   * Sent with the session snapshot rather than waited for, because the
+   * sessions are grouped by it: arriving second would mean a list that has to
+   * be regrouped the moment it is drawn.
+   */
+  | { type: 'projects.snapshot'; projects: Project[]; homeProjectId: string }
+  | { type: 'project.updated'; project: Project }
+  | { type: 'project.removed'; projectId: string }
   | { type: 'session.event'; sessionId: string; seq: number; event: AgentEvent; tabId?: string }
   | { type: 'session.reply'; sessionId: string; reply: AgentReply; tabId?: string }
   | { type: 'session.history'; sessionId: string; events: SequencedEvent[]; done: boolean }

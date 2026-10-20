@@ -58,12 +58,26 @@ export interface SessionMeta {
    * falls back to describing the handle rather than naming it wrongly.
    */
   mark?: string;
+  /**
+   * The project this run is in.
+   *
+   * Optional because every recording made before projects existed has none,
+   * and those still have to open — a relay that hid them would look like it
+   * had lost them. The relay reads a run with no project as being in the
+   * home project, which is where the migration put the ones it found.
+   *
+   * Not from the agent. The page says which session it is, because only the
+   * page knows that; which project the run belongs to is the relay's to
+   * decide, or a payload could put its recording in somebody else's
+   * engagement by naming it.
+   */
+  projectId?: string;
   /** Every window seen in this session, live or gone. Oldest first. */
   tabs: SessionTab[];
 }
 
 /** What the agent sends on hello. The server fills in the rest. */
-export type SessionHello = Omit<SessionMeta, 'lastSeenAt' | 'connected' | 'tabs'> & {
+export type SessionHello = Omit<SessionMeta, 'lastSeenAt' | 'connected' | 'tabs' | 'projectId'> & {
   tabId: string;
   /** when this window first got an agent, as opposed to when the session began */
   tabStartedAt: number;

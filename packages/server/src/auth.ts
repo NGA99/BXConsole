@@ -149,6 +149,24 @@ export class ConsoleAuth {
     return this.fallback.user;
   }
 
+  /**
+   * The account the existing recordings are given to when projects arrive.
+   *
+   * The first in the file, which the CLI makes the administrator. Those
+   * recordings predate accounts, so there is nothing in them to say whose
+   * they are; the person whose password has been opening this relay is the
+   * answer, and on a one-account relay that is the only answer there is.
+   */
+  ownerForMigration(): string {
+    return (this.file && !this.file.isMissing ? this.file.all()[0] : undefined)?.id ?? this.fallback.id;
+  }
+
+  /** Every account id that exists, for checking who a project may be given to. */
+  accountIds(): Set<string> {
+    if (this.file && !this.file.isMissing) return new Set(this.file.all().map((a) => a.id));
+    return new Set([this.fallback.id]);
+  }
+
   private accountFor(user: string): Account | null {
     if (this.file && !this.file.isMissing) return this.file.find(user);
     return user === this.fallback.user ? this.fallback : null;

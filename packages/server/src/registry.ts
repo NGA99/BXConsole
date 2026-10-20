@@ -43,7 +43,23 @@ export class SessionRegistry {
   private readonly sessions = new Map<string, SessionEntry>();
   private readonly listeners = new Set<Listener>();
 
+  /**
+   * Which project a run that has just said hello belongs in.
+   *
+   * A function, and not taken from the hello, for two reasons. The page does
+   * not know — it knows which session it is, which is a different question —
+   * and letting it say would let a payload drop its recording into somebody
+   * else's engagement by naming it. One home project for the whole relay
+   * until the injected script carries a project key, which is what will
+   * answer this properly.
+   */
+  private homeProject: () => string | undefined = () => undefined;
+
   constructor(private readonly store: SessionStore) {}
+
+  useProjectSource(home: () => string | undefined): void {
+    this.homeProject = home;
+  }
 
   async loadFromDisk(): Promise<void> {
     for (const { meta, lastSeq } of await this.store.listSessions()) {
@@ -98,8 +114,9 @@ export class SessionRegistry {
     let entry = existing;
     if (!entry) {
       const { tabId: _tab, tabStartedAt: _tabStart, openedBy: _opener, ...base } = hello;
+      const projectId = this.homeProject();
       entry = {
-        meta: { ...base, lastSeenAt: now, connected: true, tabs: [tab] },
+        meta: { ...base, ...(projectId ? { projectId } : {}), lastSeenAt: now, connected: true, tabs: [tab] },
         agents: new Map(),
         activeTabId: null,
         subscribers: new Set(),
@@ -116,7 +133,20 @@ export class SessionRegistry {
       else tabs.push(tab);
       // A page talking again means the run is in use: take it out of the trash.
       const { trashedAt: _trashed, ...kept } = entry.meta;
-      entry.meta = { ...kept, url: hello.url, title: hello.title, name: hello.name ?? entry.meta.name, lastSeenAt: now, connected: true, tabs };
+      // A recording from before projects, or one the migration did not reach,
+      // gets the project written down now that it is talking again. It was
+      // already being read as being in this one.
+      const projectId = kept.projectId ?? this.homeProject();
+      entry.meta = {
+        ...kept,
+        ...(projectId ? { projectId } : {}),
+        url: hello.url,
+        title: hello.title,
+        name: hello.name ?? entry.meta.name,
+        lastSeenAt: now,
+        connected: true,
+        tabs,
+      };
     }
 
     entry.agents.set(tabId, agent);
