@@ -227,8 +227,19 @@ export function ConsolePrompt({
       return;
     }
 
-    const single = !value.includes('\n');
-    if (e.key === 'ArrowUp' && single) {
+    /*
+     * Up and Down mean two things in a box that can hold several lines: move
+     * the caret, or walk back through what was run before. Which one depends
+     * on where the caret already is — the same rule a terminal uses.
+     *
+     * This used to ask whether the whole buffer was one line, so recalling a
+     * multi-line command put the prompt in a state where neither arrow did
+     * anything at all: history was refused because the text had a newline in
+     * it, and the caret could not get out because the keys were taken.
+     */
+    const atFirstLine = value.lastIndexOf('\n', caret - 1) === -1;
+    const atLastLine = value.indexOf('\n', caret) === -1;
+    if (e.key === 'ArrowUp' && atFirstLine) {
       const next = Math.min(cursor.current + 1, history.current.length - 1);
       if (next >= 0 && history.current[next] !== undefined) {
         e.preventDefault();
@@ -236,7 +247,7 @@ export function ConsolePrompt({
         cursor.current = next;
         setValue(history.current[next]!);
       }
-    } else if (e.key === 'ArrowDown' && single && cursor.current >= 0) {
+    } else if (e.key === 'ArrowDown' && atLastLine && cursor.current >= 0) {
       e.preventDefault();
       const next = cursor.current - 1;
       cursor.current = next;

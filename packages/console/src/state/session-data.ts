@@ -151,16 +151,28 @@ export function sessionData(sessionId: string): UseBoundStore<StoreApi<SessionDa
   return store;
 }
 
+/**
+ * What a session's view remembers between visits. Named for the network
+ * settings it started as; it holds anything that would be irritating to set
+ * again every time the console is reopened.
+ */
 interface PersistedNetworkConfig {
   blocked: string[];
   disableCache: boolean;
+  /**
+   * On by default, unlike DevTools. A page being debugged here navigates on
+   * its own and the run carries on through it, so clearing the console at
+   * every load throws away most of what a run said — and the operator is
+   * usually not watching at the moment it happens.
+   */
+  preserveLog: boolean;
 }
 const configKey = (sessionId: string) => `bxconsole.network.config.${sessionId}`;
 function loadConfig(sessionId: string): PersistedNetworkConfig {
   try {
-    return { blocked: [], disableCache: false, ...(JSON.parse(localStorage.getItem(configKey(sessionId)) ?? '{}') as Partial<PersistedNetworkConfig>) };
+    return { blocked: [], disableCache: false, preserveLog: true, ...(JSON.parse(localStorage.getItem(configKey(sessionId)) ?? '{}') as Partial<PersistedNetworkConfig>) };
   } catch {
-    return { blocked: [], disableCache: false };
+    return { blocked: [], disableCache: false, preserveLog: true };
   }
 }
 function saveConfig(sessionId: string, c: PersistedNetworkConfig): void {
@@ -175,7 +187,7 @@ function createSessionDataStore(sessionId: string) {
   const config = loadConfig(sessionId);
   return create<SessionDataState>((set, get) => ({
     historyLoaded: false,
-    preserveLog: false,
+    preserveLog: config.preserveLog,
     networkRecording: true,
     console: [],
     network: [],
@@ -191,11 +203,11 @@ function createSessionDataStore(sessionId: string) {
     disableCache: config.disableCache,
     setBlockedPatterns: (p) => {
       set({ blockedPatterns: p });
-      saveConfig(sessionId, { blocked: p, disableCache: get().disableCache });
+      saveConfig(sessionId, { blocked: p, disableCache: get().disableCache, preserveLog: get().preserveLog });
     },
     setDisableCache: (on) => {
       set({ disableCache: on });
-      saveConfig(sessionId, { blocked: get().blockedPatterns, disableCache: on });
+      saveConfig(sessionId, { blocked: get().blockedPatterns, disableCache: on, preserveLog: get().preserveLog });
     },
 
     reset: () => set({ historyLoaded: false, console: [], network: [], networkIndex: {}, history: [], pageTiming: {}, pageTimingByTab: {}, issues: { errors: 0, warnings: 0 }, pendingResourceFailures: [] }),
@@ -203,7 +215,10 @@ function createSessionDataStore(sessionId: string) {
     setKeptFiles: (files: KeptFile[]) => set({ keptFiles: new Set(files.map((f) => f.url)) }),
     clearNetwork: () => set({ network: [], networkIndex: {}, pendingResourceFailures: [] }),
     clearHistory: () => set({ history: [] }),
-    setPreserveLog: (on) => set({ preserveLog: on }),
+    setPreserveLog: (on) => {
+      set({ preserveLog: on });
+      saveConfig(sessionId, { blocked: get().blockedPatterns, disableCache: get().disableCache, preserveLog: on });
+    },
     setNetworkRecording: (on) => set({ networkRecording: on }),
 
     push: (seq, event, tabId) => {
