@@ -10,7 +10,8 @@
  */
 import { useState } from 'react';
 import { assetPath, type SessionMeta } from '@bxconsole/protocol';
-import { useSessionList } from '../../state/sessions';
+import { useSessionList, useSessionsStore } from '../../state/sessions';
+import { purgeNote, purgeSummary } from './purge';
 import { forgetSession, trashSession, restoreSession } from '../../transport/client';
 import { navigate, navigateToView, type SessionView } from '../../app/router';
 import { absoluteTimestamp, fullTimestamp } from '../../devtools-ui/time';
@@ -27,6 +28,7 @@ import './SessionsPanel.css';
 
 export function SessionsPanel({ view }: { view: SessionView }) {
   const everything = useSessionList();
+  const purgeDays = useSessionsStore((s) => s.trashPurgeDays);
   const isAdmin = useIsAdmin();
   const { selectedId, homeId, order } = useProjectsStore();
   const setView = navigateToView;
@@ -90,6 +92,7 @@ export function SessionsPanel({ view }: { view: SessionView }) {
           all={all}
           offline={offline}
           live={live}
+          purgeDays={purgeDays}
           query={query}
           setQuery={setQuery}
           connectedOnly={connectedOnly}
@@ -107,6 +110,7 @@ function SessionList({
   all,
   offline,
   live,
+  purgeDays,
   query,
   setQuery,
   connectedOnly,
@@ -118,6 +122,8 @@ function SessionList({
   all: SessionMeta[];
   offline: SessionMeta[];
   live: number;
+  /** days something stays in the trash before it is deleted; 0 means never */
+  purgeDays: number;
   query: string;
   setQuery: (v: string) => void;
   connectedOnly: boolean;
@@ -136,6 +142,9 @@ function SessionList({
         )}
         <ToolbarDivider />
         <span className="sessions-count">{trash ? `${sessions.length} in the trash` : `${live} live · ${offline.length} recorded`}</span>
+        {trash && purgeSummary(purgeDays) && (
+          <span className="sessions-count sessions-purge-note">{purgeSummary(purgeDays)}</span>
+        )}
         <div style={{ flex: 1 }} />
         {trash ? (
           <ToolbarButton
@@ -184,7 +193,7 @@ function SessionList({
             <span className="session-ua">User agent</span>
             <span className="session-windows-cell">Tab</span>
             <span className="session-started">Started</span>
-            <span className="session-when">Activity</span>
+            <span className="session-when">{trash && purgeDays > 0 ? 'Deleted' : 'Activity'}</span>
             <span />
           </div>
         )}
@@ -256,16 +265,28 @@ function SessionList({
                 having; a dead one from its last event, which is when it
                 stopped being worth watching. The tooltip says which, since one
                 column cannot. */}
-            <span
-              className="session-when"
-              title={
-                s.connected
-                  ? `Still connected\nLast event at ${fullTimestamp(s.lastSeenAt)}`
-                  : `Last event at ${fullTimestamp(s.lastSeenAt)}`
-              }
-            >
-              {relative(s.connected ? s.startedAt : s.lastSeenAt)}
-            </span>
+            {/* In the trash the useful date is not the traffic but the
+                deadline: leaving it here is itself an action, and in a week
+                it is gone with nobody to ask. */}
+            {trash && purgeDays > 0 ? (
+              <span
+                className="session-when session-purge"
+                title={`Moved to the trash at ${fullTimestamp(s.trashedAt ?? s.lastSeenAt)}\nPut it back to keep it`}
+              >
+                {purgeNote(s.trashedAt, purgeDays)}
+              </span>
+            ) : (
+              <span
+                className="session-when"
+                title={
+                  s.connected
+                    ? `Still connected\nLast event at ${fullTimestamp(s.lastSeenAt)}`
+                    : `Last event at ${fullTimestamp(s.lastSeenAt)}`
+                }
+              >
+                {relative(s.connected ? s.startedAt : s.lastSeenAt)}
+              </span>
+            )}
             {/* No panel links here: clicking the row opens the session, and the
                 tabs are right there once you are inside. */}
             <div className="session-actions" onClick={(e) => e.stopPropagation()}>

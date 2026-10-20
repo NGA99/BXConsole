@@ -129,12 +129,27 @@ describe('who may see what', () => {
   test('a trashed project is still its owner’s, so it can be restored or emptied', async () => {
     const { store: s } = store();
     await s.load();
+    await s.create('Home', ANA); // the first is the home one, which cannot be trashed
     const hers = await s.create('Ana’s', ANA);
     await s.setTrashed(hers.id, true);
     assert.ok(s.get(hers.id)?.trashedAt);
-    assert.deepEqual(s.visibleTo(ANA).map((p) => p.id), [hers.id]);
+    assert.ok(s.visibleTo(ANA).some((p) => p.id === hers.id));
     await s.setTrashed(hers.id, false);
     assert.equal(s.get(hers.id)?.trashedAt, undefined);
+  });
+
+  test('the home project cannot be trashed, only the others', async () => {
+    /*
+     * It would sit there filling up. A key names a project whether or not it
+     * is in the trash, and a payload with no key lands in the home one — so
+     * a trashed home project goes on collecting recordings, and the purge
+     * cannot clear it because deleting it is refused.
+     */
+    const { store: s } = store();
+    await s.load();
+    const home = await s.create('Home', ANA);
+    assert.equal(await s.setTrashed(home.id, true), null);
+    assert.equal(s.get(home.id)?.trashedAt, undefined);
   });
 
   test('a transfer moves it between accounts and nothing else changes', async () => {

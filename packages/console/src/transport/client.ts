@@ -454,7 +454,7 @@ function dispatch(msg: ServerToConsole): void {
   const sessions = useSessionsStore.getState();
   switch (msg.type) {
     case 'sessions.snapshot':
-      sessions.setAll(msg.sessions);
+      sessions.setAll(msg.sessions, { retentionDays: msg.retentionDays, trashPurgeDays: msg.trashPurgeDays });
       return;
     case 'console.whoami':
       useWhoamiStore.getState().set(msg.account);

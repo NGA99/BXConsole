@@ -51,6 +51,20 @@ export const AGENT_KEY_BYTES = 16;
 export const PROJECT_NAME_MAX = 80;
 
 /**
+ * How long something stays in the trash before it is deleted for good.
+ *
+ * The trash is what makes deleting a two-step thing: the first step is
+ * reversible and the second is not, and this is how long the first one
+ * lasts. A week because that is long enough to notice a mistake and come
+ * back from a weekend, and short enough that a relay does not quietly keep
+ * engagement data nobody wants.
+ *
+ * The console is told the figure rather than assuming it, so that a relay
+ * configured differently says what it will actually do.
+ */
+export const TRASH_PURGE_DAYS = 7;
+
+/**
  * The shortest password either way in. Named here because there are two ways
  * in now — the CLI and the admin screen — and a screen that accepted eight
  * characters while the CLI demanded twelve would be a rule nobody could read.

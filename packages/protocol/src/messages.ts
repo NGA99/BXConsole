@@ -418,7 +418,14 @@ export type ServerToConsole =
   /** a connectivity probe reached the relay, and which one */
   | { type: 'ping.arrived'; arrival: ProbeArrival }
   /** `retentionDays`: after how long an untouched recording is deleted; 0 or absent means never */
-  | { type: 'sessions.snapshot'; sessions: SessionMeta[]; retentionDays?: number }
+  /**
+   * `retentionDays`: how long a recording is kept at all, 0 for forever.
+   * `trashPurgeDays`: how long something stays in the trash before it is
+   * deleted, 0 when nothing is purged on a timer. Both are the relay's, and
+   * both are sent so the console says what this relay will do rather than
+   * what the defaults say.
+   */
+  | { type: 'sessions.snapshot'; sessions: SessionMeta[]; retentionDays?: number; trashPurgeDays?: number }
   | { type: 'session.updated'; session: SessionMeta }
   | { type: 'session.removed'; sessionId: string }
   /**

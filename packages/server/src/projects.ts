@@ -240,6 +240,19 @@ export class ProjectStore {
   }
 
   async setTrashed(projectId: string, trashed: boolean): Promise<Project | null> {
+    /*
+     * The home project cannot be trashed, for the same reason it cannot be
+     * deleted and one more.
+     *
+     * A payload with no key lands in it, and a key names it whether or not it
+     * is in the trash — a page from an engagement someone has just tidied
+     * away still has windows open, and dropping those runs would lose the
+     * tail of the engagement rather than tidy it. So a trashed home project
+     * would go on collecting recordings while sitting in the trash. And the
+     * purge could not clear it either, because deleting it is refused: it
+     * would sit there, filling up, for good.
+     */
+    if (trashed && projectId === this.home) return null;
     const at = this.projects.findIndex((p) => p.id === projectId);
     if (at < 0) return null;
     const { trashedAt: _was, ...kept } = this.projects[at]!;

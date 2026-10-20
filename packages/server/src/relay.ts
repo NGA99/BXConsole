@@ -111,6 +111,8 @@ export class Relay {
   private readonly networkConfig = new Map<string, { blocked?: string[]; disableCache?: boolean }>();
   /** days a recording is kept, so the console can say so; 0 means forever */
   private retentionDays = 0;
+  /** days something stays in the trash before it is deleted; 0 means never */
+  private trashPurgeDays = 0;
   private projects: ProjectStore | null = null;
   private knownAccountIds: () => Set<string> = () => new Set();
   private accounts: AccountAdmin | null = null;
@@ -406,7 +408,12 @@ export class Relay {
     // from the account, so telling it second means drawing them twice.
     if (actor) send(ws, { type: 'console.whoami', account: { id: actor.id, user: actor.user, role: actor.role } });
     this.sendProjects(ws, actor);
-    send(ws, { type: 'sessions.snapshot', sessions: this.visibleTo(actor), retentionDays: this.retentionDays });
+    send(ws, {
+      type: 'sessions.snapshot',
+      sessions: this.visibleTo(actor),
+      retentionDays: this.retentionDays,
+      trashPurgeDays: this.trashPurgeDays,
+    });
 
     ws.on('message', (raw) => {
       const msg = parse<ConsoleToServer>(raw);
@@ -567,6 +574,7 @@ export class Relay {
           type: 'sessions.snapshot',
           sessions: this.visibleTo(this.consoles.get(ws)),
           retentionDays: this.retentionDays,
+          trashPurgeDays: this.trashPurgeDays,
         });
         return;
 
@@ -609,20 +617,17 @@ export class Relay {
       }
 
       case 'project.forget': {
-        /*
-         * The project and every recording in it.
-         *
-         * The audiences are taken first, for the same reason a session's is:
-         * once the project is off the list nobody can see it, so asking then
-         * answers nobody and the consoles showing it never find out.
-         */
         if (!this.mayAdministerFrom(ws, msg.projectId)) return;
         // Before a single recording goes: the home project cannot be
         // deleted, and learning that afterwards would leave it emptied.
         if (!this.projects!.canRemove(msg.projectId)) return;
+        /*
+         * Who to tell the project went, while there is still a project to be
+         * visible. Each recording's own audience is taken as it goes, which
+         * still works because the project is removed last.
+         */
         const audience = this.projectAudience(msg.projectId);
-        const inIt = this.visibleTo(this.consoles.get(ws)).filter((m) => this.homeAwareProject(m) === msg.projectId);
-        const perSession = inIt.map((m) => [m.sessionId, this.audienceFor(m.sessionId)] as const);
+        const inIt = this.registry.all().filter((m) => this.homeAwareProject(m) === msg.projectId);
         /*
          * The recordings first, the project last.
          *
@@ -634,14 +639,7 @@ export class Relay {
          * fewer runs in it, still listed, still deletable: asking again
          * finishes the job.
          */
-        for (const [sessionId, watching] of perSession) {
-          if (await this.registry.forget(sessionId)) {
-            this.networkConfig.delete(sessionId);
-            this.screenState.delete(sessionId);
-            this.lastCursor.delete(sessionId);
-            this.sendTo(watching, { type: 'session.removed', sessionId });
-          }
-        }
+        for (const meta of inIt) await this.forgetAndTell(meta.sessionId);
         if (!(await this.projects!.remove(msg.projectId))) return;
         this.sendTo(audience, { type: 'project.removed', projectId: msg.projectId });
         this.refreshAdmins();
@@ -748,17 +746,9 @@ export class Relay {
         return;
       }
 
-      case 'session.forget': {
-        // Who to tell, while there is still a session to be visible.
-        const audience = this.audienceFor(msg.sessionId);
-        if (await this.registry.forget(msg.sessionId)) {
-          this.networkConfig.delete(msg.sessionId);
-          this.screenState.delete(msg.sessionId);
-          this.lastCursor.delete(msg.sessionId);
-          this.sendTo(audience, { type: 'session.removed', sessionId: msg.sessionId });
-        }
+      case 'session.forget':
+        await this.forgetAndTell(msg.sessionId);
         return;
-      }
 
       case 'eval.request': {
         const agent = this.agentFromMessage(msg);
@@ -955,15 +945,97 @@ export class Relay {
     timer.unref?.();
   }
 
+  /**
+   * Empty the trash on a timer: 0 to leave it to be emptied by hand.
+   *
+   * A timer of its own rather than a pass inside the retention sweep,
+   * because they are different policies — retention is about how old a
+   * recording is, this is about how long ago somebody threw it away — and a
+   * relay can want one without the other.
+   *
+   * It runs once at startup as well as hourly. A relay that was off for a
+   * fortnight should empty the trash when it comes back, not an hour later.
+   */
+  startTrashPurge(days: number): void {
+    this.trashPurgeDays = days;
+    if (days <= 0) return;
+    const purge = () => void this.purgeTrash(days * 24 * 60 * 60 * 1000).catch((err) => warn('trash purge', err));
+    purge();
+    const timer = setInterval(purge, 60 * 60 * 1000);
+    timer.unref?.();
+  }
+
+  /**
+   * Empty the trash of anything that has been in it long enough.
+   *
+   * The only thing in this relay that deletes a recording on a timer, which
+   * is why it is narrow: it touches nothing that is not in the trash, and
+   * being in the trash is a thing somebody did on purpose and can undo. A
+   * run that starts talking again comes out of the trash by itself, so a
+   * page that is still live cannot be purged out from under its own session.
+   *
+   * Unlike the retention sweep above, a console watching does not stay its
+   * hand. Retention is the relay deciding a recording has aged out and can
+   * afford to wait; this is a deletion somebody asked for a week ago, and
+   * one forgotten open tab should not hold it off for ever. A watching
+   * console is told, the same way it is told when somebody deletes a run by
+   * hand.
+   */
+  private async purgeTrash(maxAgeMs: number): Promise<void> {
+    const cutoff = Date.now() - maxAgeMs;
+    /*
+     * Projects first: purging one takes every recording in it, so doing the
+     * loose sessions first would walk rows that are about to go anyway — and
+     * would report them twice.
+     */
+    for (const project of [...(this.projects?.all() ?? [])]) {
+      if (project.trashedAt === undefined || project.trashedAt > cutoff) continue;
+      // The home project cannot be trashed and so should never be here; if
+      // it somehow is, it cannot be removed either and skipping it is the
+      // only answer that does not empty it without deleting it.
+      if (!this.projects!.canRemove(project.id)) continue;
+      const inIt = this.registry.all().filter((m) => this.homeAwareProject(m) === project.id);
+      const audience = this.projectAudience(project.id);
+      for (const meta of inIt) await this.forgetAndTell(meta.sessionId);
+      if (await this.projects!.remove(project.id)) {
+        this.sendTo(audience, { type: 'project.removed', projectId: project.id });
+        console.log(
+          `[bxconsole] trash: deleted project "${project.name}" and ${inIt.length} recording(s), trashed ${new Date(project.trashedAt).toISOString()}`,
+        );
+      }
+    }
+
+    for (const meta of this.registry.all()) {
+      if (meta.trashedAt === undefined || meta.trashedAt > cutoff) continue;
+      if (await this.forgetAndTell(meta.sessionId)) {
+        console.log(`[bxconsole] trash: deleted session-${meta.sessionId}, trashed ${new Date(meta.trashedAt).toISOString()}`);
+      }
+    }
+    this.refreshAdmins();
+  }
+
+  /** Delete a recording and tell whoever could see it, audience taken first. */
+  private async forgetAndTell(sessionId: string): Promise<boolean> {
+    const audience = this.audienceFor(sessionId);
+    if (!(await this.registry.forget(sessionId))) return false;
+    this.networkConfig.delete(sessionId);
+    this.screenState.delete(sessionId);
+    this.lastCursor.delete(sessionId);
+    this.sendTo(audience, { type: 'session.removed', sessionId });
+    return true;
+  }
+
   private async sweep(maxAgeMs: number): Promise<void> {
     const cutoff = Date.now() - maxAgeMs;
     for (const meta of this.registry.all()) {
       if (meta.connected || meta.lastSeenAt > cutoff) continue;
       const entry = this.registry.get(meta.sessionId);
       if (!entry || entry.subscribers.size > 0 || entry.screenSubscribers.size > 0) continue;
-      const audience = this.audienceFor(meta.sessionId);
-      if (await this.registry.forget(meta.sessionId)) {
-        this.sendTo(audience, { type: 'session.removed', sessionId: meta.sessionId });
+      // The same deletion the trash purge and a hand-delete do. It used to
+      // be written out here without the three maps keyed by session id, so a
+      // swept recording left its network config and screen state behind for
+      // the life of the process.
+      if (await this.forgetAndTell(meta.sessionId)) {
         console.log(`[bxconsole] retention: removed session-${meta.sessionId}, last seen ${new Date(meta.lastSeenAt).toISOString()}`);
       }
     }

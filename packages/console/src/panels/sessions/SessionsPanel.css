@@ -497,3 +497,17 @@
 .prepayload .install-hint {
   padding: 0 8px 6px;
 }
+
+/*
+ * The deadline in the trash, where the Activity column usually sits.
+ *
+ * Dimmer than a normal cell, because it is a thing that will happen rather
+ * than a thing that did.
+ */
+.session-purge {
+  color: var(--sys-color-token-subtle);
+  font-style: italic;
+}
+.sessions-purge-note {
+  color: var(--sys-color-token-subtle);
+}

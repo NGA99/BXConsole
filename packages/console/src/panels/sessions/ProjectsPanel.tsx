@@ -16,7 +16,8 @@
 import { useState } from 'react';
 import type { Project } from '@bxconsole/protocol';
 import { useProjectsStore, selectProject } from '../../state/projects';
-import { useSessionList } from '../../state/sessions';
+import { useSessionList, useSessionsStore } from '../../state/sessions';
+import { purgeNote } from './purge';
 import { useAccount } from '../../state/whoami';
 import {
   createProject,
@@ -34,6 +35,7 @@ export function ProjectsPanel() {
   const { order, byId, homeId, selectedId } = useProjectsStore();
   const account = useAccount();
   const sessions = useSessionList();
+  const purgeDays = useSessionsStore((s) => s.trashPurgeDays);
   const [making, setMaking] = useState('');
 
   const counts = new Map<string, number>();
@@ -88,6 +90,7 @@ export function ProjectsPanel() {
               home={id === homeId}
               selected={id === selectedId}
               sessions={counts.get(id) ?? 0}
+              purgeDays={purgeDays}
             />
           );
         })
@@ -102,12 +105,15 @@ function ProjectRow({
   home,
   selected,
   sessions,
+  purgeDays,
 }: {
   project: Project;
   mine: boolean;
   home: boolean;
   selected: boolean;
   sessions: number;
+  /** days in the trash before it is deleted; 0 when nothing is purged */
+  purgeDays: number;
 }) {
   const [name, setName] = useState(project.name);
   const [copied, setCopied] = useState(false);
@@ -156,7 +162,11 @@ function ProjectRow({
             shared with you
           </span>
         )}
-        {trashed && <span className="project-tag bad">in the trash</span>}
+        {trashed && (
+          <span className="project-tag bad" title={`Moved to the trash on ${new Date(project.trashedAt!).toLocaleString()}`}>
+            {purgeNote(project.trashedAt, purgeDays) ?? 'in the trash'}
+          </span>
+        )}
         <div className="project-spacer" />
         <span className="project-count">
           {sessions} {sessions === 1 ? 'recording' : 'recordings'}
@@ -208,6 +218,11 @@ function ProjectRow({
               <button className="detail-link" onClick={() => restoreProject(project.id)}>
                 take out of the trash
               </button>
+              {purgeDays > 0 && sessions > 0 && (
+                <span className="project-note">
+                  Its {sessions} {sessions === 1 ? 'recording is' : 'recordings are'} deleted with it.
+                </span>
+              )}
               {confirming !== 'forget' && (
                 <button className="detail-link bad" onClick={() => arm('forget')}>
                   delete for good
@@ -220,9 +235,16 @@ function ProjectRow({
               somewhere to land.
             </span>
           ) : (
-            <button className="detail-link" onClick={() => trashProject(project.id)}>
-              move to the trash
-            </button>
+            <>
+              <button className="detail-link" onClick={() => trashProject(project.id)}>
+                move to the trash
+              </button>
+              {purgeDays > 0 && (
+                <span className="project-note">
+                  Reversible for {purgeDays} days, then it and its recordings are deleted.
+                </span>
+              )}
+            </>
           )}
         </div>
       )}

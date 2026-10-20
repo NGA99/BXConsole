@@ -1064,3 +1064,157 @@ describe('the administrator’s screen over the socket', () => {
     assert.equal(ws.received('admin.snapshot').length, 1, 'a closed console was written to');
   });
 });
+
+describe('emptying the trash on a timer', () => {
+  const ana: Account = { user: 'ana', record: 'x', id: 'a1a1a1', role: 'member' };
+  const DAY = 24 * 60 * 60 * 1000;
+
+  /** A relay with a home project and a second one, both ana's. */
+  async function withTrash() {
+    const store = new SessionStore(dir);
+    const registry = new SessionRegistry(store);
+    const relay = new Relay(registry, store);
+    relay.useBlobs(new BlobStore(dir, Number.POSITIVE_INFINITY));
+    const projects = new ProjectStore(dir);
+    await projects.load();
+    const home = await projects.create('Home', ana.id);
+    const second = await projects.create('Second', ana.id);
+    relay.useProjects(projects);
+    relay.useKeylessLanding(() => projects.homeId());
+    await join(relay);
+    return { relay, registry, projects, home, second };
+  }
+
+  /** Put a run in the trash with a `trashedAt` of `daysAgo`. */
+  function trashedAgo(registry: SessionRegistry, sessionId: string, daysAgo: number): void {
+    const entry = registry.get(sessionId)!;
+    entry.meta = { ...entry.meta, trashedAt: Date.now() - daysAgo * DAY };
+  }
+
+  /** Run the purge with a window of `days`, reaching past the private method. */
+  const purge = (relay: Relay, days: number) =>
+    (relay as unknown as { purgeTrash(ms: number): Promise<void> }).purgeTrash(days * DAY);
+
+  test('a recording older than the window goes, a newer one stays', async () => {
+    const { relay, registry } = await withTrash();
+    trashedAgo(registry, 'sess01', 8);
+    await purge(relay, 7);
+    assert.equal(registry.get('sess01'), undefined);
+  });
+
+  test('one thrown away yesterday is left alone', async () => {
+    const { relay, registry } = await withTrash();
+    trashedAgo(registry, 'sess01', 1);
+    await purge(relay, 7);
+    assert.ok(registry.get('sess01'), 'a recording still inside the window was deleted');
+  });
+
+  test('a recording that is not in the trash is never touched', async () => {
+    /*
+     * The whole safety of this. It deletes on a timer with nobody watching,
+     * so the one thing it must not do is reach anything somebody did not put
+     * there on purpose — however old.
+     */
+    const { relay, registry } = await withTrash();
+    const entry = registry.get('sess01')!;
+    entry.meta = { ...entry.meta, lastSeenAt: Date.now() - 400 * DAY };
+    await purge(relay, 7);
+    assert.ok(registry.get('sess01'), 'an untrashed recording was purged');
+  });
+
+  test('a console watching does not hold it off, and is told', async () => {
+    /*
+     * Unlike the retention sweep, which waits. This is a deletion somebody
+     * asked for a week ago; one forgotten open tab should not postpone it
+     * for ever.
+     */
+    const { relay, registry } = await withTrash();
+    const ws = new FakeSocket();
+    relay.attachConsole(ws as unknown as WebSocket, ana);
+    await ws.deliver({ type: 'session.subscribe', sessionId: 'sess01', replay: false } satisfies ConsoleToServer);
+    trashedAgo(registry, 'sess01', 8);
+
+    await purge(relay, 7);
+    assert.equal(registry.get('sess01'), undefined);
+    assert.deepEqual(ws.received('session.removed').map((m) => m['sessionId']), ['sess01']);
+  });
+
+  test('a trashed project goes, and takes its recordings with it', async () => {
+    const { relay, registry, projects, second } = await withTrash();
+    const entry = registry.get('sess01')!;
+    entry.meta = { ...entry.meta, projectId: second.id };
+    await projects.setTrashed(second.id, true);
+    await projects.update(second.id, {});
+    (projects.get(second.id) as { trashedAt?: number }).trashedAt = Date.now() - 8 * DAY;
+
+    const ws = new FakeSocket();
+    relay.attachConsole(ws as unknown as WebSocket, ana);
+    await purge(relay, 7);
+
+    assert.equal(projects.get(second.id), undefined);
+    assert.equal(registry.get('sess01'), undefined, 'the recordings outlived their project');
+    assert.deepEqual(ws.received('project.removed').map((m) => m['projectId']), [second.id]);
+    assert.deepEqual(ws.received('session.removed').map((m) => m['sessionId']), ['sess01']);
+  });
+
+  test('a trashed project still inside the window keeps everything', async () => {
+    const { relay, registry, projects, second } = await withTrash();
+    const entry = registry.get('sess01')!;
+    entry.meta = { ...entry.meta, projectId: second.id };
+    await projects.setTrashed(second.id, true);
+
+    await purge(relay, 7);
+    assert.ok(projects.get(second.id));
+    assert.ok(registry.get('sess01'));
+  });
+
+  test('the home project is never purged, even if something trashed it', async () => {
+    /*
+     * It cannot be trashed through the store, so this reaches past it. The
+     * purge has to skip it anyway: deleting it is refused, so the only other
+     * outcome is a home project emptied of its recordings and still standing.
+     */
+    const { relay, registry, projects, home } = await withTrash();
+    (projects.get(home.id) as { trashedAt?: number }).trashedAt = Date.now() - 400 * DAY;
+    await purge(relay, 7);
+    assert.ok(projects.get(home.id), 'the home project was deleted');
+    assert.ok(registry.get('sess01'), 'its recordings were deleted under it');
+  });
+
+  test('a run that starts talking again cannot be purged, because it leaves the trash', async () => {
+    // upsertFromHello strips trashedAt, so a page that is still live takes
+    // its own recording back out of the trash.
+    const { relay, registry } = await withTrash();
+    trashedAgo(registry, 'sess01', 8);
+    await join(relay, { sessionId: 'sess01', tabId: 'tabB' });
+    assert.equal(registry.get('sess01')?.meta.trashedAt, undefined);
+
+    await purge(relay, 7);
+    assert.ok(registry.get('sess01'), 'a live run was purged');
+  });
+
+  test('switched off, nothing is purged however long it has been there', async () => {
+    const { relay, registry } = await withTrash();
+    trashedAgo(registry, 'sess01', 400);
+    relay.startTrashPurge(0);
+    await settle();
+    assert.ok(registry.get('sess01'));
+  });
+
+  test('switched on, it runs at once rather than in an hour', async () => {
+    // A relay that was off for a fortnight should empty the trash when it
+    // comes back, not after the first interval has gone by.
+    const { relay, registry } = await withTrash();
+    trashedAgo(registry, 'sess01', 8);
+    relay.startTrashPurge(7);
+    await until(() => registry.get('sess01') === undefined, 'the startup purge');
+  });
+
+  test('a console is told what this relay does with the trash', async () => {
+    const { relay } = await withTrash();
+    relay.startTrashPurge(7);
+    const ws = new FakeSocket();
+    relay.attachConsole(ws as unknown as WebSocket, ana);
+    assert.equal(ws.received('sessions.snapshot')[0]!['trashPurgeDays'], 7);
+  });
+});

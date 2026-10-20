@@ -20,6 +20,7 @@ import {
   PRE_PAYLOAD_MAX_BYTES,
   prePayloadFileFor,
   SESSIONS_DIR,
+  TRASH_PURGE_DAYS,
   WS_PATH,
   assetPath,
   decodeAssetUrl,
@@ -45,6 +46,15 @@ import { requestOrigin } from './agent-handler';
 const PORT = Number(process.env.PORT ?? 7331);
 /** Days an untouched recording is kept. 0, the default, keeps everything. */
 const RETENTION_DAYS = Number(process.env.SESSION_RETENTION_DAYS ?? 0);
+/**
+ * How long something stays in the trash before it is deleted for good.
+ *
+ * A week by default, and 0 to leave the trash to be emptied by hand. Unlike
+ * the retention above, which is off unless asked for, this one is on: the
+ * trash exists to make deleting reversible for a while, and a trash that is
+ * never emptied is not a trash, it is a second list of everything.
+ */
+const TRASH_PURGE = Number(process.env.TRASH_PURGE_DAYS ?? TRASH_PURGE_DAYS);
 /**
  * Still every interface by default: the point of this relay is that pages on
  * other machines connect to it. The operator's half needs the password and
@@ -714,6 +724,7 @@ relay.useAccounts({
 relay.useKeylessLanding(() => keylessLanding);
 
 relay.startRetention(RETENTION_DAYS);
+relay.startTrashPurge(Number.isFinite(TRASH_PURGE) && TRASH_PURGE > 0 ? TRASH_PURGE : 0);
 
 server.listen(PORT, HOST, () => {
   console.log(`[bxconsole] relay listening on http://localhost:${PORT}`);
