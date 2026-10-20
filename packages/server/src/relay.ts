@@ -235,6 +235,16 @@ export class Relay {
   private async sendFrozenScreen(entry: SessionEntry, ws: WebSocket, tabId?: string): Promise<void> {
     const id = entry.meta.sessionId;
     const bounds = await this.store.screen.bounds(id, tabId);
+    /*
+     * The legacy single-frame file belongs to a session with no timeline at
+     * all. A window that never streamed has no bounds either, and reading
+     * that file for it would hand the run's frame back under this window's
+     * name — the very thing freezing per window exists to stop. So it is
+     * read only when the recording itself is empty.
+     */
+    if (!bounds && tabId !== undefined && (await this.store.screen.bounds(id)) !== null) {
+      return send(ws, { type: 'error', message: 'nothing was recorded for this window' });
+    }
     const frame = bounds
       ? await this.store.screen.segment(id, bounds.end, 'seek', tabId)
       : await this.store.readLegacyScreenFrame<{ snapshot: ScreenSnapshot; ops: ScreenMutations[] }>(id).then((f) =>

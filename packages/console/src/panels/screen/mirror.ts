@@ -77,6 +77,24 @@ export class DomMirror {
     this.injectViewerStyle(head);
   }
 
+  /**
+   * Empty the mirror.
+   *
+   * Pointing the console at another window does not fetch that window's frame
+   * instantly, and a window that recorded nothing never sends one at all — so
+   * the document has to be blanked rather than waited out. Without this the
+   * window just left stayed on screen under the new window's name, which read
+   * as two windows showing the same page.
+   */
+  clear(): void {
+    this.nodes.clear();
+    this.idsOf.clear();
+    const doc = this.doc;
+    doc.open();
+    doc.write('<!doctype html><html><head></head><body></body></html>');
+    doc.close();
+  }
+
   /** Draw a focus ring on the remote document's active element. */
   setFocus(id: number | null): void {
     this.doc.querySelectorAll('[data-bsc-focus]').forEach((el) => el.removeAttribute('data-bsc-focus'));

@@ -190,7 +190,25 @@ export class ScreenReplayer {
     const segment = await this.fetchSegment(this.hooks.sessionId, ts ?? Date.now(), 'seek');
     if (this.disposed || token !== this.request) return; // a later seek won
     if (!segment || !segment.snapshot) {
-      this.setStatus({ loading: false, bounds: segment?.bounds ?? null });
+      /*
+       * Nothing to replay: no recording at all, or a window of this run that
+       * never streamed — only one window streams at a time, so a window
+       * nobody opened the Screen tab on has no recording of its own.
+       *
+       * What the last window left has to go with it. Keeping the counters
+       * left "0 / 591 changes" standing next to an empty mirror, which reads
+       * as a recording that failed to load rather than one that is not there.
+       */
+      this.snapshot = null;
+      this.batches = [];
+      this.pointer = [];
+      this.cursor = 0;
+      this.trimmed = 0;
+      this.base = 0;
+      this.changes = segment?.changes ?? 0;
+      this.baseValid = false;
+      this.hasAllToEnd = true;
+      this.setStatus({ loading: false, bounds: segment?.bounds ?? null, tab: segment?.tab, url: '', atEnd: true });
       return;
     }
     this.snapshot = segment.snapshot;

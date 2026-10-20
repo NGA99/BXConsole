@@ -103,6 +103,36 @@ describe('which window a segment came from', () => {
     assert.ok(read.snapshot);
   });
 
+  test('a recording that spans a relay change does not pour the old part into every window', async () => {
+    /*
+     * An agent rejoins its session by the id it kept, so a run that was going
+     * when the relay was replaced carries lines from before the change. Those
+     * name no window. Letting them through for whichever window was asked for
+     * replayed one window's work inside another — which is what this looked
+     * like from the outside.
+     */
+    const { log } = await newLog();
+    // before: no window on anything
+    log.append(SESSION, { k: 1, ts: T0, snapshot: snapshot(T0) });
+    log.append(SESSION, batch(T0 + 10, 'from before the change'));
+    // after: both windows named
+    log.append(SESSION, { k: 1, ts: T0 + 1_000, tab: 'tab-A', snapshot: snapshot(T0 + 1_000) });
+    log.append(SESSION, { k: 0, ts: T0 + 1_010, tab: 'tab-A', ops: [{ op: 'text', id: 1, text: 'A did this' }] });
+    log.append(SESSION, { k: 1, ts: T0 + 2_000, tab: 'tab-B', snapshot: snapshot(T0 + 2_000) });
+    log.append(SESSION, { k: 0, ts: T0 + 2_010, tab: 'tab-B', ops: [{ op: 'text', id: 1, text: 'B did this' }] });
+
+    const a = await log.segment(SESSION, T0 + 1_000, 'seek', 'tab-A');
+    const texts = (seg: typeof a) => seg.batches.flatMap((b) => b.ops.map((o) => ('text' in o ? o.text : '')));
+    assert.deepEqual(texts(a), ['A did this'], 'A replayed something that was not its own');
+
+    const b = await log.segment(SESSION, T0 + 2_000, 'seek', 'tab-B');
+    assert.deepEqual(texts(b), ['B did this']);
+
+    // and the whole recording is still the whole recording
+    const all = await log.segment(SESSION, T0, 'seek');
+    assert.ok(texts(all).includes('from before the change'));
+  });
+
   test('the window does not disturb the index the scan builds from the line', async () => {
     const { log, dir } = await newLog();
     log.append(SESSION, { k: 1, ts: T0, tab: 'a-rather-long-window-id-0123456789', snapshot: snapshot(T0) });
@@ -242,5 +272,73 @@ describe('ScreenLog', () => {
     assert.equal(scanned.changes, original.changes);
     assert.deepEqual(scanned.batches, original.batches);
     restarted.forget(SESSION);
+  });
+});
+
+describe('a window that recorded nothing', () => {
+  /*
+   * Only one window of a run streams at a time, so a run can be recorded for
+   * twenty minutes and a window of it still hold not one line — any window
+   * nobody opened the Screen tab on is in exactly that state.
+   *
+   * Asking for such a window used to give the whole run back, because the
+   * same branch also covered a recording made before windows were written
+   * down, which names none at all and is one undifferentiated run. The two
+   * read alike in the index and are opposite in meaning: selecting the empty
+   * window replayed every other window's work under its name, and freezing
+   * on it showed another window's page.
+   */
+  test('asking for it gives nothing, not the whole run', async () => {
+    const { log } = await newLog();
+    log.append(SESSION, { k: 1, ts: T0, tab: 'win-a', snapshot: snapshot(T0) });
+    for (let i = 0; i < 4; i++) log.append(SESSION, { ...batch(T0 + 10 + i, `a${i}`), tab: 'win-a' });
+    log.append(SESSION, { k: 1, ts: T0 + 1000, tab: 'win-b', snapshot: snapshot(T0 + 1000) });
+    for (let i = 0; i < 3; i++) log.append(SESSION, { ...batch(T0 + 1010 + i, `b${i}`), tab: 'win-b' });
+
+    const whole = await log.segment(SESSION, T0, 'seek');
+    assert.equal(whole.changes, 7, 'the run itself holds both windows');
+
+    // 'win-c' is in the session's tab list but never streamed.
+    assert.equal(await log.bounds(SESSION, 'win-c'), null, 'an empty window claims the run as its extent');
+    const seg = await log.segment(SESSION, T0, 'seek', 'win-c');
+    assert.equal(seg.bounds, null, 'an empty window is handed the run to scrub');
+    assert.equal(seg.snapshot, undefined, "an empty window is shown another window's page");
+    assert.deepEqual(seg.batches, [], "an empty window replays another window's ops");
+    assert.equal(seg.changes, 0, 'an empty window is credited with the run\'s changes');
+    assert.equal(seg.done, true);
+    log.forget(SESSION);
+  });
+
+  test('a recording that names no window at all is still one whole run', async () => {
+    // The case the old branch was written for, which must keep working: these
+    // are recordings from before `tab` existed, and narrowing them shows nothing.
+    const { log } = await newLog();
+    log.append(SESSION, { k: 1, ts: T0, snapshot: snapshot(T0) });
+    for (let i = 0; i < 4; i++) log.append(SESSION, batch(T0 + 10 + i, `x${i}`));
+
+    const seg = await log.segment(SESSION, T0, 'seek', 'win-whatever');
+    assert.ok(seg.bounds, 'an older recording lost its extent');
+    assert.equal(seg.snapshot?.ts, T0, 'an older recording lost its keyframe');
+    assert.equal(seg.changes, 4);
+    assert.equal(seg.tab, undefined);
+    log.forget(SESSION);
+  });
+
+  test('a window that streamed is unaffected', async () => {
+    const { log } = await newLog();
+    log.append(SESSION, { k: 1, ts: T0, tab: 'win-a', snapshot: snapshot(T0) });
+    for (let i = 0; i < 4; i++) log.append(SESSION, { ...batch(T0 + 10 + i, `a${i}`), tab: 'win-a' });
+    log.append(SESSION, { k: 1, ts: T0 + 1000, tab: 'win-b', snapshot: snapshot(T0 + 1000) });
+    for (let i = 0; i < 3; i++) log.append(SESSION, { ...batch(T0 + 1010 + i, `b${i}`), tab: 'win-b' });
+
+    const a = await log.segment(SESSION, T0, 'seek', 'win-a');
+    assert.equal(a.tab, 'win-a');
+    assert.equal(a.changes, 4);
+    assert.deepEqual(
+      a.batches.flatMap((b) => b.ops.map((o) => (o.op === 'text' ? o.text : o.op))),
+      ['a0', 'a1', 'a2', 'a3'],
+      'window A replayed something other than its own ops',
+    );
+    log.forget(SESSION);
   });
 });

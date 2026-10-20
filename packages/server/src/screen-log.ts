@@ -147,16 +147,38 @@ export class ScreenLog {
 
   /** What the recording covers, for the replay scrubber. */
   /**
+   * Which part of the recording a request for `tab` is asking about.
+   *
+   * Three cases, and the middle one is why this is a function. A recording
+   * made before windows were written down names none at all, and is one
+   * undifferentiated run: there is nothing to narrow to, so the whole thing
+   * is the answer. A recording that names windows but not this one is a
+   * different thing entirely — that window recorded nothing, and nothing is
+   * the honest answer. Treating the two alike served every other window's
+   * work under the name of the one that had none: picking it replayed the
+   * whole run, and a closed window showed another window's page.
+   *
+   * A window records nothing whenever it never streamed, which is ordinary:
+   * only one window of a run streams at a time, so any window nobody opened
+   * the Screen tab on is in exactly this state.
+   */
+  private scopeFor(idx: Index, tab?: string): 'window' | 'run' | 'none' {
+    if (!tab || idx.tabs.size === 0) return 'run';
+    return idx.tabs.has(tab) ? 'window' : 'none';
+  }
+
+  /**
    * The extent of the recording, or of one window of it.
    *
    * Only one window of a run streams at a time, so a window's recording is
-   * the stretches where it was the one streaming. Asking for a window the
-   * recording never names — an old recording, or one that never streamed —
-   * gives the whole thing back, which is what there is to show.
+   * the stretches where it was the one streaming. null when the window named
+   * has none — see scopeFor.
    */
   async bounds(sessionId: string, tab?: string): Promise<{ start: number; end: number } | null> {
     const idx = await this.ensureIndex(sessionId);
-    const own = tab ? idx.tabs.get(tab) : undefined;
+    const scope = this.scopeFor(idx, tab);
+    if (scope === 'none') return null;
+    const own = scope === 'window' ? idx.tabs.get(tab!) : undefined;
     const first = own ? own.first : idx.firstTs;
     const last = own ? own.last : idx.lastTs;
     if (first === null || last === null || first === undefined || last === undefined) return null;
@@ -170,10 +192,11 @@ export class ScreenLog {
   async segment(sessionId: string, ts: number, mode: 'seek' | 'continue', tab?: string): Promise<ScreenSegment> {
     await this.flushAndSettle(sessionId);
     const idx = await this.ensureIndex(sessionId);
+    const scope = this.scopeFor(idx, tab);
+    // Nothing was recorded under this window's name. Not the whole run: see scopeFor.
+    if (scope === 'none') return { bounds: null, batches: [], done: true, changes: 0, from: 0 };
     const bounds = await this.bounds(sessionId, tab);
-    // A window the recording never names is not a window to narrow to: an old
-    // recording has no windows at all, and narrowing to one would show nothing.
-    const only = tab && idx.tabs.has(tab) ? tab : undefined;
+    const only = scope === 'window' ? tab : undefined;
     const frames = only ? idx.keyframes.filter((k) => k.tab === only) : idx.keyframes;
     const changes = only ? (idx.tabBatches.get(only) ?? 0) : idx.batches;
     if (!bounds || frames.length === 0) return { bounds, batches: [], done: true, changes, from: 0 };
@@ -190,10 +213,22 @@ export class ScreenLog {
     let fresh = 0;
 
     for await (const { record, length } of this.readFrom(sessionId, kf.offset)) {
-      // Another window's line. One window streams at a time, so these are the
-      // stretches where this one was not the one recording; stepping over them
-      // is what makes the playhead follow a single window.
-      if (only && record.tab !== undefined && record.tab !== only) continue;
+      /*
+       * Not this window's line. One window streams at a time, so these are
+       * the stretches where this one was not the one recording; stepping
+       * over them is what makes the playhead follow a single window.
+       *
+       * A line naming no window is skipped too, and that is the point rather
+       * than an oversight. A recording can hold both: an agent rejoins its
+       * session by the id it kept, so a run that was going when the relay was
+       * replaced carries lines from before the change, which name nothing.
+       * Letting those through "because they might be ours" put every one of
+       * them into every window — one window replaying what another had done.
+       * They belong to a window nobody can name, so they are shown only when
+       * no window is being asked for, which is what a wholly older recording
+       * does: it names no windows at all, so nothing is filtered.
+       */
+      if (only && record.tab !== only) continue;
       if (record.k === 2) {
         // Carried along with whatever window the caller asked for; the viewer
         // sorts out which ones are at or before its playhead.

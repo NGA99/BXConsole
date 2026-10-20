@@ -221,6 +221,8 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
   // Subscribing before the strip has picked a window would mirror an arbitrary
   // one for a moment; with tabs known, wait the one tick until there is a pick.
   const waitingForTab = tabCount > 1 && !activeTab;
+  /** An empty screen in a run of several windows is about the window, not the run. */
+  const emptyScope: 'run' | 'window' = tabCount > 1 && activeTab ? 'window' : 'run';
 
   useEffect(() => {
     if (waitingForTab) return;
@@ -258,6 +260,26 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
     // `connected` is in here on purpose: when the page comes back the relay has
     // no record of us watching it, so only a fresh subscribe restarts the stream.
   }, [sessionId, activeTab, waitingForTab, connected]);
+
+  /*
+   * Blank the mirror when the strip moves to another window.
+   *
+   * Subscribing is what fetches the new window's frame, and until it lands the
+   * mirror still holds the old one: the window just left, sitting under the
+   * new one's name. Only one window of a run streams at a time, so a window
+   * nobody ever opened this tab on recorded nothing and sends no frame — and
+   * without this it kept the other window's page for good, which is what
+   * "both tabs show the same thing" was.
+   */
+  const shownTab = useRef<string | null>(null);
+  useEffect(() => {
+    const was = shownTab.current;
+    shownTab.current = activeTab;
+    if (was === null || was === activeTab) return;
+    mirror.current?.clear();
+    mirror.current = null;
+    setStatus((s) => ({ ...s, snapshotAt: null, batches: 0, ops: 0 }));
+  }, [activeTab]);
 
   // Track the pane size; the frame geometry below derives from it and the mode.
   useEffect(() => {
@@ -639,10 +661,10 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
                 replay.loading ? (
                   'Loading the recording…'
                 ) : (
-                  <NothingRecorded />
+                  <NothingRecorded scope={emptyScope} />
                 )
               ) : !connected ? (
-                <NothingRecorded />
+                <NothingRecorded scope={emptyScope} />
               ) : (
                 'Waiting for the first snapshot…'
               )}
@@ -690,19 +712,29 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
 /**
  * Why there is no picture, and what to do about it.
  *
- * By default the agent streams the DOM only while someone is watching, so a
- * run nobody opened leaves nothing to show afterwards. Saying only "nothing
- * was recorded" leaves that as a mystery; the setting that would have
- * recorded it is one tab away.
+ * `scope` is what the emptiness is about, and the two cases need different
+ * things said. A run with nothing at all was almost certainly recorded with
+ * Blackbox off, and the setting that would have caught it is one tab away.
+ * One empty window inside a recorded run is not that: Blackbox is on by
+ * default and records every window from boot, so the window being read simply
+ * had nothing to record — it closed in a moment, or it was the one window
+ * nobody watched on a run where Blackbox was off. Pointing at the setting
+ * there sent people to a checkbox that was already ticked.
  */
-function NothingRecorded() {
+function NothingRecorded({ scope }: { scope: 'run' | 'window' }) {
   return (
     <span>
-      Nothing was recorded for this run.
+      {scope === 'window' ? 'Nothing was recorded for this window.' : 'Nothing was recorded for this run.'}
       <br />
       <span className="screen-overlay-hint">
-        The agent streams the screen only while a Screen tab is open, unless{' '}
-        <a href="#/agent">Record the screen from boot</a> is on.
+        {scope === 'window' ? (
+          <>The other windows of this run have their own recordings — pick one from the strip above.</>
+        ) : (
+          <>
+            With <a href="#/agent">Record the screen from boot</a> on, a page records from its first tick; off, it records only
+            while a Screen tab is open on it.
+          </>
+        )}
       </span>
     </span>
   );
