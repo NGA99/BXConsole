@@ -20,7 +20,8 @@
  *   2. the config global the relay injects when it serves agent.js
  *      (its own public origin + the ?name= ?server= ?bodies= query); this is
  *      what makes `import("https://relay/agent.js")` and bookmarklets work,
- *      where there is no script tag to look at
+ *      where there is no script tag to look at. It is read once and taken off
+ *      the window, which is why this runs exactly once, from boot
  *   3. the origin of the script tag's src
  *   4. the page's own origin (last resort)
  */
@@ -94,9 +95,10 @@ export interface AgentConfig {
 }
 
 export function readConfig(): AgentConfig {
+  // First, before the page is looked at at all: see takeInjected.
+  const injected = takeInjected();
   const script = findOwnScriptTag();
   const ds = script?.dataset ?? {};
-  const injected = ((globalThis as unknown as Record<string, unknown>)[INJECT_GLOBAL] as Injected | undefined) ?? {};
   const scriptSrc = script?.src ?? (injected.origin ? `${injected.origin}/agent.js` : null);
 
   return {
@@ -117,6 +119,38 @@ export function readConfig(): AgentConfig {
     mark: ds.mark ?? injected.mark ?? queryParam(scriptSrc, 'mark') ?? null,
     pre: injected.pre ?? null,
   };
+}
+
+/**
+ * Read what the relay prepended to the bundle, and take it off the window.
+ *
+ * Every other trace the agent leaves is named from the mark, so it changes
+ * per engagement (mark.ts says why that matters). This one cannot be: the
+ * mark is read out of it. Left behind it would be the fixed name that undoes
+ * all the renaming at a stroke, and of all of them it is the one worth
+ * finding — it holds the relay's address and what the operator called the
+ * run, and a page that found it could simply delete it.
+ *
+ * So it is read once and removed, and that is the first thing this function
+ * does. Anything before it is another chance to throw and leave the name
+ * sitting in the page. Nothing of the page's own code runs between the
+ * relay's line and this one — the config is prepended to the bundle, and the
+ * bundle runs to here synchronously — so there is no moment at which the page
+ * could look.
+ *
+ * Which is also why readConfig is called exactly once, from boot: a second
+ * call finds the injected half gone.
+ */
+function takeInjected(): Injected {
+  const g = globalThis as unknown as Record<string, unknown>;
+  const injected = g[INJECT_GLOBAL] as Injected | undefined;
+  try {
+    delete g[INJECT_GLOBAL];
+  } catch {
+    // The page got to the name first and locked it, in which case the relay
+    // will not have written to it either. Nothing of ours is there to remove.
+  }
+  return injected ?? {};
 }
 
 function toWsUrl(origin: string | undefined): string | undefined {

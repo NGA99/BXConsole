@@ -48,6 +48,7 @@ import {
   timeLabel,
   typeLabel,
   type TypeChip,
+  streamsFrames,
 } from './classify';
 import { rangeOf, timelineOf } from './timing';
 import { useActiveTab } from '../../state/active-tab';
@@ -156,7 +157,7 @@ export function NetworkPanel({ sessionId }: { sessionId: string }) {
   const [, tick] = useState(0);
   // A live WebSocket never "finishes", so counting it as pending would re-render
   // the whole grid once a second for as long as the socket is open.
-  const pending = entries.some((e) => !e.finished && !e.failed && !e.resource && e.request.kind !== 'websocket');
+  const pending = entries.some((e) => !e.finished && !e.failed && !e.resource && !streamsFrames(e));
   useEffect(() => {
     if (!pending) return;
     const id = setInterval(() => tick((n) => n + 1), 1000);
@@ -347,7 +348,7 @@ export function NetworkPanel({ sessionId }: { sessionId: string }) {
       x: e.clientX,
       y: e.clientY,
       items: [
-        { label: 'Open in Sources', disabled: entry.request.kind === 'websocket', onClick: () => openSource(sessionId, entry.request.url) },
+        { label: 'Open in Sources', disabled: streamsFrames(entry), onClick: () => openSource(sessionId, entry.request.url) },
         // Greyed out rather than guarded at click time: `window.open` on a
         // `javascript:` URL runs it in a window that inherits this origin, and
         // the URL is whatever the page reported for the request.

@@ -1,7 +1,10 @@
 /**
  * Serves the agent bundle with a one-line config prepended:
  *
- *   self.__wvc = {"origin":"https://relay.example.com","name":"checkout"};
+ *   try{Object.defineProperty(self,"__wvc",{value:{"origin":"https://relay.example.com"},writable:true,configurable:true})}catch(e){}
+ *
+ * written that way, rather than as an assignment, for the reasons under
+ * injectedHeader below.
  *
  * The origin is the address the request arrived on (honouring X-Forwarded-*
  * behind a proxy, or PUBLIC_ORIGIN when set), so the same file works whether
@@ -52,7 +55,7 @@ export function createAgentHandler(
       const source = await opts.prePayload();
       if (source) config.pre = source;
     }
-    const header = `self.${INJECT_GLOBAL}=${JSON.stringify(config)};\n`;
+    const header = injectedHeader(config);
     res.writeHead(200, {
       'Content-Type': 'text/javascript; charset=utf-8',
       'Cache-Control': 'no-cache',
@@ -61,6 +64,34 @@ export function createAgentHandler(
     });
     res.end(header + bundle);
   };
+}
+
+/**
+ * The one line that carries the configuration into the bundle.
+ *
+ * `self.__wvc = {…}` is the obvious way to write it and the wrong one, for
+ * the two reasons a plain assignment always is. It makes an enumerable own
+ * property, so the page finds the relay's address in `Object.keys(window)`
+ * without having to know the name — and having to know the name is the whole
+ * of what per-engagement marking buys (see the agent's mark.ts). And it goes
+ * through a setter, so a page that has met this tool before can leave the
+ * name trapped and be handed the configuration as it arrives.
+ *
+ * `defineProperty` answers both: it writes past an accessor the page left
+ * behind, and what it creates is not one of the page's globals. It stays
+ * `configurable` because the agent's first act is to delete it — this
+ * property is meant to live for one synchronous script and no longer.
+ *
+ * If the page has already made the name non-configurable there is nothing to
+ * be done, and nothing is attempted: assigning instead would hand the config
+ * to whatever is waiting for it. An agent that arrived in a script tag still
+ * finds the relay in its own `src`; one that arrived through `import()` loses
+ * the run, which is the better of those two outcomes.
+ */
+function injectedHeader(config: InjectedConfig): string {
+  const name = JSON.stringify(INJECT_GLOBAL);
+  const value = JSON.stringify(config);
+  return `try{Object.defineProperty(self,${name},{value:${value},writable:true,configurable:true})}catch(e){}\n`;
 }
 
 /** Where this request reached us, as seen from the outside. */

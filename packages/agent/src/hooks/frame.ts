@@ -62,10 +62,28 @@ export function hostInIframe(config: AgentConfig, sessionId: string, carryOn: ()
   } catch {
     return false; // cross-origin top: not ours to take over
   }
-  // The top window never sets __bxconsole (it returns before that), so a
-  // second load of the script would otherwise wrap the wrapper.
-  // Through setFlag like every other trace, so it is not enumerable either.
+  /*
+   * A second load of the script must not wrap the wrapper. The handle that
+   * says "an agent is already here" is never set in this window — hosting
+   * returns before that — so hosting keeps a flag of its own, through setFlag
+   * like every other trace, so it is not enumerable either.
+   */
   if (getFlag(window, 'Hosting')) return true;
+  /*
+   * And a flag named from the mark is no use against a snippet carrying a
+   * different one. Two agents with two marks could not see each other's flag,
+   * so the second wrapped the page a second time: it hid everything in the
+   * body, which by then included the frame holding the first run, and put its
+   * own frame up beside it. What that leaves is one page framed twice, the
+   * first run still going behind `display:none` and recording a window
+   * nobody can see. Two marks in one page may well have meant two runs; it
+   * never meant that.
+   *
+   * So the second guard reads the arrangement itself rather than a name —
+   * there is no name available here that is both mark-independent and not the
+   * fixed token mark.ts exists to keep out of the page.
+   */
+  if (hostsOwnPage()) return true;
   setFlag(window, 'Hosting', true);
 
   /*
@@ -120,6 +138,28 @@ export function hostInIframe(config: AgentConfig, sessionId: string, carryOn: ()
 }
 
 /**
+ * Whether this window is already holding a frame of its own page.
+ *
+ * That is what hosting looks like from the outside, and it stays that way:
+ * the wrapper's body holds an iframe whose `src` is the wrapper's own URL,
+ * and the attribute is not what moves when the app inside navigates. A page
+ * that framed itself at exactly its own address would recurse without any
+ * help from us, so there is no working document this mistakes for a wrapper.
+ *
+ * Direct children of <body> only. A frame further down belongs to the app.
+ */
+export function hostsOwnPage(): boolean {
+  try {
+    for (const el of Array.from(document.body?.children ?? [])) {
+      if (el.tagName === 'IFRAME' && (el as HTMLIFrameElement).src === location.href) return true;
+    }
+  } catch {
+    // No body yet, or a document that will not be read. Either way, nothing found.
+  }
+  return false;
+}
+
+/**
  * Call back the moment <body> appears, which is as early as a wrapper can
  * act — sooner than DOMContentLoaded, so less of a document we are about to
  * hide gets built. The load event is only a backstop for a document that
@@ -144,6 +184,14 @@ function whenBodyExists(run: () => void): void {
 const FRAME_TIMEOUT_MS = 8000;
 
 function wrap(config: AgentConfig, sessionId: string, giveUp: () => void): void {
+  /*
+   * Asked again, because the check in hostInIframe may have run before <body>
+   * existed — the Agent tab tells people to put the snippet in <head>, and an
+   * empty document holds no wrapper to find. By now the other agent's frame
+   * is in place. Returning leaves this window inert, which is what it is.
+   */
+  if (hostsOwnPage()) return;
+
   const url = location.href;
   const doc = document;
 

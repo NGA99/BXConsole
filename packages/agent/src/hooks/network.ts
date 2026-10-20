@@ -6,8 +6,12 @@
  * read from a clone so the page's own consumer is untouched. Binary bodies
  * are shipped as base64 up to `maxBodyLength`.
  *
+ * WebSocket traffic is in websocket.ts, including the frames in either
+ * direction; `sendBeacon` and `EventSource` are below, since both are a
+ * request this hook's own ids and events have to cover.
+ *
  * TODO: XHR upload progress, ReadableStream responses (currently waits for
- *       full body), sendBeacon, WebSocket frames.
+ *       the full body).
  */
 import { isTextualMime, type NetworkKind } from '@bxconsole/protocol';
 import type { AgentConfig } from '../config';
@@ -39,6 +43,8 @@ export const BLOCKED_ERROR = 'net::ERR_BLOCKED_BY_CLIENT';
 export function installNetworkHook(transport: Transport, config: AgentConfig): void {
   patchFetch(transport, config);
   patchXhr(transport, config);
+  patchBeacon(transport, config);
+  patchEventSource(transport, config);
 }
 
 // --------------------------------------------------------------------------- fetch
@@ -404,4 +410,242 @@ function arrayBufferToBase64(buf: ArrayBuffer): string {
     parts.push(String.fromCharCode(...bytes.subarray(i, i + 0x8000)));
   }
   return btoa(parts.join(''));
+}
+
+// --------------------------------------------------------------------------- sendBeacon
+
+/**
+ * `navigator.sendBeacon` -> one request, and no response to wait for.
+ *
+ * This was missed for a long time and it is the worst one to miss. A beacon is
+ * what a page reaches for exactly when it does not want to be waited on:
+ * analytics, telemetry, and the "tell the server before we go" call on
+ * pagehide — which is where a page that has noticed something would send what
+ * it noticed. It also survives the document being torn down, so it is the one
+ * request that still goes out after everything else has stopped. A recording
+ * that shows the whole network of a page except its beacons is not a record
+ * of what the page did.
+ *
+ * There is nothing to report but the request. The browser answers `true` when
+ * it has taken the data to send and `false` when it has refused — usually for
+ * the queue limit — and the page never learns what came back, so neither can
+ * this. `finished` with no response says exactly that, rather than leaving a
+ * row that looks like it is still in flight.
+ */
+function patchBeacon(transport: Transport, config: AgentConfig): void {
+  const native = navigator.sendBeacon;
+  if (typeof native !== 'function') return; // not every engine has it
+  const original = native.bind(navigator);
+
+  navigator.sendBeacon = function patchedSendBeacon(url: string | URL, data?: BodyInit | null): boolean {
+    const requestId = newRequestId();
+    const absolute = absoluteUrl(url);
+    const stack = captureStack(config);
+    transport.send({
+      type: 'network.request',
+      ts: Date.now(),
+      requestId,
+      kind: 'beacon',
+      // Always a POST: the method is not the caller's to choose here.
+      method: 'POST',
+      url: absolute,
+      headers: {},
+      ...(stack ? { stack } : {}),
+      ...(config.captureBodies ? truncate(bodyToString(data as XMLHttpRequestBodyInit | null | undefined), config) : {}),
+    });
+
+    if (isBlocked(absolute)) {
+      transport.send({ type: 'network.failed', ts: Date.now(), requestId, error: BLOCKED_ERROR });
+      // What a refusing browser returns, so a blocked beacon is indistinguishable
+      // from one the browser would not take.
+      return false;
+    }
+
+    let queued = false;
+    try {
+      queued = original(url, data ?? undefined);
+    } catch (err) {
+      transport.send({ type: 'network.failed', ts: Date.now(), requestId, error: err instanceof Error ? err.message : String(err) });
+      throw err;
+    }
+    if (queued) transport.send({ type: 'network.finished', ts: Date.now(), requestId, durationMs: 0 });
+    else transport.send({ type: 'network.failed', ts: Date.now(), requestId, error: 'sendBeacon refused the payload' });
+    return queued;
+  };
+}
+
+/** Absolute, because a recording read later has no page to resolve against. */
+function absoluteUrl(url: string | URL): string {
+  try {
+    return new URL(String(url), location.href).href;
+  } catch {
+    return String(url);
+  }
+}
+
+// --------------------------------------------------------------------------- EventSource
+
+/** A long message is cut at the same length a websocket frame is. */
+const MAX_SSE_TEXT = 8 * 1024;
+
+/** The page's listener -> the one actually registered, so removeEventListener still finds it. */
+const wrappers = new WeakMap<EventListenerOrEventListenerObject, EventListener>();
+
+/**
+ * `EventSource` -> one request, and a received frame per message.
+ *
+ * Server-sent events were not recorded at all, and nothing even listed them
+ * as missing. A page using them looked, in the recording, like a page that
+ * made one request and then went quiet — while the server was in fact
+ * driving it the whole time.
+ *
+ * It is modelled as the websocket is, because that is what it is: a request
+ * that stays open and delivers messages, with the traffic in one direction
+ * only. The messages reuse `network.wsFrame` rather than getting an event of
+ * their own. The name is then half a lie, and the alternative was worse — a
+ * second event meaning the same thing, a second branch in the console to
+ * render it, and old recordings still speaking the first. `direction` is
+ * always `received`, which is the honest part: a page cannot send on one.
+ *
+ * `error` does not end the run. The spec has the browser reconnect on its
+ * own, and the event carries no detail to report, so it is left to the row
+ * staying open — which is the truth of it. Only `close()` finishes it.
+ */
+function patchEventSource(transport: Transport, config: AgentConfig): void {
+  if (typeof EventSource !== 'function') return;
+  const Native = EventSource;
+
+  const Patched = function (this: EventSource, url: string | URL, init?: EventSourceInit) {
+    const es = init === undefined ? new Native(url) : new Native(url, init);
+    const requestId = newRequestId();
+    const start = performance.now();
+    const absolute = absoluteUrl(url);
+    const stack = captureStack(config);
+
+    transport.send({
+      type: 'network.request',
+      ts: Date.now(),
+      requestId,
+      kind: 'eventsource',
+      method: 'GET',
+      url: absolute,
+      headers: {},
+      ...(stack ? { stack } : {}),
+      body: null,
+    });
+
+    es.addEventListener('open', () => {
+      transport.send({
+        type: 'network.response',
+        ts: Date.now(),
+        requestId,
+        status: 200,
+        statusText: 'OK',
+        headers: { 'content-type': 'text/event-stream' },
+        mimeType: 'text/event-stream',
+        waitMs: performance.now() - start,
+        body: null,
+      });
+    });
+
+    /*
+     * Named events as well as `message`, read off the listeners the page adds.
+     *
+     * `onmessage` only sees events the server did not name, and naming them is
+     * the normal way to use this — a page listening for `price` would have had
+     * every one of its messages missing. There is no list of the names in use
+     * to subscribe to, so each listener the page registers is wrapped on its
+     * way in, which is the one place every name passes through.
+     *
+     * The first attempt at this patched `dispatchEvent`, which looked right
+     * and recorded nothing: that method is for events script dispatches by
+     * hand, and a message arriving from the network does not go through it.
+     *
+     * A page may add several listeners for one event, and the same event
+     * object is handed to each, so identity is what keeps one message from
+     * being recorded three times.
+     */
+    const recorded = new WeakSet<Event>();
+    const record = (event: Event): void => {
+      if (!(event instanceof MessageEvent) || typeof event.data !== 'string') return;
+      if (recorded.has(event)) return;
+      recorded.add(event);
+      const text = event.data;
+      const cut = text.length > MAX_SSE_TEXT;
+      transport.send({
+        type: 'network.wsFrame',
+        ts: Date.now(),
+        requestId,
+        direction: 'received',
+        opcode: 'text',
+        // The event name is part of the message for SSE, and losing it would
+        // make two different messages read the same.
+        data: `${event.type === 'message' ? '' : `[${event.type}] `}${cut ? text.slice(0, MAX_SSE_TEXT) : text}`,
+        length: text.length,
+        ...(cut ? { truncated: true } : {}),
+      });
+    };
+
+    const nativeAdd = es.addEventListener.bind(es) as EventSource['addEventListener'];
+    es.addEventListener = ((type: string, listener: EventListenerOrEventListenerObject | null, options?: unknown) => {
+      if (!listener || type === 'open' || type === 'error') return nativeAdd(type, listener as EventListener, options as never);
+      const wrapped: EventListener = (event) => {
+        record(event);
+        if (typeof listener === 'function') listener.call(es, event);
+        else listener.handleEvent(event);
+      };
+      // Remembered so removeEventListener with the page's own function still works.
+      wrappers.set(listener, wrapped);
+      return nativeAdd(type, wrapped, options as never);
+    }) as EventSource['addEventListener'];
+
+    const nativeRemove = es.removeEventListener.bind(es) as EventSource['removeEventListener'];
+    es.removeEventListener = ((type: string, listener: EventListenerOrEventListenerObject | null, options?: unknown) => {
+      const wrapped = listener ? wrappers.get(listener) : undefined;
+      return nativeRemove(type, (wrapped ?? listener) as EventListener, options as never);
+    }) as EventSource['removeEventListener'];
+
+    /*
+     * `onmessage` is a property, not a listener, so it does not pass through
+     * the wrapper above. Routed into it instead, which also keeps reading the
+     * property working.
+     */
+    let onmessage: ((this: EventSource, ev: MessageEvent) => unknown) | null = null;
+    Object.defineProperty(es, 'onmessage', {
+      configurable: true,
+      get: () => onmessage,
+      set: (fn: ((this: EventSource, ev: MessageEvent) => unknown) | null) => {
+        if (onmessage) es.removeEventListener('message', onmessage as unknown as EventListener);
+        onmessage = fn;
+        if (fn) es.addEventListener('message', fn as unknown as EventListener);
+      },
+    });
+
+    const nativeClose = es.close.bind(es);
+    es.close = (): void => {
+      transport.send({ type: 'network.finished', ts: Date.now(), requestId, durationMs: performance.now() - start });
+      nativeClose();
+    };
+
+    return es;
+  } as unknown as typeof EventSource;
+
+  /*
+   * The readyState constants are read-only on the type, and a page reading
+   * `EventSource.OPEN` off the constructor has to still find it. Copying the
+   * own properties across covers them without naming each one.
+   */
+  Patched.prototype = Native.prototype;
+  for (const key of Object.getOwnPropertyNames(Native)) {
+    if (key === 'prototype' || key === 'length' || key === 'name') continue;
+    const d = Object.getOwnPropertyDescriptor(Native, key);
+    if (d) {
+      try {
+        Object.defineProperty(Patched, key, d);
+      } catch {
+        /* a property that will not transfer is not worth failing the hook over */
+      }
+    }
+  }
+  (window as unknown as { EventSource: typeof EventSource }).EventSource = Patched;
 }

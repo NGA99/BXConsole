@@ -42,7 +42,12 @@ export type ConsoleLevel =
 // Network-tab related
 // ---------------------------------------------------------------------------
 
-export type NetworkKind = 'fetch' | 'xhr' | 'beacon' | 'websocket' | 'resource';
+/**
+ * `eventsource` and `websocket` are the two that stay open: they have no
+ * response body of their own and their traffic arrives as `network.wsFrame`,
+ * so the console treats them alike wherever that matters.
+ */
+export type NetworkKind = 'fetch' | 'xhr' | 'beacon' | 'websocket' | 'eventsource' | 'resource';
 
 export interface NetworkTiming {
   startTime: number;

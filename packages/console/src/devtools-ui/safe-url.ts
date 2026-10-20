@@ -41,27 +41,20 @@
  * browser *can* open is one the console itself minted, which is exactly the
  * thing a forged `blob:` value would be reaching for.
  */
+/*
+ * The scheme reader lives in the protocol package: the relay has to agree
+ * with this file about what a scheme is, and when each kept its own rule they
+ * disagreed — one of them read `\0javascript:` as a relative path. Re-exported
+ * so a reader of this file does not have to go looking for it.
+ */
+import { urlScheme } from '@bxconsole/protocol';
+
+export { urlScheme };
+
 const LINKABLE = new Set(['http:', 'https:', 'ws:', 'wss:', 'file:']);
 
 /** Schemes that run code in whatever document they are navigated in. */
 const SCRIPTING = new Set(['javascript:', 'vbscript:']);
-
-/**
- * The scheme a browser would act on, lowercased and with the colon, or null
- * when the value names none (a relative URL, or plain text).
- *
- * Not `value.split(':')[0]`, and not `/^\s*javascript:/`: before a browser
- * looks at a URL it throws away leading C0 controls and spaces — which `\s`
- * does not cover, so a leading NUL byte hides the scheme from that regex —
- * and it removes every tab, CR and LF *anywhere* in the string. That last
- * rule is what makes `java&#9;script:alert(1)` a working script URL in an
- * attribute, so the stripping has to happen here too, before the match.
- */
-export function urlScheme(raw: string): string | null {
-  const normalized = raw.replace(/[\t\n\r]/g, '').replace(/^[\x00-\x20]+/, '');
-  const m = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(normalized);
-  return m ? `${m[1]!.toLowerCase()}:` : null;
-}
 
 /** Whether a page-supplied URL may be an `href`, a `window.open` target, or the like. */
 export function isLinkableUrl(raw: string): boolean {

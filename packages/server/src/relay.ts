@@ -35,6 +35,7 @@ import {
   type SequencedEvent,
   type SourceEntry,
   type SourceText,
+  PROTOCOL_VERSION,
 } from '@bxconsole/protocol';
 import { agentFor, type SessionEntry, type SessionRegistry } from './registry';
 import type { PingBoard } from './ping';
@@ -124,6 +125,21 @@ export class Relay {
 
       if (msg.type === 'session.hello') {
         if (!validHello(msg.hello)) return;
+        /*
+         * The version is noted, not enforced.
+         *
+         * Rejecting a mismatch would be the usual thing and is the wrong
+         * trade here: the relay serves the bundle, so agent and relay only
+         * disagree when a payload pinned to an older relay is still firing
+         * somewhere — mid-engagement, in a browser nobody can reach. Dropping
+         * that run loses the only shot at it. Carrying the field and never
+         * reading it was worse than either, because it read like a check.
+         */
+        if (msg.v !== PROTOCOL_VERSION) {
+          console.warn(
+            `[bxconsole] an agent says protocol v${String(msg.v)} and this relay speaks v${PROTOCOL_VERSION}; taking it anyway`,
+          );
+        }
         const joined = await this.registry.upsertFromHello(msg.hello, ws);
         entry = joined.entry;
         // The relay may hand back a different window id than the page asked for

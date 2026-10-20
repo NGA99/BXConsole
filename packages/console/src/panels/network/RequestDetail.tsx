@@ -10,7 +10,7 @@ import { held, load } from './stored-bodies';
 import { bodySource } from './body-source';
 import { TabBar } from '../../devtools-ui/TabBar';
 import { ObjectTree } from '../console/ObjectTree';
-import { nameOf, formatMs, formatBytes } from './classify';
+import { nameOf, formatMs, formatBytes, streamsFrames } from './classify';
 import { timelineOf } from './timing';
 import { toSerialized, tryParseJson } from './json-to-serialized';
 import { PHASE_COLORS } from './Waterfall';
@@ -156,7 +156,8 @@ export function RequestDetail({ entry, sessionId, onClose }: { entry: NetworkEnt
   const [tab, setTab] = useState<TabId>('headers');
   const hasPayload = Boolean(entry.request.body) || new URL(entry.request.url, 'http://x').search.length > 1;
 
-  const isWs = entry.request.kind === 'websocket';
+  // Both kinds that stay open show the Frames tab and no response body.
+  const isWs = streamsFrames(entry);
   const tabs = [
     { id: 'headers' as const, label: 'Headers' },
     { id: 'payload' as const, label: 'Payload', disabled: !hasPayload },

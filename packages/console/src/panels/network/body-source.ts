@@ -12,6 +12,7 @@
  * that was gone.
  */
 import type { NetworkEntry } from '../../state/session-data';
+import { streamsFrames } from './classify';
 
 export type BodySource =
   /** the bytes are in the event, exactly as the page saw them */
@@ -37,7 +38,7 @@ export function bodySource(entry: NetworkEntry): BodySource {
 
   // An opaque response is one the page itself could not read, and a WebSocket
   // has frames rather than a body. Neither has anything to go and fetch.
-  if (res?.responseType === 'opaque' || entry.request.kind === 'websocket') return { from: 'nowhere', why: 'no-response' };
+  if (res?.responseType === 'opaque' || streamsFrames(entry)) return { from: 'nowhere', why: 'no-response' };
 
   /*
    * Asking may end in a fresh GET for the URL, which stands in for the

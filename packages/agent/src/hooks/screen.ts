@@ -401,10 +401,28 @@ function cssText(sheet: CSSStyleSheet | null): string | null {
   }
 }
 
-function inputState(el: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): { value?: string; checked?: boolean } {
+/**
+ * What an input is holding, as the recording sees it.
+ *
+ * Password fields included, and that is a choice rather than an oversight.
+ * The whole run is a credential capture: the Authorization header a request
+ * carried is kept, so is an object the page logged with a token inside it,
+ * and seeing what passed through the page is the reason for watching it. A
+ * password field replaced by bullets makes none of that safer. It blanks the
+ * one place the person actually typed — which is where a replay is read most
+ * closely — and leaves the operator unable to tell a mistyped login from a
+ * rejected one.
+ *
+ * File inputs are skipped for a reason that does hold: `value` is a fake path
+ * the browser invents, and the files themselves cannot be read from here, so
+ * there is nothing true to put in the recording.
+ *
+ * Exported for its tests, which are the point: this used to bullet passwords
+ * out, silently and with nothing covering it either way.
+ */
+export function inputState(el: HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement): { value?: string; checked?: boolean } {
   if (el instanceof HTMLInputElement) {
     if (el.type === 'checkbox' || el.type === 'radio') return { checked: el.checked };
-    if (el.type === 'password') return { value: '•'.repeat(el.value.length) };
     if (el.type === 'file') return {};
   }
   return { value: el.value };

@@ -12,6 +12,13 @@
  * replaces it per engagement, which matters because a fixed neutral token is
  * only one grep better than a fixed obvious one.
  *
+ * All of them but one, and the exception is worth knowing about. The relay
+ * prepends its configuration to the bundle under a name that cannot be
+ * derived from the mark, because the mark is read out of it. That one is
+ * dealt with by not keeping it: readConfig takes it off the window before it
+ * reads anything else, so it is gone before any of the page's code runs
+ * again. See INJECT_GLOBAL in the protocol package.
+ *
  * It has to be stable within a window: the session and tab keys are read back
  * after a reload to rejoin the run, so a value that changed per load would
  * start a new session on every navigation.

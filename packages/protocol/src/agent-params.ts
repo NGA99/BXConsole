@@ -17,10 +17,18 @@ export type AgentParam = (typeof AGENT_PARAMS)[number];
 /**
  * The global the relay prepends the configuration to.
  *
- * This one cannot be derived from `mark`, because the mark is read out of it
- * — so it is fixed, and therefore deliberately dull. It is the one trace a
- * page can always look for, which is the price of configuring an agent that
- * has no script tag to read.
+ * This one name cannot be derived from `mark`, because the mark is read out
+ * of it — so it is fixed, and therefore deliberately dull. A fixed name is
+ * exactly what the mark exists to avoid, and it would undo every renamed
+ * trace on its own: one grep for every host this tool has ever been pasted
+ * into, whatever `data-mark` said that day.
+ *
+ * What saves it is that it does not last. The relay defines it rather than
+ * assigning it, so it is not one of the page's own globals while it is there,
+ * and the agent takes it off the window before it reads anything else. None
+ * of the page's code runs in between, so the window in which it could be
+ * found does not exist. See the relay's agent-handler and the agent's
+ * readConfig for the two halves.
  */
 export const INJECT_GLOBAL = '__wvc';
 

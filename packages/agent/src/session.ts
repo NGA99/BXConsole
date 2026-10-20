@@ -12,7 +12,7 @@
  * new one when the ids collide.
  */
 import type { SessionHello } from '@bxconsole/protocol';
-import { getHandle, storeKey } from './mark';
+import { getHandle, markName, storeKey } from './mark';
 import type { AgentConfig } from './config';
 
 /*
@@ -125,6 +125,8 @@ export function buildHello(session: LocalSession, tab: LocalTab, config: AgentCo
     },
     startedAt: session.startedAt,
     collect: config.collect,
+    // So the console can name this run's handle instead of guessing at it.
+    mark: markName(),
   };
 }
 

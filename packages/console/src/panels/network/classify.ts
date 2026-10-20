@@ -2,7 +2,19 @@
 import type { NetworkEntry } from '../../state/session-data';
 
 export type ResourceType =
-  | 'fetch' | 'xhr' | 'doc' | 'css' | 'js' | 'font' | 'img' | 'media' | 'manifest' | 'ws' | 'wasm' | 'other';
+  | 'fetch' | 'xhr' | 'doc' | 'css' | 'js' | 'font' | 'img' | 'media' | 'manifest' | 'ws' | 'eventsource' | 'wasm' | 'other';
+
+/**
+ * A request that stays open and delivers frames instead of a body.
+ *
+ * WebSockets and EventSource both do this, and every place that treated the
+ * first specially — the pending-row clock, the frames tab, both body readers
+ * — meant this rather than "is a websocket". Server-sent events arrived later
+ * and inherited none of it until they were given this name.
+ */
+export function streamsFrames(entry: NetworkEntry): boolean {
+  return entry.request.kind === 'websocket' || entry.request.kind === 'eventsource';
+}
 
 export interface TypeChip {
   id: 'all' | ResourceType | 'fetchxhr';
@@ -21,6 +33,7 @@ export const TYPE_CHIPS: TypeChip[] = [
   { id: 'media', label: 'Media', matches: (t) => t === 'media' },
   { id: 'manifest', label: 'Manifest', matches: (t) => t === 'manifest' },
   { id: 'ws', label: 'Socket', matches: (t) => t === 'ws' },
+  { id: 'eventsource', label: 'EventSource', matches: (t) => t === 'eventsource' },
   { id: 'wasm', label: 'Wasm', matches: (t) => t === 'wasm' },
   { id: 'other', label: 'Other', matches: (t) => t === 'other' },
 ];
@@ -39,6 +52,7 @@ export function classify(entry: NetworkEntry): ResourceType {
   if (entry.request.kind === 'fetch') return 'fetch';
   if (entry.request.kind === 'xhr') return 'xhr';
   if (entry.request.kind === 'websocket') return 'ws';
+  if (entry.request.kind === 'eventsource') return 'eventsource';
   if (entry.request.kind === 'beacon') return 'other';
 
   const r = entry.resource;
@@ -129,6 +143,12 @@ export function statusLabel(entry: NetworkEntry): string {
     const rs = entry.resource.responseStatus;
     return rs && rs > 0 ? String(rs) : '—';
   }
+  /*
+   * A beacon has no response to wait for and never will: the browser takes
+   * the payload and the page is told only whether it was taken. "(pending)"
+   * was a row that looked stuck forever.
+   */
+  if (entry.request.kind === 'beacon') return entry.finished ? '(queued)' : '(pending)';
   return '(pending)';
 }
 
@@ -137,6 +157,9 @@ export function statusTitle(entry: NetworkEntry): string | undefined {
   if (entry.response?.status === 0) return 'no-cors request: the status and body are not visible to page scripts';
   if (entry.resource && !(entry.resource.responseStatus && entry.resource.responseStatus > 0)) {
     return 'Cross-origin resource: status and size are not exposed to page scripts unless the server sends Timing-Allow-Origin';
+  }
+  if (entry.request.kind === 'beacon' && entry.finished) {
+    return 'The browser accepted this beacon for sending. A beacon has no response, so there is nothing further to report.';
   }
   return undefined;
 }

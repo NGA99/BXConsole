@@ -15,6 +15,7 @@
  * what matters when they want to know why.
  */
 import type { NetworkEntry } from '../../state/session-data';
+import { streamsFrames } from './classify';
 
 export type BodyState =
   /** the agent caught it as it happened; it is in the recording */
@@ -67,7 +68,7 @@ export function bodyState(entry: NetworkEntry, kept: ReadonlySet<string>, connec
 
   // An opaque response is one the page itself could not read, and a WebSocket
   // carries frames rather than a body.
-  if (res?.responseType === 'opaque' || entry.request.kind === 'websocket') return 'none';
+  if (res?.responseType === 'opaque' || streamsFrames(entry)) return 'none';
 
   /*
    * Re-reading means a fresh GET for the URL, which stands in for the

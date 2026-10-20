@@ -47,6 +47,17 @@ export interface SessionMeta {
    * the option existed, which the relay reads as on.
    */
   collect?: boolean;
+  /**
+   * The token every trace the agent left in the page is named from, so the
+   * console can say the handle out loud: `__wv.mark('x')` for a default run,
+   * and whatever `data-mark` chose for an engagement that set one.
+   *
+   * It is here because the console was telling operators to call
+   * `window.__bxconsole.mark(...)`, which has never existed under that name.
+   * Absent on recordings made before this was sent, and on those the console
+   * falls back to describing the handle rather than naming it wrongly.
+   */
+  mark?: string;
   /** Every window seen in this session, live or gone. Oldest first. */
   tabs: SessionTab[];
 }

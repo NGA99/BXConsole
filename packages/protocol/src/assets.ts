@@ -44,11 +44,50 @@ export function decodeAssetUrl(encoded: string): string | null {
   }
 }
 
-/** Whether a URL found in markup is worth proxying at all. */
+/**
+ * The scheme a browser would act on, lowercased and with the colon, or null
+ * when the value names none (a relative URL, or plain text).
+ *
+ * Not `value.split(':')[0]`, and not a `/^\s*scheme:/` regex: before a
+ * browser looks at a URL it throws away leading C0 controls and spaces —
+ * which `\s` does not cover, so a leading NUL hides the scheme from such a
+ * regex — and it removes every tab, CR and LF *anywhere* in the string. That
+ * last rule is what makes `java&#9;script:alert(1)` a working script URL, so
+ * the stripping has to happen here too, before the match.
+ *
+ * It lives in the protocol package because two different packages have to
+ * agree about it. They did not: the console grew a correct reader for the
+ * links it draws while the rule below kept a regex that `\0javascript:` walks
+ * straight past. Nothing escaped, because what the relay will actually fetch
+ * is decided by decodeAssetUrl above and that allows three schemes — but one
+ * of the two readings was wrong, and which one you got depended on where you
+ * entered the code.
+ */
+export function urlScheme(raw: string): string | null {
+  const normalized = raw.replace(/[\t\n\r]/g, '').replace(/^[\x00-\x20]+/, '');
+  const m = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(normalized);
+  return m ? `${m[1]!.toLowerCase()}:` : null;
+}
+
+/**
+ * Schemes a page's markup can name that are not a file to go and fetch:
+ * the inline ones carry their own bytes, the two scripting ones execute, and
+ * the last two open an application rather than load anything.
+ */
+const NOT_WORTH_PROXYING = new Set(['data:', 'about:', 'javascript:', 'vbscript:', 'mailto:', 'tel:']);
+
+/**
+ * Whether a URL found in markup is worth proxying at all.
+ *
+ * A relative URL has no scheme and is the ordinary case, so it passes. This
+ * is not the security boundary — decodeAssetUrl is, and it allows only http,
+ * https and blob — it only decides what is worth asking for.
+ */
 export function isProxyableUrl(raw: string): boolean {
   const t = raw.trim();
   if (!t || t.startsWith('#')) return false;
-  return !/^(data:|about:|javascript:|mailto:|tel:)/i.test(t);
+  const scheme = urlScheme(t);
+  return scheme === null || !NOT_WORTH_PROXYING.has(scheme);
 }
 
 /**

@@ -27,7 +27,13 @@ function page(opts: { src?: string; data?: Record<string, string>; injected?: Re
 const clear = () => {
   delete (globalThis as any).document;
   delete (globalThis as any).location;
-  delete (globalThis as any)[INJECT_GLOBAL];
+  // Tolerant because one test below locks the name, which is the whole point
+  // of it: a property the page made non-configurable cannot be taken back.
+  try {
+    delete (globalThis as any)[INJECT_GLOBAL];
+  } catch {
+    (globalThis as any)[INJECT_GLOBAL] = undefined;
+  }
 };
 beforeEach(clear);
 afterEach(clear);
@@ -125,8 +131,11 @@ describe('the query on the script’s own url', () => {
 describe('what the relay injected when it served agent.js', () => {
   test('it supplies the relay address where there is no script tag to read', () => {
     page({ injected: { origin: 'https://relay.test' } });
-    assert.equal(readConfig().serverUrl, `wss://relay.test${WS_PATH.agent}`);
-    assert.equal(readConfig().scriptSrc, 'https://relay.test/agent.js');
+    // One call, because reading it is what removes it: see the block at the
+    // bottom of this file.
+    const c = readConfig();
+    assert.equal(c.serverUrl, `wss://relay.test${WS_PATH.agent}`);
+    assert.equal(c.scriptSrc, 'https://relay.test/agent.js');
   });
 
   test('it carries the options too', () => {
@@ -162,8 +171,9 @@ describe('precedence', () => {
 describe('malformed input', () => {
   test('an unparseable injected origin does not stop the agent starting', () => {
     page({ src: RELAY, injected: { origin: 'http://[not a url' } });
-    assert.doesNotThrow(() => readConfig());
-    assert.equal(readConfig().serverUrl, `ws://relay.test:7331${WS_PATH.agent}`, 'it falls back to the script it came from');
+    let c: ReturnType<typeof readConfig> | undefined;
+    assert.doesNotThrow(() => (c = readConfig()));
+    assert.equal(c!.serverUrl, `ws://relay.test:7331${WS_PATH.agent}`, 'it falls back to the script it came from');
   });
 
   test('an unparseable script src does not stop it either', () => {
@@ -174,5 +184,61 @@ describe('malformed input', () => {
     page({ src: 'http://[broken', href: 'https://app.test/x' });
     assert.doesNotThrow(() => readConfig());
     assert.equal(readConfig().serverUrl, `wss://app.test${WS_PATH.agent}`, 'it falls back to the page it is in');
+  });
+});
+
+/**
+ * The one name the mark cannot rename.
+ *
+ * Every other trace the agent leaves is built from `mark`, so it changes per
+ * engagement; this one cannot be, because the mark arrives inside it. Leaving
+ * it in the page would hand a defender the fixed grep that finds every host
+ * this tool has touched regardless of what `data-mark` said — and of all the
+ * traces it is the one that says where the data goes and what the run is
+ * called. So it is read once and taken off the window.
+ */
+describe('the config global does not outlive the read', () => {
+  test('reading it takes it off the window', () => {
+    page({ injected: { origin: 'https://relay.test', name: 'checkout' } });
+    const c = readConfig();
+    assert.equal(c.name, 'checkout', 'it was read before it was removed');
+    assert.ok(!(INJECT_GLOBAL in (globalThis as any)), 'and removed after');
+  });
+
+  test('not merely hidden from Object.keys — gone', () => {
+    // The page would find it either way: a non-enumerable property still
+    // answers to its name and still shows in getOwnPropertyNames.
+    page({ injected: { origin: 'https://relay.test' } });
+    readConfig();
+    assert.ok(!Object.keys(globalThis as any).includes(INJECT_GLOBAL));
+    assert.ok(!Object.getOwnPropertyNames(globalThis as any).includes(INJECT_GLOBAL));
+    assert.equal((globalThis as any)[INJECT_GLOBAL], undefined);
+  });
+
+  test('a second read finds the injected half gone', () => {
+    // Which is why boot calls this exactly once. Pinned so that a second
+    // caller added later fails here rather than in a page, where it would
+    // look like a relay that stopped answering.
+    page({ injected: { origin: 'https://relay.test', name: 'checkout' } });
+    assert.equal(readConfig().name, 'checkout');
+    assert.equal(readConfig().name, null);
+  });
+
+  test('a page with no agent config at all is still read without complaint', () => {
+    page({ src: RELAY });
+    assert.doesNotThrow(() => readConfig());
+    assert.ok(!(INJECT_GLOBAL in (globalThis as any)));
+  });
+
+  // Last in the file: a non-configurable property cannot be taken back off
+  // globalThis, so this one leaves the name behind for the rest of the run.
+  test('a name the page locked first does not stop the agent starting', () => {
+    const planted = { origin: 'https://relay.test' };
+    Object.defineProperty(globalThis, INJECT_GLOBAL, { value: planted, writable: true, configurable: false });
+    (globalThis as any).document = { currentScript: null, querySelectorAll: () => [] };
+    (globalThis as any).location = { href: 'https://app.test/x', protocol: 'https:', host: 'app.test' };
+    let c: ReturnType<typeof readConfig> | undefined;
+    assert.doesNotThrow(() => (c = readConfig()), 'the delete throws in a module, and is caught');
+    assert.equal(c!.serverUrl, `wss://relay.test${WS_PATH.agent}`, 'the run goes on with what it could read');
   });
 });

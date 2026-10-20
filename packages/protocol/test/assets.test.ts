@@ -10,7 +10,7 @@
  */
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { assetPath, decodeAssetUrl, isProxyableUrl, rewriteCssUrls, rewriteSrcset } from '../src/assets';
+import { assetPath, decodeAssetUrl, isProxyableUrl, rewriteCssUrls, rewriteSrcset, urlScheme } from '../src/assets';
 
 const proxy = (absolute: string) => `/asset/s1/${Buffer.from(absolute).toString('base64url')}`;
 const BASE = 'https://app.test/css/main.css';
@@ -84,6 +84,44 @@ describe('urls found in markup', () => {
     for (const leave of ['', '   ', '#anchor', 'data:image/png;base64,AAA', 'about:blank', 'javascript:void 0', 'mailto:a@b.c', 'tel:+1', 'DATA:image/png,x']) {
       assert.equal(isProxyableUrl(leave), false, leave);
     }
+  });
+
+  test('a script URL is one however it is spelled', () => {
+    /*
+     * This used to be a `/^(data:|javascript:|…)/i` test on the trimmed
+     * string, which three of these walk straight past: a browser strips
+     * leading C0 controls (not matched by \s) and every tab, CR and LF
+     * anywhere in the value, before it reads the scheme. Nothing escaped,
+     * because decodeAssetUrl above decides what is actually fetched — but the
+     * console had grown a reader that got this right and this one had not,
+     * and two readings of one rule is how the wrong one gets used.
+     */
+    for (const spelling of [
+      'javascript:alert(1)',
+      ' javascript:alert(1)',
+      '\u0000javascript:alert(1)',
+      '\u0001\u0002javascript:alert(1)',
+      'java\tscript:alert(1)',
+      'java\nscript:alert(1)',
+      'java\rscript:alert(1)',
+      'JaVaScRiPt:alert(1)',
+      'vbscript:MsgBox(1)',
+    ]) {
+      assert.equal(isProxyableUrl(spelling), false, JSON.stringify(spelling));
+    }
+  });
+
+  test('the scheme a browser would act on', () => {
+    assert.equal(urlScheme('https://x/y'), 'https:');
+    assert.equal(urlScheme('HTTPS://x/y'), 'https:');
+    assert.equal(urlScheme('\u0000java\tscript:x'), 'javascript:');
+    assert.equal(urlScheme('blob:https://x/y'), 'blob:');
+    // No scheme: a relative URL, a fragment, or plain text.
+    for (const none of ['/a.png', 'a/b.png', '#frag', '', '   ', '://x', '1http://x', 'webpack-internal']) {
+      assert.equal(urlScheme(none), null, JSON.stringify(none));
+    }
+    // A colon further along is not a scheme.
+    assert.equal(urlScheme('/path/with:colon'), null);
   });
 });
 

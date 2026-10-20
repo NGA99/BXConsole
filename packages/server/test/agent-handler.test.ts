@@ -52,9 +52,21 @@ async function serve(query: string, opts: { publicOrigin?: string; host?: string
   return res;
 }
 
+/**
+ * Run the one line the relay prepended, against a stand-in for `self`.
+ *
+ * By running it rather than reading it: the line is not an assignment any
+ * more, and what matters about it — that it is not one of the page's globals,
+ * and that it writes past anything the page left on the name — is a property
+ * of what it does, not of how it is spelled.
+ */
+function runHeader(body: string, self: Record<string, unknown> = {}): Record<string, unknown> {
+  new Function('self', body.slice(0, body.indexOf('\n')))(self);
+  return self;
+}
+
 /** The object the agent will read as `self.<INJECT_GLOBAL>`. */
-const injected = (body: string) =>
-  JSON.parse(new RegExp(`^self\\.${INJECT_GLOBAL}=(.*);$`, 'm').exec(body)![1]!) as Record<string, string>;
+const injected = (body: string) => runHeader(body)[INJECT_GLOBAL] as Record<string, string>;
 
 describe('every option the agent understands is forwarded', () => {
   // The list is shared; this is the guard that it stays shared. Dropping one
@@ -110,7 +122,9 @@ describe('every option the agent understands is forwarded', () => {
 describe('the bundle it serves', () => {
   test('the config goes first, so the agent sees it before it runs', async () => {
     const res = await serve('?name=run');
-    assert.match(res.body, new RegExp(`^self\\.${INJECT_GLOBAL}=.*;\\n/\\* the agent \\*/`));
+    const nl = res.body.indexOf('\n');
+    assert.match(res.body.slice(0, nl), new RegExp(`defineProperty\\(self,"${INJECT_GLOBAL}"`));
+    assert.equal(res.body.slice(nl + 1), '/* the agent */\n', 'and the bundle is untouched behind it');
   });
 
   test('it is served as javascript, uncached, and readable cross-origin', async () => {
@@ -204,5 +218,49 @@ describe('the pre-payload', () => {
     await handler({ url: '/agent.js?pre=1', headers: { host: 'h' }, socket: {} } as never, twice as never);
     assert.equal(injected(once.body).pre, 'first');
     assert.equal(injected(twice.body).pre, 'second');
+  });
+});
+
+/**
+ * How the config is written, which is as much the point as what is in it.
+ *
+ * The agent renames every trace it leaves from a per-engagement mark, so that
+ * finding one takes knowing the name (see the agent's mark.ts). This global
+ * is the one name that cannot be renamed — the mark is read out of it — so
+ * everything else about it has to make up the difference. It is defined, not
+ * assigned, and the agent deletes it as its first act, which leaves nothing
+ * to find after the bundle's first synchronous moment.
+ */
+describe('how the config is written', () => {
+  test('it is not one of the page’s globals', async () => {
+    // An assignment would put the relay's address in Object.keys(window),
+    // where a page finds it without knowing a thing about this tool.
+    const page = runHeader((await serve('?name=run')).body);
+    assert.deepEqual(Object.keys(page), [], 'nothing enumerable');
+    const d = Object.getOwnPropertyDescriptor(page, INJECT_GLOBAL)!;
+    assert.equal(d.enumerable, false);
+    assert.equal(d.configurable, true, 'the agent has to be able to delete it');
+  });
+
+  test('a page that trapped the name is not handed the config', async () => {
+    // A page that has met this tool before can leave a setter waiting on the
+    // name. defineProperty replaces the accessor instead of calling it.
+    const page: Record<string, unknown> = {};
+    let caught: unknown = null;
+    Object.defineProperty(page, INJECT_GLOBAL, { configurable: true, set: (v) => { caught = v; } });
+    runHeader((await serve('?name=run')).body, page);
+    assert.equal(caught, null, 'the page’s setter never ran');
+    assert.equal((page[INJECT_GLOBAL] as Record<string, string>).origin, 'http://relay.test:7331');
+  });
+
+  test('a name the page locked is left alone rather than assigned to', async () => {
+    // Nothing can be done with the name at that point, and assigning would
+    // hand the relay's address to whatever locked it. The agent still finds
+    // the relay in its own script src; an import() loses the run instead.
+    const page: Record<string, unknown> = {};
+    Object.defineProperty(page, INJECT_GLOBAL, { value: 'the page’s', writable: false, configurable: false });
+    const body = (await serve('?name=run')).body;
+    assert.doesNotThrow(() => runHeader(body, page), 'the relay’s line swallows what it cannot do');
+    assert.equal(page[INJECT_GLOBAL], 'the page’s');
   });
 });

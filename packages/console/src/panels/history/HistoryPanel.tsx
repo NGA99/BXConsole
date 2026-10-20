@@ -60,6 +60,8 @@ export function HistoryPanel({ sessionId, active = true }: { sessionId: string; 
   // History can span every window of the run or stay on the one the strip
   // points at; the column says which window a row came from either way.
   const tabs = useSessionsStore((s) => s.byId[sessionId]?.tabs) ?? [];
+  /** This run's handle name, for the empty state; absent on older recordings. */
+  const mark = useSessionsStore((s) => s.byId[sessionId]?.mark);
   const tabLabel = useMemo(() => {
     const m = new Map<string, string>();
     tabs.forEach((t, i) => m.set(t.tabId, `${i + 1}`));
@@ -495,7 +497,15 @@ export function HistoryPanel({ sessionId, active = true }: { sessionId: string; 
         }}>
           {items.length === 0 && (
             <div className="hist-empty">
-              Nothing recorded yet. Interact with the page, or call <code>window.__bxconsole.mark('name')</code> to drop a marker.
+              Nothing recorded yet. Interact with the page, or{' '}
+              {mark ? (
+                <>
+                  call <code>{mark}.mark('name')</code> in the page
+                </>
+              ) : (
+                <>call <code>mark('name')</code> on the agent's handle</>
+              )}{' '}
+              to drop a marker.
             </div>
           )}
           {items.length > 0 && rows.length === 0 && <div className="hist-empty">No events match the filter or the selected range.</div>}
