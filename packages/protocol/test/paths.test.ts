@@ -8,7 +8,16 @@
  */
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { SESSION_FILES, fileForEventType, isValidSessionId, sessionDirName } from '../src/paths';
+import {
+  AGENT_MAX_MESSAGE_BYTES,
+  BLOB_MAX_BYTES,
+  BODY_INLINE_MAX_BYTES,
+  PRE_PAYLOAD_MAX_BYTES,
+  SESSION_FILES,
+  fileForEventType,
+  isValidSessionId,
+  sessionDirName,
+} from '../src/paths';
 
 describe('which file an event belongs in', () => {
   const cases: Array<[string, keyof typeof SESSION_FILES]> = [
@@ -87,5 +96,39 @@ describe('what may be a session id', () => {
   test('a refused id throws rather than quietly naming some other directory', () => {
     assert.throws(() => sessionDirName('../escape'));
     assert.equal(sessionDirName('abc123'), 'session-abc123');
+  });
+});
+
+describe('the ceilings have to stay in the right order', () => {
+  /*
+   * These numbers only work as a set. The socket limit is the outermost one:
+   * past it `ws` closes the connection, so an agent that can legitimately
+   * produce a larger message would have its run killed rather than recorded.
+   * Nothing here is a tuning preference — each is a bound on what an honest
+   * agent can send, and raising one without the other breaks real runs.
+   */
+  test('a message may carry anything the agent can legitimately produce', () => {
+    assert.ok(
+      AGENT_MAX_MESSAGE_BYTES > BLOB_MAX_BYTES,
+      'a body the store would accept must fit through the socket that delivers it',
+    );
+    assert.ok(
+      AGENT_MAX_MESSAGE_BYTES > PRE_PAYLOAD_MAX_BYTES,
+      'the pre-payload travels the other way, but a run that echoes it must still fit',
+    );
+    // Headroom, not a hair's breadth: a message is a body plus its event, and
+    // a DOM keyframe of a heavy page has been measured at about 200 kB.
+    assert.ok(AGENT_MAX_MESSAGE_BYTES >= BLOB_MAX_BYTES * 2, 'too little room between the body limit and the message limit');
+  });
+
+  test('a body is stored before it is large, and inline while it is small', () => {
+    assert.ok(BODY_INLINE_MAX_BYTES < BLOB_MAX_BYTES, 'nothing would ever reach the store');
+    assert.ok(BODY_INLINE_MAX_BYTES > 0);
+  });
+
+  test('the socket limit is far below the library default it replaces', () => {
+    // `ws` defaults to 100 MB, which on a socket that cannot ask for a
+    // password is not a limit at all.
+    assert.ok(AGENT_MAX_MESSAGE_BYTES < 100 * 1024 * 1024 / 4, 'the cap is not buying much over the default');
   });
 });

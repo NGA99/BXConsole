@@ -83,6 +83,24 @@ export function bodyState(entry: NetworkEntry, kept: ReadonlySet<string>, connec
   return connected ? 'live-only' : 'lost';
 }
 
+/**
+ * Why a body is not here, when the plain state does not say it.
+ *
+ * "Lost" covers two different things and a reader can act on only one of
+ * them. A body nobody captured was never asked for; a body the relay refused
+ * was asked for and turned away, for being over 4 MiB or for putting the run
+ * past its 50 MB budget — which is a setting, not a fact of the world. The
+ * size is kept either way, so the sentence can say how much went past.
+ */
+export function bodyTitle(entry: NetworkEntry, state: BodyState): string {
+  const res = entry.response;
+  if (res?.bodyDropped) {
+    const size = typeof res.bodyBytes === 'number' ? `${res.bodyBytes.toLocaleString()} bytes` : 'This body';
+    return `${size} went past and none of it was kept: the relay holds bodies up to 4 MB and up to 50 MB for a whole run, and this one did not fit. ${TITLE[state]}`;
+  }
+  return TITLE[state];
+}
+
 /** Sorting puts what is readable first and what is gone last. */
 export const BODY_ORDER: Record<BodyState, number> = {
   captured: 0,

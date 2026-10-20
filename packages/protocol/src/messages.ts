@@ -132,6 +132,18 @@ export type AgentEvent =
       bodyRef?: string;
       /** decoded size of the body, kept when `bodyRef` took the body itself away */
       bodyBytes?: number;
+      /**
+       * There was a body of `bodyBytes`, and none of it was kept.
+       *
+       * The blob store refuses a body that is larger than it will hold or
+       * that puts the session over its budget. Those used to stay inline in
+       * the event log, on the rule that a recording must never come out with
+       * less than went in — which read well and meant that the budget bounded
+       * nothing: past it, every body landed in a file that has no ceiling and
+       * no compaction, and is read end to end whenever the session is opened.
+       * Saying the body was there and is not is the smaller loss.
+       */
+      bodyDropped?: boolean;
       initiator?: string;
       /** call stack at fetch()/XHR send()/new WebSocket(), agent frames stripped */
       stack?: string;
@@ -151,6 +163,18 @@ export type AgentEvent =
       bodyRef?: string;
       /** decoded size of the body, kept when `bodyRef` took the body itself away */
       bodyBytes?: number;
+      /**
+       * There was a body of `bodyBytes`, and none of it was kept.
+       *
+       * The blob store refuses a body that is larger than it will hold or
+       * that puts the session over its budget. Those used to stay inline in
+       * the event log, on the rule that a recording must never come out with
+       * less than went in — which read well and meant that the budget bounded
+       * nothing: past it, every body landed in a file that has no ceiling and
+       * no compaction, and is read end to end whenever the session is opened.
+       * Saying the body was there and is not is the smaller loss.
+       */
+      bodyDropped?: boolean;
       encodedLength?: number;
       /** ms from request start until response headers arrived (TTFB) */
       waitMs?: number;

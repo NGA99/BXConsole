@@ -14,7 +14,7 @@ import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import type { WebSocket } from 'ws';
-import { SESSION_FILES, sessionDirName } from '@bxconsole/protocol';
+import { SESSION_FILES, sessionDirName, PROTOCOL_VERSION } from '@bxconsole/protocol';
 import { SessionStore } from '../src/store';
 import { SessionRegistry } from '../src/registry';
 import { BlobStore } from '../src/blobs';
@@ -114,6 +114,9 @@ async function join(relay: Relay, over: Record<string, unknown> = {}): Promise<F
 
 const hello = (over: Record<string, unknown> = {}) => ({
   type: 'session.hello',
+  // The relay says so in the log when this is missing or different, which is
+  // the point of it; a test that does not mean to say that sends the real one.
+  v: PROTOCOL_VERSION,
   hello: {
     sessionId: 'sess01',
     tabId: 'tabA',
@@ -266,15 +269,40 @@ describe('what the console sees and what the disk keeps', () => {
     assert.equal(held?.toString('utf8'), body);
   });
 
-  test('a body the store refuses stays inline: a recording never loses one', async () => {
+  test('a body the store refuses is dropped, with its size kept', async () => {
+    /*
+     * This used to assert the opposite — a refused body stayed in the line,
+     * so that a recording never came out with less in it than went in. The
+     * rule is right and that was the wrong place for it: the store refuses a
+     * body for being over 4 MiB or for taking the run past its 50 MB budget,
+     * and sending those to network.ndjson instead meant the budget bounded
+     * nothing. Past it every body went into a file with no ceiling and no
+     * compaction, which is read end to end whenever the session is opened —
+     * so an ordinary long run grew without limit and a socket forging its own
+     * events could fill a disk on purpose.
+     */
     const { relay, blobs } = build(10); // a budget nothing will fit in
     const agent = await join(relay);
     const big = 'y'.repeat(5000);
     await agent.deliver(response(big));
     const [line] = await recorded('sess01', 'network');
     await blobs.whenQuiet('sess01');
-    assert.equal(line!.event.body, big, 'refused by the budget, so it must still be in the line');
-    assert.equal(line!.event.bodyRef, undefined);
+    assert.equal(line!.event.body, undefined, 'the refused body is still taking up the event log');
+    assert.equal(line!.event.bodyRef, undefined, 'nothing was stored, so there is nothing to point at');
+    assert.equal(line!.event.bodyDropped, true, 'the reader cannot tell a dropped body from one nobody captured');
+    assert.equal(line!.event.bodyBytes, 5000, 'the size is the one thing left worth keeping');
+  });
+
+  test('a body small enough to store is untouched by any of that', async () => {
+    const { relay, blobs } = build();
+    const agent = await join(relay);
+    const body = 'z'.repeat(5000);
+    await agent.deliver(response(body));
+    const [line] = await recorded('sess01', 'network');
+    await blobs.whenQuiet('sess01');
+    assert.equal(line!.event.bodyDropped, undefined);
+    assert.ok(line!.event.bodyRef, 'it should have gone to the store');
+    assert.equal((await blobs.read(String(line!.event.bodyRef)))?.toString('utf8'), body);
   });
 
   test('events stay in seq order even though some of them wait on a blob write', async () => {

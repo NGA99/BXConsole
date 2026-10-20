@@ -109,6 +109,22 @@ export const BODY_INLINE_MAX_BYTES = 2 * 1024;
 /** Nothing larger is stored: a huge bundle costs as much as a video. */
 export const BLOB_MAX_BYTES = 4 * 1024 * 1024;
 
+/**
+ * The largest single message the relay will take from an agent socket.
+ *
+ * `ws` defaults to 100 MB, which is not a limit so much as the absence of
+ * one: `/ws/agent` cannot ask for a password — nobody is at the keyboard —
+ * so anything that can reach it can send that much, as often as it likes.
+ *
+ * The figure comes from measurement rather than taste. The largest line a
+ * real run has produced here is a DOM keyframe of a heavy news site at about
+ * 200 kB; the agent caps a captured body at 64 kB before it sends one. Eight
+ * megabytes is forty times the worst honest case and twelve times smaller
+ * than the default, which is the trade: a page heavy enough to be cut off
+ * would have to be two orders of magnitude past anything measured.
+ */
+export const AGENT_MAX_MESSAGE_BYTES = 8 * 1024 * 1024;
+
 /** Which ndjson file an event type lands in. */
 export function fileForEventType(type: string): SessionFile | null {
   if (type.startsWith('console.') || type.startsWith('error.')) return 'console';

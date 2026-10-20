@@ -41,7 +41,7 @@ import { agentFor, type SessionEntry, type SessionRegistry } from './registry';
 import type { PingBoard } from './ping';
 import type { BlobStore } from './blobs';
 import type { AssetCollector } from './collect';
-import { bodyOf, carriesBody, withBodyRef } from './net-bodies';
+import { bodyOf, carriesBody, withBodyDropped, withBodyRef } from './net-bodies';
 import type { SessionStore } from './store';
 
 /** A keyframe is due this long after the last one… */
@@ -744,8 +744,11 @@ export class Relay {
    * the blob store, which also collapses the identical bodies a polled
    * endpoint returns over and over into one copy.
    *
-   * If the store will not take it the body stays exactly where it was. A
-   * recording must never come out of this with less in it than it went in.
+   * If the store will not take it — too large, or the session is past its
+   * budget — the body is dropped rather than left inline. Leaving it was the
+   * older behaviour and it made the budget meaningless: past it every body
+   * went to this very file, which has no ceiling and is read end to end on
+   * every open. See net-bodies.ts.
    */
   private async forStorage(sessionId: string, item: SequencedEvent): Promise<SequencedEvent> {
     const event = item.event;
@@ -753,9 +756,9 @@ export class Relay {
     const held = bodyOf(event);
     if (!held) return item;
     const sha = await this.blobs.putBody(sessionId, held.bytes, held.mime).catch(() => null);
-    // Refused for size, or for budget. The body stays where it was, which is
-    // exactly where it would have been without any of this.
-    if (!sha) return item;
+    // Refused for size or for budget: keep the size and the fact of it, not
+    // the bytes. The event log is the one file here that nothing bounds.
+    if (!sha) return { ...item, event: withBodyDropped(event, held.bytes.length) };
     return { ...item, event: withBodyRef(event, sha, held.bytes.length) };
   }
 

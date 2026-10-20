@@ -8,9 +8,19 @@
  * collapses the identical bodies a polled endpoint returns over and over into
  * a single copy on disk.
  *
- * The rule the whole arrangement rests on: a recording must never come out
- * with less in it than it went in. Every refusal here leaves the body exactly
- * where it was.
+ * A refusal used to leave the body inline, on the rule that a recording must
+ * never come out with less in it than it went in. The rule is a good one and
+ * that was the wrong place to apply it: the store refuses a body for being
+ * over 4 MiB or for putting the session past its 50 MB budget, and sending
+ * those to the event log instead meant the budget bounded nothing at all.
+ * Past it, every body landed in a file with no ceiling, no compaction, and a
+ * reader that goes through it end to end each time the session is opened —
+ * so an ordinary long run on a busy app grew without limit, and a socket
+ * that forged its own events could fill a disk on purpose.
+ *
+ * So a refused body is dropped and said to be dropped, with its size kept.
+ * What is lost is a body the store had already decided not to hold; what is
+ * kept is the fact that it existed and how big it was.
  */
 import { BODY_INLINE_MAX_BYTES, type AgentEvent } from '@bxconsole/protocol';
 
@@ -48,6 +58,17 @@ export function bodyOf(event: BodyEvent): { bytes: Buffer; mime: string } | null
 export function withBodyRef(event: BodyEvent, sha: string, bytes: number): BodyEvent {
   const { body: _moved, ...rest } = event;
   return { ...rest, bodyRef: sha, bodyBytes: bytes } as BodyEvent;
+}
+
+/**
+ * The event with its body taken away and nothing put in its place.
+ *
+ * For a body the store would not hold. The size stays, so the Network panel
+ * can still say how much went past even though none of it was kept.
+ */
+export function withBodyDropped(event: BodyEvent, bytes: number): BodyEvent {
+  const { body: _gone, ...rest } = event;
+  return { ...rest, bodyBytes: bytes, bodyDropped: true } as BodyEvent;
 }
 
 /** Header lookup that does not care how the page spelled the name. */

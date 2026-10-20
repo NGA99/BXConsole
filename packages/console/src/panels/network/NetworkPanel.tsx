@@ -26,7 +26,7 @@ import { TypeIcon } from './icons';
 import { GearIcon } from '../../devtools-ui/icons';
 import { compileFilter, hostOf } from './filters';
 import { searchEntries } from './search';
-import { BODY_ORDER, LABEL, TITLE, bodyState } from './body-state';
+import { BODY_ORDER, LABEL, TITLE, bodyState, bodyTitle } from './body-state';
 import { loadAll } from './stored-bodies';
 import { asCurl, asFetch, copyText, replayExpression } from './copy';
 import { toHar, downloadJson } from './har';
@@ -283,7 +283,7 @@ export function NetworkPanel({ sessionId }: { sessionId: string }) {
         render: (e) => {
           const state = bodyState(e, keptFiles, connected);
           return (
-            <span className={`body-state ${state}`} title={TITLE[state]}>
+            <span className={`body-state ${state}`} title={bodyTitle(e, state)}>
               {LABEL[state]}
             </span>
           );

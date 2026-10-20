@@ -13,6 +13,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import {
+  AGENT_MAX_MESSAGE_BYTES,
   ASSET_MAX_BYTES,
   PING_TOKENS_FILE,
   PRE_PAYLOAD_FILE,
@@ -431,7 +432,14 @@ const server = http.createServer((req, res) => {
   serveStatic(req, res);
 });
 
-const agentWss = new WebSocketServer({ noServer: true });
+/*
+ * The agent socket is the one nothing can authenticate — a victim's browser
+ * has nobody at the keyboard — so it is the one that needs a ceiling on what
+ * a single message may be. See AGENT_MAX_MESSAGE_BYTES for where the figure
+ * comes from. Past it `ws` closes the connection with 1009, and the agent's
+ * transport reconnects with its usual backoff.
+ */
+const agentWss = new WebSocketServer({ noServer: true, maxPayload: AGENT_MAX_MESSAGE_BYTES });
 /** The connectivity probe socket: accepted, recorded, closed. */
 const pingWss = new WebSocketServer({ noServer: true });
 const consoleWss = new WebSocketServer({ noServer: true });

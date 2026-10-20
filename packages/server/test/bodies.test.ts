@@ -1,10 +1,15 @@
 /**
  * Response bodies moved out of network.ndjson and into the blob store.
  *
- * The one rule that matters: a recording must never come out with less in it
- * than it went in. The store is allowed to refuse — it is not allowed to make
- * a body disappear, and the sweep is not allowed to collect one a recording
- * still points at.
+ * The store is allowed to refuse: over 4 MiB, or past the run's budget. What
+ * it may not do is lose a body it accepted, hand back different bytes than it
+ * was given, or let the sweep collect one a recording still points at.
+ *
+ * A refused body used to be left inline in the event log instead, so that a
+ * recording never came out with less in it than went in. That is in
+ * relay-integration.test.ts now, and it says the opposite: the event log is
+ * the one file here with no ceiling, so a body the store would not hold is
+ * dropped and said to be dropped.
  */
 import { describe, test, beforeEach, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
