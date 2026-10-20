@@ -386,14 +386,18 @@ async function serveLogin(req: http.IncomingMessage, res: http.ServerResponse): 
     res.writeHead(429, { 'Content-Type': 'text/html; charset=utf-8', 'Retry-After': '60', 'Cache-Control': 'no-store' });
     return void res.end(loginPage(false, true));
   }
-  const password = new URLSearchParams(Buffer.concat(chunks).toString('utf8')).get('password') ?? '';
-  const setCookie = await auth.cookieFor(password);
+  const form = new URLSearchParams(Buffer.concat(chunks).toString('utf8'));
+  const password = form.get('password') ?? '';
+  // An empty name means a form from before there were several accounts —
+  // and a relay running on CONSOLE_PASSWORD, where there is only ever one.
+  const user = (form.get('user') ?? '').trim();
+  const setCookie = await (user ? auth.cookieFor(password, user) : auth.cookieFor(password));
   if (!setCookie) {
     // Slow as well as limited: the pause costs a human one mistype and costs a
     // script the only thing it has, which is attempts per second.
     await new Promise((r) => setTimeout(r, 400));
     res.writeHead(401, { 'Content-Type': 'text/html; charset=utf-8', 'Cache-Control': 'no-store' });
-    return void res.end(loginPage(true));
+    return void res.end(loginPage(true, false, user));
   }
   loginLimit.clear(key);
   res.writeHead(303, { 'Set-Cookie': setCookie, Location: '/', 'Cache-Control': 'no-store' });
@@ -497,7 +501,7 @@ server.on('upgrade', (req, socket, head) => {
   } else if (pathname === WS_PATH.console) {
     consoleWss.handleUpgrade(req, socket, head, (ws) => {
       armHeartbeat(ws);
-      relay.attachConsole(ws);
+      relay.attachConsole(ws, auth.actorFor(req) ?? undefined);
     });
   } else {
     socket.destroy();

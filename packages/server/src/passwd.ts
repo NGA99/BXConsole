@@ -40,11 +40,39 @@ export const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 32, saltBytes: 16 } as con
 /** How long a loaded file is trusted before its mtime is checked again. */
 const RECHECK_MS = 1000;
 
+/** What an account may do. Two, because a third has never been needed. */
+export type Role = 'admin' | 'member';
+
 export interface Account {
   readonly user: string;
   /** The stored line's credential half, verbatim. Also the cookie's HMAC key:
    *  change the password and every cookie issued against the old one dies. */
   readonly record: string;
+  /**
+   * The name this account is known by everywhere except this file.
+   *
+   * Projects record who owns them, and they have to go on meaning the same
+   * person when the account is renamed or its password changes — so what they
+   * record is this, not the user name and not the credential.
+   *
+   * Assigned once, when the account is created, and never derived from the
+   * name. Deriving it would be less to store and would quietly hand a new
+   * person the projects of a deleted one who happened to be called the same
+   * thing, which in a tool holding engagement data is not a trade worth
+   * making. A file written before ids existed gets one derived on the way in
+   * and a line in the log saying how to pin it.
+   */
+  readonly id: string;
+  readonly role: Role;
+}
+
+/** An id for a line that predates them. Stable, so a restart agrees with itself. */
+export function derivedId(user: string): string {
+  return createHash('sha256').update(`bxconsole:account:${user}`).digest('hex').slice(0, 12);
+}
+
+export function newAccountId(): string {
+  return randomBytes(6).toString('hex');
 }
 
 /** Build a `scrypt$...` record for a password. */
@@ -117,10 +145,10 @@ export class PasswordFile {
     return this.accounts.find((a) => a.user === user) ?? null;
   }
 
-  /** The single account, while one account is the limit. */
-  only(): Account | null {
+  /** Every account, for the CLI and the admin screen. */
+  all(): readonly Account[] {
     this.refreshIfStale();
-    return this.accounts[0] ?? null;
+    return this.accounts;
   }
 
   /**
@@ -166,13 +194,13 @@ export class PasswordFile {
   }
 
   private apply(parsed: Parsed): void {
-    if (parsed.accounts.length > 1) {
+    if (parsed.legacy.length) {
       this.warn(
-        `.passwd holds ${parsed.accounts.length} accounts and only one is supported yet; ` +
-          `using "${parsed.accounts[0]!.user}" and ignoring the rest`,
+        `.passwd: ${parsed.legacy.join(', ')} ${parsed.legacy.length === 1 ? 'has' : 'have'} no account id, ` +
+          'so one is derived from the name — run: npm run passwd -- --pin-ids',
       );
     }
-    this.accounts = parsed.accounts.slice(0, 1);
+    this.accounts = parsed.accounts;
     this.loadedMtime = parsed.mtime;
     this.missing = false;
   }
@@ -181,8 +209,10 @@ export class PasswordFile {
 interface Parsed {
   accounts: Account[];
   mtime: number;
+  /** Account names whose id was derived rather than read. */
+  legacy: string[];
 }
-const UNCHANGED = { accounts: [], mtime: -1 } as Parsed;
+const UNCHANGED = { accounts: [], mtime: -1, legacy: [] } as Parsed;
 
 /** Read and parse, or null when absent, or UNCHANGED when the mtime matches. */
 function read(path: string, knownMtime = -2): Parsed | null {
@@ -209,44 +239,86 @@ function read(path: string, knownMtime = -2): Parsed | null {
 
   const text = readFileSync(path, 'utf8');
   const accounts: Account[] = [];
+  /** Lines with no id of their own, reported once so they can be pinned. */
+  const legacy: string[] = [];
   let lineNo = 0;
   for (const raw of text.split('\n')) {
     lineNo++;
     const line = raw.trim();
     if (!line || line.startsWith('#')) continue;
+    /*
+     * `user:record[:id[:role]]`. The record holds its own fields on `$`, so
+     * the colons after it are free; a file written before ids and roles
+     * existed is three fields short and still reads.
+     */
     const at = line.indexOf(':');
     if (at <= 0) throw new PasswdError(`${path}:${lineNo}: expected "user:hash"`);
     const user = line.slice(0, at).trim();
-    const record = line.slice(at + 1).trim();
+    const [record = '', id, role] = line
+      .slice(at + 1)
+      .split(':')
+      .map((s) => s.trim());
     if (!/^[A-Za-z0-9._-]{1,64}$/.test(user)) {
       throw new PasswdError(`${path}:${lineNo}: "${user}" is not a usable account name`);
     }
     if (!record.startsWith('scrypt$')) {
       throw new PasswdError(`${path}:${lineNo}: "${user}" has no scrypt hash — run: npm run passwd -- ${user}`);
     }
+    if (id !== undefined && !/^[a-f0-9]{6,32}$/.test(id)) {
+      throw new PasswdError(`${path}:${lineNo}: "${id}" is not a usable account id`);
+    }
+    if (role !== undefined && role !== 'admin' && role !== 'member') {
+      throw new PasswdError(`${path}:${lineNo}: "${role}" is not a role — expected admin or member`);
+    }
     if (accounts.some((a) => a.user === user)) {
       throw new PasswdError(`${path}:${lineNo}: "${user}" appears twice`);
     }
-    accounts.push({ user, record });
+    if (id === undefined) legacy.push(user);
+    accounts.push({
+      user,
+      record,
+      id: id ?? derivedId(user),
+      // A file with no roles in it at all is the one written before they
+      // existed, which holds one account and that account is the operator.
+      // Anyone added after the first starts out as a member.
+      role: role ?? (accounts.length === 0 ? 'admin' : 'member'),
+    });
   }
   if (accounts.length === 0) throw new PasswdError(`${path} holds no accounts`);
-  return { accounts, mtime };
+  /*
+   * All of them or none. A file half in each scheme is being hand-edited, and
+   * deriving the ids that are missing would hand ownership out by coincidence
+   * — so it is a thing to fix rather than to guess at.
+   */
+  if (legacy.length && legacy.length !== accounts.length) {
+    throw new PasswdError(`${path}: some accounts have an id and some do not — run: npm run passwd -- --pin-ids`);
+  }
+  return { accounts, mtime, legacy };
 }
 
 /** An account synthesised from CONSOLE_PASSWORD, for a relay with no file. */
 export function accountFromEnv(user: string, password: string): Account {
   // The record is the cookie's HMAC key, so it has to change with the
-  // password and must not be the password itself.
-  return { user, record: `env$${createHash('sha256').update(`bxconsole:${password}`).digest('hex')}` };
+  // password and must not be the password itself. An id derived from the
+  // name rather than drawn at random, so a relay running on the environment
+  // variable owns the same projects after a restart.
+  return {
+    user,
+    record: `env$${createHash('sha256').update(`bxconsole:${password}`).digest('hex')}`,
+    id: derivedId(user),
+    role: 'admin',
+  };
 }
 
 /** Writing the file, used by the CLI. 0600 from the moment it exists. */
 export async function writeAccounts(path: string, accounts: Account[]): Promise<void> {
   const body = [
-    '# BXConsole operator accounts. One per line: user:scrypt$N$r$p$salt$hash',
-    '# Add or change one with: npm run passwd -- <user>',
+    '# BXConsole operator accounts. One per line:',
+    '#   user:scrypt$N$r$p$salt$hash:id:role      role is admin or member',
+    '# Add or change one with: npm run passwd -- <user> [--role admin|member]',
+    '# List them: --list   Remove one: --remove <user>   Give them ids: --pin-ids',
     '# The relay re-reads this when it changes; no restart, no dropped sessions.',
-    ...accounts.map((a) => `${a.user}:${a.record}`),
+    ...accounts.map((a) => `${a.user}:${a.record}:${a.id}:${a.role}`),
     '',
   ].join('\n');
   await fs.writeFile(path, body, { mode: 0o600 });

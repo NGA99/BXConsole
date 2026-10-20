@@ -15,6 +15,8 @@ import os from 'node:os';
 import path from 'node:path';
 import type { WebSocket } from 'ws';
 import { SESSION_FILES, sessionDirName, PROTOCOL_VERSION } from '@bxconsole/protocol';
+import type { ConsoleToServer, SessionMeta } from '@bxconsole/protocol';
+import type { Account } from '../src/passwd';
 import { SessionStore } from '../src/store';
 import { SessionRegistry } from '../src/registry';
 import { BlobStore } from '../src/blobs';
@@ -376,5 +378,151 @@ describe('the collection choice', () => {
     relay.attachAgent(a as unknown as WebSocket);
     await a.deliver(hello());
     assert.equal(reg2.get('sess01')!.meta.collect, undefined, 'absent, which the relay reads as on');
+  });
+});
+
+/*
+ * What one console is allowed to see.
+ *
+ * The relay decides this in one place — `visibleTo(actor)` — and the gate at
+ * the top of the console handler turns that into "this message names a
+ * session you cannot see, so there is no answer". Today visibleTo says yes to
+ * everything, because sessions are not divided by anything yet; projects come
+ * next. These tests subclass it to say what it will say then, so the wiring
+ * that carries the answer is covered before the answer is real, and so they
+ * keep meaning the same thing once it is.
+ */
+class ScopedRelay extends Relay {
+  /** Session ids each account id may see; an account missing from it sees none. */
+  readonly allowed = new Map<string | undefined, Set<string>>();
+
+  protected override visibleTo(actor: Account | undefined): SessionMeta[] {
+    const may = this.allowed.get(actor?.id);
+    return super.visibleTo(actor).filter((m) => may?.has(m.sessionId) ?? false);
+  }
+}
+
+describe('what one console may see', () => {
+  const ana: Account = { user: 'ana', record: 'x', id: 'a1a1a1', role: 'member' };
+  const bo: Account = { user: 'bo', record: 'x', id: 'b2b2b2', role: 'member' };
+
+  /** A relay where ana can see sess01 and bo can see nothing, with sess01 live. */
+  async function scoped() {
+    const store = new SessionStore(dir);
+    const registry = new SessionRegistry(store);
+    const relay = new ScopedRelay(registry, store);
+    relay.useBlobs(new BlobStore(dir, Number.POSITIVE_INFINITY));
+    relay.allowed.set(ana.id, new Set(['sess01']));
+    relay.allowed.set(bo.id, new Set());
+    const agent = await join(relay);
+    return { relay, agent };
+  }
+
+  test('the snapshot at sign-in holds only the sessions that account may see', async () => {
+    const { relay } = await scoped();
+    const hers = new FakeSocket();
+    const his = new FakeSocket();
+    relay.attachConsole(hers as unknown as WebSocket, ana);
+    relay.attachConsole(his as unknown as WebSocket, bo);
+
+    const toAna = hers.received('sessions.snapshot')[0]!['sessions'] as SessionMeta[];
+    const toBo = his.received('sessions.snapshot')[0]!['sessions'] as SessionMeta[];
+    assert.deepEqual(toAna.map((m) => m.sessionId), ['sess01']);
+    assert.deepEqual(toBo.map((m) => m.sessionId), [], 'bo must not be told the session exists');
+  });
+
+  test('asking for the list again is answered the same way, not from the registry', async () => {
+    // sessions.list went straight to registry.all() and so handed back every
+    // session to anyone who asked for a refresh.
+    const { relay } = await scoped();
+    const his = new FakeSocket();
+    relay.attachConsole(his as unknown as WebSocket, bo);
+    await his.deliver({ type: 'sessions.list' });
+    for (const snap of his.received('sessions.snapshot')) {
+      assert.deepEqual((snap['sessions'] as SessionMeta[]).map((m) => m.sessionId), []);
+    }
+  });
+
+  test('a message naming a session that account cannot see gets no answer at all', async () => {
+    const { relay, agent } = await scoped();
+    const his = new FakeSocket();
+    relay.attachConsole(his as unknown as WebSocket, bo);
+    const sentToHim = his.sent.length;
+    const sentToAgent = agent.sent.length;
+    /*
+     * Typed as the union on purpose. The first version of this sent
+     * `session.remove`, which is not a message the relay has, so every one of
+     * them fell through to the default case and the test proved nothing.
+     */
+    const asking: ConsoleToServer[] = [
+      { type: 'session.subscribe', sessionId: 'sess01', replay: true },
+      { type: 'eval.request', sessionId: 'sess01', tabId: 'tabA', commandId: 'c1', expression: 'document.cookie' },
+      { type: 'sources.list', sessionId: 'sess01', tabId: 'tabA', requestId: 'q1' },
+      { type: 'screen.subscribe', sessionId: 'sess01', tabId: 'tabA' },
+      { type: 'files.list', sessionId: 'sess01' },
+      { type: 'network.configure', sessionId: 'sess01', blocked: ['*'] },
+    ];
+    for (const msg of asking) await his.deliver(msg);
+    await settle();
+
+    // Not even an error: a refusal that names the session confirms it is there.
+    assert.equal(his.sent.length, sentToHim, `answered with ${JSON.stringify(his.sent.slice(sentToHim))}`);
+    // And nothing reached the page, which is the part that matters most —
+    // eval.request on someone else's run is their victim's browser.
+    assert.equal(agent.sent.length, sentToAgent, `sent to the page: ${JSON.stringify(agent.sent.slice(sentToAgent))}`);
+  });
+
+  test('a session it cannot see cannot be trashed or deleted by it', async () => {
+    const { relay } = await scoped();
+    const his = new FakeSocket();
+    relay.attachConsole(his as unknown as WebSocket, bo);
+    const destructive: ConsoleToServer[] = [
+      { type: 'session.trash', sessionId: 'sess01' },
+      { type: 'session.forget', sessionId: 'sess01' },
+    ];
+    for (const msg of destructive) await his.deliver(msg);
+    await settle();
+
+    const hers = new FakeSocket();
+    relay.attachConsole(hers as unknown as WebSocket, ana);
+    const left = hers.received('sessions.snapshot')[0]!['sessions'] as SessionMeta[];
+    assert.deepEqual(left.map((m) => m.sessionId), ['sess01'], 'bo deleted a session he cannot see');
+    assert.equal(left[0]!.trashedAt, undefined, 'bo trashed a session he cannot see');
+  });
+
+  test('a session changing is told only to the consoles that may see it', async () => {
+    /*
+     * This is the broadcast, not the gate: every meta change used to go to
+     * every console connected, so a title change on one account's run pushed
+     * that run's url, title and user agent to everybody.
+     */
+    const { relay } = await scoped();
+    const hers = new FakeSocket();
+    const his = new FakeSocket();
+    relay.attachConsole(hers as unknown as WebSocket, ana);
+    relay.attachConsole(his as unknown as WebSocket, bo);
+
+    await hers.deliver({ type: 'session.trash', sessionId: 'sess01' } satisfies ConsoleToServer);
+    await until(() => hers.received('session.updated')[0], 'ana to be told her session moved');
+    assert.equal(his.received('session.updated').length, 0, 'bo was told about a session he cannot see');
+
+    await hers.deliver({ type: 'session.forget', sessionId: 'sess01' } satisfies ConsoleToServer);
+    await until(() => hers.received('session.removed')[0], 'ana to be told it is gone');
+    assert.equal(his.received('session.removed').length, 0, 'bo was told a session he cannot see was deleted');
+  });
+
+  test('a live event reaches the consoles that may see its session and no others', async () => {
+    const { relay, agent } = await scoped();
+    const hers = new FakeSocket();
+    const his = new FakeSocket();
+    relay.attachConsole(hers as unknown as WebSocket, ana);
+    relay.attachConsole(his as unknown as WebSocket, bo);
+    await hers.deliver({ type: 'session.subscribe', sessionId: 'sess01', replay: false });
+
+    await agent.deliver({ type: 'console.message', ts: 3, level: 'log', args: [{ type: 'string', value: 'hi' }] });
+    await until(() => hers.received('session.event')[0], 'ana to get the event');
+    assert.equal(his.received('session.event').length, 0);
+    // The meta updates that ride alongside it are scoped the same way.
+    assert.equal(his.received('session.updated').length, 0, 'bo was told the session changed');
   });
 });

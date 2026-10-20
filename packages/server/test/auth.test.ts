@@ -10,7 +10,7 @@
  */
 import { after, describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { COOKIE_NAME, ConsoleAuth, cookie, isVictimPath, refuse } from '../src/auth';
@@ -20,8 +20,8 @@ const PASSWORD = 'asdf1234!@#';
 const auth = new ConsoleAuth({ password: PASSWORD });
 
 /** A request carrying the cookie this auth would issue for `password`. */
-async function signedInWith(a: ConsoleAuth, password: string): Promise<never> {
-  const header = await a.cookieFor(password);
+async function signedInWith(a: ConsoleAuth, password: string, user?: string): Promise<never> {
+  const header = await a.cookieFor(password, user);
   assert.ok(header, 'expected a cookie');
   return { headers: { cookie: header.slice(0, header.indexOf(';')) } } as never;
 }
@@ -31,6 +31,19 @@ const signedIn = () => signedInWith(auth, PASSWORD);
 async function passwdFile(user: string, password: string): Promise<string> {
   const file = path.join(mkdtempSync(path.join(tmpdir(), 'bxc-auth-')), '.passwd');
   writeFileSync(file, `${user}:${await hashPassword(password)}\n`);
+  chmodSync(file, 0o600);
+  return file;
+}
+
+/** A .passwd holding several accounts, each `user:password:id:role`. */
+async function passwdWithAll(
+  rows: readonly (readonly [string, string, string, 'admin' | 'member'])[],
+): Promise<string> {
+  const file = path.join(mkdtempSync(path.join(tmpdir(), 'bxc-auth-')), '.passwd');
+  const lines = await Promise.all(
+    rows.map(async ([user, password, id, role]) => `${user}:${await hashPassword(password)}:${id}:${role}`),
+  );
+  writeFileSync(file, lines.join('\n') + '\n');
   chmodSync(file, 0o600);
   return file;
 }
@@ -183,7 +196,7 @@ describe('accounts from .passwd', () => {
     const file = keep(await passwdFile('operator', 'pw for operator'));
     const a = new ConsoleAuth({ file });
     a.load();
-    assert.equal(a.userName(), 'operator');
+    assert.equal(a.defaultUser(), 'operator');
     assert.match((await a.cookieFor('pw for operator'))!, /^__wvs=operator\.[0-9a-f]{64};/);
   });
 
@@ -226,6 +239,94 @@ describe('accounts from .passwd', () => {
     const file = keep(await passwdFile('admin', 'pw'));
     chmodSync(file, 0o644);
     assert.throws(() => new ConsoleAuth({ file }).load(), /chmod 600/);
+  });
+
+  /*
+   * Several accounts.
+   *
+   * Everything a console socket may read is decided from the account behind
+   * the request, so the question stopped being "is this the operator" and
+   * became "which of them is it". The cookie already carried the name; these
+   * are about the answer being the right account and not merely a yes.
+   */
+  test('the request is a particular account, with its id and role', async () => {
+    const file = keep(await passwdWithAll([['ana', 'pw for ana', 'a1a1a1', 'admin']]));
+    const a = new ConsoleAuth({ file });
+    a.load();
+    const actor = a.actorFor(await signedInWith(a, 'pw for ana'));
+    assert.equal(actor?.user, 'ana');
+    assert.equal(actor?.id, 'a1a1a1', 'the id is what a project will be owned by');
+    assert.equal(actor?.role, 'admin');
+  });
+
+  test('two accounts each get their own cookie, and neither answers as the other', async () => {
+    const file = keep(
+      await passwdWithAll([
+        ['ana', 'pw for ana', 'a1a1a1', 'admin'],
+        ['bo', 'pw for bo', 'b2b2b2', 'member'],
+      ]),
+    );
+    const a = new ConsoleAuth({ file });
+    a.load();
+    assert.equal(a.actorFor(await signedInWith(a, 'pw for ana', 'ana'))?.user, 'ana');
+    const bo = a.actorFor(await signedInWith(a, 'pw for bo', 'bo'));
+    assert.equal(bo?.user, 'bo');
+    assert.equal(bo?.role, 'member', 'a later account is not an administrator');
+    // And one password does not open the other's account.
+    assert.equal(await a.cookieFor('pw for bo', 'ana'), null);
+    assert.equal(await a.cookieFor('pw for ana', 'bo'), null);
+  });
+
+  test('a password with no name is refused once there is a choice, not aimed at the first', async () => {
+    /*
+     * The form had no name field before there were several accounts, so an
+     * empty one still means "the one account" — for a single-account file and
+     * for CONSOLE_PASSWORD. With several it means nothing, and resolving it to
+     * the first would point every blank attempt at whoever happens to be at
+     * the top of the file.
+     */
+    const one = new ConsoleAuth({ file: keep(await passwdWithAll([['ana', 'pw for ana', 'a1a1a1', 'admin']])) });
+    one.load();
+    assert.equal(one.defaultUser(), 'ana');
+    assert.ok(await one.cookieFor('pw for ana'));
+
+    const two = new ConsoleAuth({
+      file: keep(
+        await passwdWithAll([
+          ['ana', 'pw for ana', 'a1a1a1', 'admin'],
+          ['bo', 'pw for bo', 'b2b2b2', 'member'],
+        ]),
+      ),
+    });
+    two.load();
+    assert.equal(two.defaultUser(), null);
+    assert.equal(await two.cookieFor('pw for ana'), null, 'a blank name must not resolve to the first account');
+    assert.ok(await two.cookieFor('pw for ana', 'ana'));
+  });
+
+  test('one account changing its password leaves the others signed in', async () => {
+    // The cookie is keyed on that account's own line, so a password change is
+    // one person's revocation and not everybody's.
+    const file = keep(
+      await passwdWithAll([
+        ['ana', 'pw for ana', 'a1a1a1', 'admin'],
+        ['bo', 'pw for bo', 'b2b2b2', 'member'],
+      ]),
+    );
+    const a = new ConsoleAuth({ file });
+    a.load();
+    const anaBefore = await signedInWith(a, 'pw for ana', 'ana');
+    const boBefore = await signedInWith(a, 'pw for bo', 'bo');
+
+    // Only ana's line is rewritten. Re-hashing bo's would move its salt and
+    // so its key, which is the very thing being shown not to happen here.
+    const bosLine = readFileSync(file, 'utf8').split('\n').find((l) => l.startsWith('bo:'))!;
+    writeFileSync(file, `ana:${await hashPassword('ana again')}:a1a1a1:admin\n${bosLine}\n`);
+    chmodSync(file, 0o600);
+    await new Promise((r) => setTimeout(r, 1100));
+
+    assert.equal(a.allows(anaBefore), false, 'ana changed her password');
+    assert.equal(a.allows(boBefore), true, 'bo did not');
   });
 
   after(() => {

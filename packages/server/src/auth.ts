@@ -75,26 +75,40 @@ export class ConsoleAuth {
 
   /** Whether this request carries a cookie we issued. */
   allows(req: IncomingMessage): boolean {
+    return this.actorFor(req) !== null;
+  }
+
+  /**
+   * Who this request is, or null when it is nobody.
+   *
+   * The cookie has carried the account name since there was one account, so
+   * nothing about it changes to answer this — what changes is that the answer
+   * is now worth having. Everything a console socket may read is decided from
+   * the account this returns.
+   */
+  actorFor(req: IncomingMessage): Account | null {
     const given = cookie(req.headers.cookie, COOKIE_NAME);
-    if (!given) return false;
+    if (!given) return null;
     const dot = given.lastIndexOf('.');
-    if (dot <= 0) return false;
+    if (dot <= 0) return null;
     const account = this.accountFor(given.slice(0, dot));
-    if (!account) return false;
+    if (!account) return null;
     let got: Buffer;
     try {
       got = Buffer.from(given.slice(dot + 1), 'hex');
     } catch {
-      return false;
+      return null;
     }
     const want = tokenFor(account);
     // Lengths differ on a malformed cookie, and timingSafeEqual throws on that.
-    return got.length === want.length && timingSafeEqual(got, want);
+    return got.length === want.length && timingSafeEqual(got, want) ? account : null;
   }
 
   /** The Set-Cookie value for a correct password, or null for a wrong one. */
-  async cookieFor(password: string, user: string = this.userName()): Promise<string | null> {
-    const account = this.accountFor(user);
+  async cookieFor(password: string, user?: string): Promise<string | null> {
+    const name = user ?? this.defaultUser();
+    if (name === null) return null;
+    const account = this.accountFor(name);
     if (!account) return null;
     const ok = account.record.startsWith('env$')
       ? constantEquals(accountFromEnv(account.user, password).record, account.record)
@@ -117,9 +131,22 @@ export class ConsoleAuth {
     return this.source === 'env' && this.fallbackIsDefault;
   }
 
-  /** The account name to sign in as, while one account is the limit. */
-  userName(): string {
-    return (this.file?.only() ?? this.fallback).user;
+  /**
+   * The account an empty name on the login form means, or null when there is
+   * a choice to make.
+   *
+   * A file holding one account, and a relay running on CONSOLE_PASSWORD, both
+   * have an obvious answer, and the form worked without a name field before
+   * there was one. Several accounts have no obvious answer: guessing the first
+   * would quietly aim every blank-name attempt at it, so the sign-in is
+   * refused instead and the operator types which account they are.
+   */
+  defaultUser(): string | null {
+    if (this.file && !this.file.isMissing) {
+      const all = this.file.all();
+      return all.length === 1 ? all[0]!.user : null;
+    }
+    return this.fallback.user;
   }
 
   private accountFor(user: string): Account | null {
@@ -155,13 +182,20 @@ export function cookie(header: string | undefined, name: string): string | null 
   return null;
 }
 
-/** The sign-in page, served in place of the console to anyone without the cookie. */
-export function loginPage(wrong: boolean, tooMany = false): string {
+/**
+ * The sign-in page, served in place of the console to anyone without the cookie.
+ *
+ * @param user  what was typed in the name box, put back so a mistyped
+ *              password does not cost the name as well.
+ */
+export function loginPage(wrong: boolean, tooMany = false, user = ''): string {
   const message = tooMany
     ? '<p class="bad">Too many attempts. Wait a minute.</p>'
     : wrong
-      ? '<p class="bad">Wrong password.</p>'
-      : '<p>This relay is password-protected.</p>';
+      ? // Which half was wrong is not said, because saying it tells someone
+        // with a list of names which of them are real.
+        '<p class="bad">Wrong name or password.</p>'
+      : '<p>Sign in to this relay.</p>';
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><title>BXConsole</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
@@ -178,10 +212,16 @@ export function loginPage(wrong: boolean, tooMany = false): string {
 <form method="POST" action="/login">
  <h1>BXConsole</h1>
  ${message}
- <input type="password" name="password" autofocus autocomplete="current-password" placeholder="Password">
+ <input name="user" value="${escapeAttr(user)}" autofocus autocomplete="username" placeholder="Account" autocapitalize="off" spellcheck="false">
+ <input type="password" name="password" autocomplete="current-password" placeholder="Password">
  <button type="submit">Sign in</button>
 </form>
 </body></html>`;
+}
+
+/** The name goes back into an attribute, and it is whatever was typed. */
+function escapeAttr(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /** Refuse a request that is not signed in, in whatever way suits the caller. */

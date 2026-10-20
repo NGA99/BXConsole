@@ -18,8 +18,7 @@ import {
   accountFromEnv,
   hashPassword,
   verifyPassword,
-  writeAccounts,
-} from '../src/passwd';
+  writeAccounts, derivedId } from '../src/passwd';
 
 const dirs: string[] = [];
 function tmp(): string {
@@ -86,7 +85,7 @@ describe('reading the file', () => {
     const f = new PasswordFile(file);
     f.loadOrThrow();
     assert.equal(f.isMissing, false);
-    assert.equal(f.only()?.user, 'admin');
+    assert.equal(f.all()[0]?.user, 'admin');
     assert.equal(f.find('admin')?.record, record);
     assert.equal(f.find('nobody'), null);
   });
@@ -95,7 +94,7 @@ describe('reading the file', () => {
     const f = new PasswordFile(path.join(tmp(), 'nope'));
     f.loadOrThrow();
     assert.equal(f.isMissing, true);
-    assert.equal(f.only(), null);
+    assert.deepEqual(f.all(), []);
   });
 
   test('a file others can read stops the relay', async () => {
@@ -125,16 +124,73 @@ describe('reading the file', () => {
     }
   });
 
-  test('extra accounts are ignored, not granted, and the limit is said out loud', async () => {
+  test('every account in the file is granted, not just the first', async () => {
+    // This used to assert the opposite — one account honoured and the rest
+    // refused with a warning — because that is all the relay could do with
+    // them. They are the people who log in now.
     const record = await hashPassword('pw');
-    const file = passwd(`admin:${record}\nsecond:${record}\n`);
-    const warnings: string[] = [];
-    const f = new PasswordFile(file, (m) => warnings.push(m));
+    const file = passwd(`admin:${record}:aaaaaa:admin\nsecond:${record}:bbbbbb:member\n`);
+    const f = new PasswordFile(file);
     f.loadOrThrow();
-    assert.equal(f.only()?.user, 'admin');
-    // Fail closed: the account nobody meant to honour gets no access at all.
-    assert.equal(f.find('second'), null);
-    assert.match(warnings.join('\n'), /only one is supported yet/);
+    assert.equal(f.find('admin')?.id, 'aaaaaa');
+    assert.equal(f.find('second')?.id, 'bbbbbb', 'the second account is still being refused');
+    assert.equal(f.find('second')?.role, 'member');
+  });
+
+  test('a file written before ids says so rather than failing', async () => {
+    /*
+     * The deployed file is two fields: `user:hash`. It has to go on working,
+     * because the relay reads it at boot and a relay that will not boot drops
+     * every live run. The id is derived from the name meanwhile, which is
+     * stable across restarts, and the warning says how to pin it.
+     */
+    const record = await hashPassword('pw');
+    const warnings: string[] = [];
+    const f = new PasswordFile(passwd(`admin:${record}\n`), (m) => warnings.push(m));
+    f.loadOrThrow();
+    assert.equal(f.find('admin')?.user, 'admin');
+    assert.equal(f.find('admin')?.id, derivedId('admin'));
+    assert.equal(f.find('admin')?.role, 'admin', 'an old single-account file is the administrator');
+    assert.match(warnings.join('\n'), /--pin-ids/);
+  });
+
+  test('a file with ids but no roles makes the first one the operator, the rest members', async () => {
+    /*
+     * Roles are the last field, so a hand-written file can stop before them.
+     * Defaulting the lot to admin was the first thing this did, which made
+     * everyone in the file an administrator — including on a file written to
+     * add somebody with less than that.
+     */
+    const record = await hashPassword('pw');
+    const f = new PasswordFile(passwd(`admin:${record}:aaaaaa\nsecond:${record}:bbbbbb\nthird:${record}:cccccc\n`));
+    f.loadOrThrow();
+    assert.equal(f.find('admin')?.role, 'admin');
+    assert.equal(f.find('second')?.role, 'member');
+    assert.equal(f.find('third')?.role, 'member');
+  });
+
+  test('a two-account file from before ids reads, with ids derived for both', async () => {
+    // All of them lacking an id is one scheme, not a half-migration.
+    const record = await hashPassword('pw');
+    const warnings: string[] = [];
+    const f = new PasswordFile(passwd(`admin:${record}\nsecond:${record}\n`), (m) => warnings.push(m));
+    f.loadOrThrow();
+    assert.equal(f.find('admin')?.id, derivedId('admin'));
+    assert.equal(f.find('second')?.id, derivedId('second'));
+    assert.match(warnings.join('\n'), /admin, second/, 'the warning names both');
+  });
+
+  test('a half-migrated file is refused rather than guessed at', async () => {
+    // Some lines with ids and some without means two schemes at once, and
+    // deriving the missing ones would hand out ownership by coincidence.
+    const record = await hashPassword('pw');
+    const body = `admin:${record}:aaaaaa:admin\nsecond:${record}\n`;
+    assert.throws(() => new PasswordFile(passwd(body)).loadOrThrow(), /--pin-ids/);
+  });
+
+  test('a role that is not one of the two is refused', async () => {
+    const record = await hashPassword('pw');
+    assert.throws(() => new PasswordFile(passwd(`admin:${record}:aaaaaa:owner\n`)).loadOrThrow(), /expected admin or member/);
   });
 });
 
@@ -152,14 +208,14 @@ describe('reloading', () => {
     const warnings: string[] = [];
     const f = new PasswordFile(file, (m) => warnings.push(m));
     f.loadOrThrow();
-    assert.equal(f.only()?.record, first);
+    assert.equal(f.all()[0]?.record, first);
 
     const second = await hashPassword('second');
     writeFileSync(file, `admin:${second}\n`);
     chmodSync(file, 0o600);
     await new Promise((r) => setTimeout(r, 1100)); // past the recheck throttle
 
-    assert.equal(f.only()?.record, second, 'should have re-read the file');
+    assert.equal(f.all()[0]?.record, second, 'should have re-read the file');
     assert.match(warnings.join('\n'), /reloaded/);
   });
 
@@ -176,7 +232,7 @@ describe('reloading', () => {
     chmodSync(file, 0o600);
     await new Promise((r) => setTimeout(r, 1100));
 
-    assert.equal(f.only()?.record, good, 'a half-written file must not lock the operator out');
+    assert.equal(f.all()[0]?.record, good, 'a half-written file must not lock the operator out');
     assert.match(warnings.join('\n'), /not reloaded/);
   });
 
@@ -197,15 +253,15 @@ describe('writing the file', () => {
   test('it lands at 0600 and reads back', async () => {
     const file = path.join(tmp(), '.passwd');
     const record = await hashPassword('pw');
-    await writeAccounts(file, [{ user: 'admin', record }]);
+    await writeAccounts(file, [{ user: 'admin', record, id: 'aaaaaa', role: 'admin' }]);
     const f = new PasswordFile(file);
     f.loadOrThrow(); // would throw on the mode
-    assert.equal(f.only()?.user, 'admin');
+    assert.equal(f.all()[0]?.user, 'admin');
   });
 
   test('an existing loose file is tightened rather than left as it was', async () => {
     const file = passwd('# old\n', 0o644);
-    await writeAccounts(file, [{ user: 'admin', record: await hashPassword('pw') }]);
+    await writeAccounts(file, [{ user: 'admin', record: await hashPassword('pw'), id: 'aaaaaa', role: 'admin' as const }]);
     assert.doesNotThrow(() => new PasswordFile(file).loadOrThrow());
   });
 });

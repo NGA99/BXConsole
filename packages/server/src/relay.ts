@@ -36,8 +36,10 @@ import {
   type SourceEntry,
   type SourceText,
   PROTOCOL_VERSION,
+  type SessionMeta,
 } from '@bxconsole/protocol';
 import { agentFor, type SessionEntry, type SessionRegistry } from './registry';
+import type { Account } from './passwd';
 import type { PingBoard } from './ping';
 import type { BlobStore } from './blobs';
 import type { AssetCollector } from './collect';
@@ -78,7 +80,22 @@ interface ScreenState {
 }
 
 export class Relay {
-  private readonly consoles = new Set<WebSocket>();
+  /**
+   * The consoles that are connected, and who each one is.
+   *
+   * A Set until there was only ever one person to be. Everything a console
+   * may see is decided from the account here: the snapshot it gets on
+   * connect, the updates pushed to it afterwards, and the sessions its
+   * messages are allowed to name. Those are three separate places and they
+   * all read this one map, which is why it is the first thing to exist —
+   * splitting the recordings up on disk is of no use while every console is
+   * still told about all of them.
+   *
+   * Undefined for a socket let through before accounts existed, which no
+   * longer happens; it is kept so that a missing actor fails closed rather
+   * than throwing.
+   */
+  private readonly consoles = new Map<WebSocket, Account | undefined>();
   private readonly screenState = new Map<string, ScreenState>();
   /** which console asked for a given commandId/requestId, so replies route back */
   private readonly pendingReplies = new Map<string, WebSocket>();
@@ -107,7 +124,7 @@ export class Relay {
     private readonly registry: SessionRegistry,
     private readonly store: SessionStore,
   ) {
-    registry.onChange((entry) => this.broadcast({ type: 'session.updated', session: entry.meta }));
+    registry.onChange((entry) => this.broadcast({ type: 'session.updated', session: entry.meta }, entry.meta.sessionId));
   }
 
   // ------------------------------------------------------------------ agents
@@ -354,9 +371,9 @@ export class Relay {
 
   // ---------------------------------------------------------------- consoles
 
-  attachConsole(ws: WebSocket): void {
-    this.consoles.add(ws);
-    send(ws, { type: 'sessions.snapshot', sessions: this.registry.all(), retentionDays: this.retentionDays });
+  attachConsole(ws: WebSocket, actor?: Account): void {
+    this.consoles.set(ws, actor);
+    send(ws, { type: 'sessions.snapshot', sessions: this.visibleTo(actor), retentionDays: this.retentionDays });
 
     ws.on('message', (raw) => {
       const msg = parse<ConsoleToServer>(raw);
@@ -405,6 +422,15 @@ export class Relay {
   }
 
   private async handleConsoleMessage(ws: WebSocket, msg: ConsoleToServer): Promise<void> {
+    /*
+     * One gate for the lot.
+     *
+     * Twenty-eight of these carry a sessionId, and checking each where it is
+     * handled would mean twenty-eight chances to forget — the kind of mistake
+     * that is found by someone seeing another team's run rather than by a
+     * test. They all arrive here, so this is the place to ask.
+     */
+    if ('sessionId' in msg && typeof msg.sessionId === 'string' && !this.mayRead(ws, msg.sessionId)) return;
     switch (msg.type) {
       case 'ping.subscribe': {
         let watched = this.pingWatchers.get(ws);
@@ -423,7 +449,13 @@ export class Relay {
         return;
 
       case 'sessions.list':
-        send(ws, { type: 'sessions.snapshot', sessions: this.registry.all(), retentionDays: this.retentionDays });
+        // Through visibleTo, like the snapshot at attach: this is the same
+        // answer asked for again, and it went straight to the registry.
+        send(ws, {
+          type: 'sessions.snapshot',
+          sessions: this.visibleTo(this.consoles.get(ws)),
+          retentionDays: this.retentionDays,
+        });
         return;
 
       case 'session.subscribe': {
@@ -458,19 +490,22 @@ export class Relay {
       case 'session.restore': {
         if (await this.registry.setTrashed(msg.sessionId, msg.type === 'session.trash')) {
           const entry = this.registry.get(msg.sessionId);
-          if (entry) this.broadcast({ type: 'session.updated', session: entry.meta });
+          if (entry) this.broadcast({ type: 'session.updated', session: entry.meta }, entry.meta.sessionId);
         }
         return;
       }
 
-      case 'session.forget':
+      case 'session.forget': {
+        // Who to tell, while there is still a session to be visible.
+        const audience = this.audienceFor(msg.sessionId);
         if (await this.registry.forget(msg.sessionId)) {
           this.networkConfig.delete(msg.sessionId);
           this.screenState.delete(msg.sessionId);
           this.lastCursor.delete(msg.sessionId);
-          this.broadcast({ type: 'session.removed', sessionId: msg.sessionId });
+          this.sendTo(audience, { type: 'session.removed', sessionId: msg.sessionId });
         }
         return;
+      }
 
       case 'eval.request': {
         const agent = this.agentFromMessage(msg);
@@ -673,8 +708,9 @@ export class Relay {
       if (meta.connected || meta.lastSeenAt > cutoff) continue;
       const entry = this.registry.get(meta.sessionId);
       if (!entry || entry.subscribers.size > 0 || entry.screenSubscribers.size > 0) continue;
+      const audience = this.audienceFor(meta.sessionId);
       if (await this.registry.forget(meta.sessionId)) {
-        this.broadcast({ type: 'session.removed', sessionId: meta.sessionId });
+        this.sendTo(audience, { type: 'session.removed', sessionId: meta.sessionId });
         console.log(`[bxconsole] retention: removed session-${meta.sessionId}, last seen ${new Date(meta.lastSeenAt).toISOString()}`);
       }
     }
@@ -771,8 +807,53 @@ export class Relay {
     await this.blobs.put(sessionId, url, body, source.mimeType ?? 'text/plain').catch(() => null);
   }
 
-  private broadcast(msg: ServerToConsole): void {
-    for (const c of this.consoles) send(c, msg);
+  /**
+   * The sessions an account may see.
+   *
+   * Every account sees every session today, because there is nothing yet to
+   * divide them by — projects come next. It is a function rather than a
+   * constant so that there is one place to change when they do, and so the
+   * four places that need the answer are already asking for it.
+   */
+  protected visibleTo(_actor: Account | undefined): SessionMeta[] {
+    return this.registry.all();
+  }
+
+  /** Whether a console may act on this session at all. */
+  private mayRead(ws: WebSocket, sessionId: string): boolean {
+    const actor = this.consoles.get(ws);
+    return this.visibleTo(actor).some((m) => m.sessionId === sessionId);
+  }
+
+  /**
+   * The consoles that may see this session, as a list taken now.
+   *
+   * Taken now because the answer depends on the session still existing: the
+   * one message that has to reach a console is that a session is gone, and
+   * asking who may see it after it has been deleted answers nobody. So the
+   * audience for a removal is resolved before the removal.
+   */
+  private audienceFor(sessionId: string): WebSocket[] {
+    const out: WebSocket[] = [];
+    for (const [c, actor] of this.consoles) {
+      if (this.visibleTo(actor).some((m) => m.sessionId === sessionId)) out.push(c);
+    }
+    return out;
+  }
+
+  private sendTo(audience: readonly WebSocket[], msg: ServerToConsole): void {
+    for (const c of audience) send(c, msg);
+  }
+
+  /**
+   * To every console that may see what this is about.
+   *
+   * It used to go to all of them, which pushed each session's whole meta —
+   * url, title, user agent, its windows — to everyone connected, every time
+   * a page so much as changed its title.
+   */
+  private broadcast(msg: ServerToConsole, about: string): void {
+    this.sendTo(this.audienceFor(about), msg);
   }
 }
 
