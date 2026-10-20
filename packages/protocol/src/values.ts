@@ -15,7 +15,12 @@ export type SerializedValue =
   | { t: 'boolean'; v: boolean }
   | { t: 'number'; v: number | 'NaN' | 'Infinity' | '-Infinity' | '-0' }
   | { t: 'bigint'; v: string }
-  | { t: 'string'; v: string; truncated?: boolean }
+  /**
+   * `length` is how long the string was in the page, present only when `v` is
+   * shorter than that. An array says how many items it had; a string that did
+   * not say how long it was left the reader thinking they had all of it.
+   */
+  | { t: 'string'; v: string; truncated?: boolean; length?: number }
   | { t: 'symbol'; v: string }
   | { t: 'function'; name: string; src?: string; id?: ObjectId }
   | { t: 'date'; v: string }

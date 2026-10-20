@@ -12,7 +12,19 @@ import { scopedId } from './ids';
 
 const MAX_PREVIEW_PROPS = 10;
 const MAX_PREVIEW_ITEMS = 100;
-const MAX_STRING = 10_000;
+/**
+ * How much of a string travels. The same ceiling a response body gets, and
+ * for the same reason: what is cut here is cut in the page and cannot be
+ * asked for again, so the ceiling should be the one the rest of the tool
+ * already thinks is a reasonable thing to carry.
+ *
+ * It was 10,000, which is shorter than plenty of things worth reading — a
+ * token, a serialised form, the HTML of a panel. The cost is that a page
+ * logging large strings repeatedly makes console.ndjson bigger; network
+ * bodies solve that by moving past a couple of kilobytes into the blob
+ * store, and console arguments do not do that yet.
+ */
+const MAX_STRING = 64 * 1024;
 const MAX_REGISTRY = 5000;
 /** Nesting beyond this ships only class/length + an id; the UI expands lazily. */
 const MAX_DEPTH = 2;
@@ -37,8 +49,11 @@ export function serialize(value: unknown, path = '$', seen = new Map<unknown, st
     case 'bigint':
       return { t: 'bigint', v: value.toString() };
     case 'string':
+      // The length goes with it. What is cut here is cut in the page and
+      // cannot be asked for again, so the reader needs to know how much of it
+      // they are looking at — the same thing an array says about its items.
       return value.length > MAX_STRING
-        ? { t: 'string', v: value.slice(0, MAX_STRING), truncated: true }
+        ? { t: 'string', v: value.slice(0, MAX_STRING), truncated: true, length: value.length }
         : { t: 'string', v: value };
     case 'symbol':
       return { t: 'symbol', v: value.toString() };

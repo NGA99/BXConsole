@@ -20,6 +20,7 @@ import { sessionData } from '../../state/session-data';
 import { copyText } from '../network/copy';
 import { formatValue, isCompound } from './format';
 import './ObjectTree.css';
+import { downloadText, stampedName } from '../../devtools-ui/download';
 
 const propsCache = new Map<string, PropertyPreview[] | null>();
 const LONG_STRING = 500;
@@ -236,6 +237,30 @@ function PropName({ name, dim = false }: { name: string; dim?: boolean }) {
   );
 }
 
+/**
+ * Past this, reading it in a console row is not the point any more and a file
+ * is. Below it, Show more and a selection do the job.
+ */
+const DOWNLOADABLE = 4 * 1024;
+
+/**
+ * What the Show more button says.
+ *
+ * Two different losses, and the reader has to be able to tell them apart: the
+ * console folded a long string away, which a click undoes, and the agent cut
+ * one short in the page, which nothing undoes. Saying "10,000 chars" for a
+ * string that was 20,000 reads as the whole of it, so when the original length
+ * came through it is the one quoted, with how much of it is actually here.
+ */
+function moreLabel(value: Extract<SerializedValue, { t: 'string' }>): string {
+  const here = value.v.length;
+  if (!value.truncated) return `Show more (${here.toLocaleString()} chars)`;
+  if (typeof value.length === 'number' && value.length > here) {
+    return `Show more (${here.toLocaleString()} of ${value.length.toLocaleString()} chars — the rest never left the page)`;
+  }
+  return `Show more (${here.toLocaleString()} chars, truncated by agent)`;
+}
+
 /** Strings over LONG_STRING characters collapse with a Show more toggle. */
 function LongString({ value, mode }: { value: Extract<SerializedValue, { t: 'string' }>; mode: 'top' | 'nested' }) {
   const [open, setOpen] = useState(false);
@@ -246,8 +271,24 @@ function LongString({ value, mode }: { value: Extract<SerializedValue, { t: 'str
       {!open && '…'}
       {open && mode !== 'top' && "'"}
       <button className="otree-more" onClick={(e) => { e.stopPropagation(); setOpen((o) => !o); }}>
-        {open ? 'Show less' : `Show more (${value.v.length.toLocaleString()} chars${value.truncated ? ', truncated by agent' : ''})`}
+        {open ? 'Show less' : moreLabel(value)}
       </button>
+      {/* What arrived is already here, so the file is made from memory and
+          the relay is not asked for anything. A string the agent had to cut
+          saves what there is of it — which the name says, so a half string
+          does not get filed away as the whole one. */}
+      {value.v.length >= DOWNLOADABLE && (
+        <button
+          className="otree-more"
+          title={value.truncated ? 'Save the part that reached the console' : 'Save the whole string as a file'}
+          onClick={(e) => {
+            e.stopPropagation();
+            downloadText(value.v, stampedName(value.truncated ? 'console-value-partial' : 'console-value', 'txt', value.v.length));
+          }}
+        >
+          {value.truncated ? 'Download what arrived' : 'Download'}
+        </button>
+      )}
     </span>
   );
 }

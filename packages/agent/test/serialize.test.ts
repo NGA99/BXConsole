@@ -47,11 +47,26 @@ describe('primitives', () => {
   });
 
   test('a very long string is cut and says that it was', () => {
-    const under = 'x'.repeat(10_000);
+    const under = 'x'.repeat(64 * 1024);
     assert.equal(as<{ truncated?: boolean }>(serialize(under)).truncated, undefined, 'exactly at the limit is not over it');
-    const over = as<{ v: string; truncated: boolean }>(serialize('x'.repeat(10_001)));
-    assert.equal(over.v.length, 10_000);
+    const over = as<{ v: string; truncated: boolean; length?: number }>(serialize('x'.repeat(64 * 1024 + 1)));
+    assert.equal(over.v.length, 64 * 1024);
     assert.equal(over.truncated, true);
+    // What was cut here is cut in the page and cannot be asked for again, so
+    // the reader has to be told how much of the string they are looking at.
+    assert.equal(over.length, 64 * 1024 + 1, 'the original length must travel with it');
+  });
+
+  test('a string that fits carries no length, because it is all there', () => {
+    const fits = as<{ v: string; truncated?: boolean; length?: number }>(serialize('x'.repeat(64 * 1024)));
+    assert.equal(fits.truncated, undefined);
+    assert.equal(fits.length, undefined);
+  });
+
+  test('a very long string reports its real size, not the size that arrived', () => {
+    const huge = as<{ v: string; length?: number }>(serialize('y'.repeat(2_000_000)));
+    assert.equal(huge.v.length, 64 * 1024);
+    assert.equal(huge.length, 2_000_000);
   });
 });
 
