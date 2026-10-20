@@ -15,7 +15,22 @@
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  max-width: 280px;
+  /*
+   * One width for every tab, rather than each sized to its own title.
+   *
+   * Tabs that size themselves move whenever a title does — and a page's
+   * title changes as it navigates, so the tab the reader is aiming at slides
+   * out from under the pointer. A fixed width also lets the eye run down the
+   * same column in every tab, which is the whole use of the count on the
+   * right of it.
+   *
+   * 180px: after the dot, the count and the padding there are about 124px
+   * left for the title and the path together. Narrower than this and a title
+   * of any length came out as three characters and an ellipsis, which is not
+   * a handle for anything.
+   */
+  width: 180px;
+  flex: 0 0 auto;
   min-width: 0;
   height: 24px;
   padding: 0 10px 0 8px;
@@ -57,19 +72,49 @@
   background: var(--sys-color-green);
 }
 
+/* The title takes the room going spare, and gives it up last. */
 .tabstrip-label {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex: 0 1 auto;
-}
-
-/* Where the window is, next to what it calls itself. Given up first when the
-   strip is tight: the title is the better handle, the path the better fact. */
-.tabstrip-where {
   overflow: hidden;
   text-overflow: ellipsis;
   flex: 1 1 auto;
   min-width: 0;
+}
+
+/*
+ * Where the window is, next to what it calls itself.
+ *
+ * Given up first when the tab is tight — the title is the better handle, the
+ * path the better fact — which takes a shrink factor rather than a comment:
+ * with both set to shrink alike, a long title and a long path ate each other
+ * and neither was readable. It is never dropped outright, because a run whose
+ * windows all call themselves the same thing (five tabs reading NAVER) has
+ * nothing else to tell them apart by.
+ */
+.tabstrip-where {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 0 4 auto;
+  min-width: 2.5em;
   opacity: 0.6;
   font-size: 10px;
+}
+
+/*
+ * How much this window did, as a number on the tab.
+ *
+ * Right-aligned and dimmed: it is there to be compared with the tab next to
+ * it, not read as part of the title. `tabular-nums` so the digits line up
+ * down the strip rather than dancing with the glyph widths.
+ */
+.tabstrip-count {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-left: 4px;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.55;
+}
+
+.tabstrip-tab.active .tabstrip-count {
+  opacity: 0.75;
 }

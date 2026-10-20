@@ -25,12 +25,28 @@ export function SessionPicker({ sessionId, panel }: { sessionId: string; panel: 
   const tab = current?.tabs?.find((t) => t.tabId === activeTab);
   const shownUrl = tab?.url ?? current?.url;
   const live = tab ? tab.connected : current?.connected;
+  /*
+   * The selected window's own title, spelled out here because its tab cannot.
+   *
+   * A tab is 180px and a title is whatever the page calls itself, so
+   * "쇼핑몰 — 주문 확인 페이지" arrives as "쇼핑몰 — 주문 확…" and there was
+   * nowhere to read the rest short of hovering. This line is already the
+   * address bar for the selected window; the title belongs on it for the same
+   * reason the url does.
+   *
+   * Only when there is a strip to have truncated it, and only when it says
+   * something the session's own name does not — a one-window run would just
+   * be repeating itself.
+   */
+  const several = (current?.tabs?.length ?? 0) > 1;
+  const windowTitle = several && tab?.title && tab.title !== label ? tab.title : null;
 
   return (
     <div className="session-picker" ref={ref}>
       <button className="session-picker-button" onClick={() => setOpen((o) => !o)} title={shownUrl}>
         <span className={`dot ${live ? 'on' : 'off'}`} />
         <span className="session-picker-name">{label}</span>
+        {windowTitle && <span className="session-picker-window">{windowTitle}</span>}
         {shownUrl && <span className="session-picker-url mono">{shortUrl(shownUrl)}</span>}
         <span className="session-picker-caret">▾</span>
       </button>

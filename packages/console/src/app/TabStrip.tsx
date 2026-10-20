@@ -12,7 +12,9 @@
 import { useEffect, useMemo } from 'react';
 import type { SessionTab } from '@bxconsole/protocol';
 import { useSessionsStore } from '../state/sessions';
+import { sessionData } from '../state/session-data';
 import { useActiveTab, setActiveTab } from '../state/active-tab';
+import { compact, describe as describeTab } from './tab-label';
 import './TabStrip.css';
 
 /** Depth of each tab in the opener tree, capped so a long chain stays readable. */
@@ -46,6 +48,21 @@ export function TabStrip({ sessionId }: { sessionId: string }) {
    * than the shape.
    */
   const tabs = useMemo(() => [...recorded.filter((t) => t.connected), ...recorded.filter((t) => !t.connected)], [recorded]);
+  /*
+   * How much each window has done, counted from the events as they arrive.
+   *
+   * A run's windows look alike in a strip — the same site, often the same
+   * title — and nothing in it said which one is worth opening. One of this
+   * session's naver windows had produced 1,902 events and another 126, and
+   * they read identically. The number is every event the window produced,
+   * deliberately: weighting them would mean inventing a formula nobody can
+   * read off the tab.
+   *
+   * It is not a sort key. The strip's order is the run's own — live windows
+   * first, then the order they were made — and an order that rearranged
+   * itself as traffic arrived would be unusable.
+   */
+  const counts = sessionData(sessionId)((s) => s.eventsByTab);
   const active = useActiveTab(sessionId);
   const depth = useMemo(() => depths(tabs), [tabs]);
   // The host the run started on, so only the hops away from it are spelled out.
@@ -73,12 +90,13 @@ export function TabStrip({ sessionId }: { sessionId: string }) {
           aria-selected={t.tabId === active}
           className={`tabstrip-tab${t.tabId === active ? ' active' : ''}${t.connected ? '' : ' gone'}`}
           style={{ paddingLeft: 8 + (depth.get(t.tabId) ?? 0) * 10 }}
-          title={`${t.title || t.url}\n${t.url}${t.connected ? '' : '\n(closed)'}`}
+          title={describeTab(t, counts[t.tabId] ?? 0)}
           onClick={() => setActiveTab(sessionId, t.tabId)}
         >
           <span className={`tabstrip-dot${t.connected ? ' on' : ''}`} />
           <span className="tabstrip-label">{t.title || hostOf(t.url) || t.url}</span>
           <span className="tabstrip-where">{whereOf(t.url, baseHost)}</span>
+          <span className="tabstrip-count">{compact(counts[t.tabId] ?? 0)}</span>
         </button>
       ))}
     </div>

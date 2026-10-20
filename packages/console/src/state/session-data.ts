@@ -104,6 +104,16 @@ interface SessionDataState {
   pageTiming: PageTiming;
   /** …and the same keyed by window, since a session can hold several. */
   pageTimingByTab: Record<string, PageTiming>;
+  /**
+   * How many events each window of the run has produced.
+   *
+   * Counted here rather than measured off the arrays below, because those are
+   * trimmed: a long run keeps its last 5,000 console rows and 2,000 requests,
+   * so their lengths stop being the answer well before a busy window does.
+   * Nothing is added to the protocol for it — every event already arrives
+   * with the window that produced it.
+   */
+  eventsByTab: Record<string, number>;
   /** set while a recording is being replayed in bulk: appends mutate in place */
   batching: boolean;
   /** running totals for the tab strip badge, so nothing has to rescan the buffer */
@@ -196,6 +206,7 @@ function createSessionDataStore(sessionId: string) {
     history: [],
     pageTiming: {},
     pageTimingByTab: {},
+    eventsByTab: {},
     batching: false,
     issues: { errors: 0, warnings: 0 },
     pendingResourceFailures: [],
@@ -210,7 +221,8 @@ function createSessionDataStore(sessionId: string) {
       saveConfig(sessionId, { blocked: get().blockedPatterns, disableCache: on, preserveLog: get().preserveLog });
     },
 
-    reset: () => set({ historyLoaded: false, console: [], network: [], networkIndex: {}, history: [], pageTiming: {}, pageTimingByTab: {}, issues: { errors: 0, warnings: 0 }, pendingResourceFailures: [] }),
+    reset: () =>
+      set({ historyLoaded: false, console: [], network: [], networkIndex: {}, history: [], pageTiming: {}, pageTimingByTab: {}, eventsByTab: {}, issues: { errors: 0, warnings: 0 }, pendingResourceFailures: [] }),
     clearConsole: () => set({ console: [], issues: { errors: 0, warnings: 0 } }),
     setKeptFiles: (files: KeptFile[]) => set({ keptFiles: new Set(files.map((f) => f.url)) }),
     clearNetwork: () => set({ network: [], networkIndex: {}, pendingResourceFailures: [] }),
@@ -223,7 +235,14 @@ function createSessionDataStore(sessionId: string) {
 
     push: (seq, event, tabId) => {
       const next = applyEvent(get(), seq, event, tabId);
-      if (next) set(next);
+      /*
+       * Counted whether or not the event changed anything on screen. A
+       * resource timing entry that only lands in an array, a cursor sample,
+       * a navigation that clears the log — all of them are things the window
+       * did, which is what the number in its tab is for.
+       */
+      const counted = tabId ? { eventsByTab: { ...get().eventsByTab, [tabId]: (get().eventsByTab[tabId] ?? 0) + 1 } } : null;
+      if (next || counted) set({ ...next, ...counted });
     },
 
     /**
@@ -244,10 +263,16 @@ function createSessionDataStore(sessionId: string) {
         batching: true,
       };
       let state = draft;
+      // Tallied alongside, then applied once: a replay arrives in chunks of
+      // hundreds and copying the record per event is the thing this whole
+      // function exists to avoid.
+      const tally: Record<string, number> = { ...start.eventsByTab };
       for (const { seq, event, tabId } of events) {
+        if (tabId) tally[tabId] = (tally[tabId] ?? 0) + 1;
         const next = applyEvent(state, seq, event, tabId);
         if (next) state = { ...state, ...next };
       }
+      state = { ...state, eventsByTab: tally };
       // Trim once, then hand the arrays over.
       const console_ = state.console.length > MAX_CONSOLE ? state.console.slice(-MAX_CONSOLE) : state.console;
       const dropped = Math.max(0, state.network.length - MAX_NETWORK);

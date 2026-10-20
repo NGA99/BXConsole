@@ -83,6 +83,24 @@
 .session-picker-name {
   font-weight: 500;
 }
+/*
+ * The selected window's title, which its own tab is too narrow to finish.
+ *
+ * Wider than the url beside it, because a title is what the tab cut and this
+ * is where it gets read; the url is already short enough to survive up there.
+ */
+.session-picker-window {
+  color: var(--sys-color-on-surface);
+  max-width: 420px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.session-picker-window::before {
+  content: '·';
+  color: var(--sys-color-token-subtle);
+  margin-right: 6px;
+}
 .session-picker-url {
   color: var(--sys-color-token-subtle);
   max-width: 460px;
