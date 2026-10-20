@@ -18,12 +18,14 @@ import {
   PING_TOKENS_FILE,
   PRE_PAYLOAD_FILE,
   PRE_PAYLOAD_MAX_BYTES,
+  prePayloadFileFor,
   SESSIONS_DIR,
   WS_PATH,
   assetPath,
   decodeAssetUrl,
   isValidPingToken,
   isValidSessionId,
+  mayAdminister,
   rewriteCssUrls,
 } from '@bxconsole/protocol';
 import { SessionRegistry } from './registry';
@@ -64,6 +66,15 @@ const registry = new SessionRegistry(store);
 const relay = new Relay(registry, store);
 /** Who owns which recordings. Read and migrated at boot, below. */
 const projects = new ProjectStore(path.join(repoRoot, SESSIONS_DIR), (m) => console.log(`[bxconsole] ${m}`));
+/**
+ * ACCEPT_KEYLESS, as a project id, or null to refuse keyless runs.
+ *
+ * Declared here and set at boot, below, because the request handlers read it
+ * and they are defined above that point. It was a `const` down there with a
+ * `typeof` guard up here pretending to cope with reading it early — which
+ * `typeof` does not do for a `const`: it throws like any other access.
+ */
+let keylessLanding: string | null = null;
 
 /**
  * Subresources of the debugged pages, fetched by the pages themselves.
@@ -229,7 +240,19 @@ function servePing(req: http.IncomingMessage, res: http.ServerResponse, requeste
     return true;
   }
   if (pathname === '/ping/new' && req.method === 'POST') {
-    const issued = ping.issue();
+    /*
+     * The operator's, not the victim's.
+     *
+     * It used to need no password, alongside the probe routes — and it is not
+     * like them. A victim's browser only ever fetches `/ping/{probe}/{token}`
+     * with a token the console baked into the snippet; nothing in a page asks
+     * for a token. So this was an endpoint anyone who found the port could
+     * use to mint tokens, and now the account that asks is also the account
+     * that may read what arrives.
+     */
+    const actor = auth.actorFor(req);
+    if (!actor) return refuse(req, res), true;
+    const issued = ping.issue(actor.id);
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
     res.end(JSON.stringify(issued));
     return true;
@@ -244,8 +267,11 @@ function servePing(req: http.IncomingMessage, res: http.ServerResponse, requeste
    */
   if (pathname.startsWith('/ping/check/')) {
     const token = decodeURIComponent(pathname.slice('/ping/check/'.length).replace(/\/$/, ''));
+    // Live to the account that owns it, and not live to anybody else, so
+    // this cannot be used to find out which tokens exist.
+    const actor = auth.actorFor(req);
     res.writeHead(200, { 'content-type': 'application/json', 'cache-control': 'no-store' });
-    res.end(JSON.stringify({ live: isValidPingToken(token) && ping.knows(token) }));
+    res.end(JSON.stringify({ live: isValidPingToken(token) && ping.isOwnedBy(token, actor?.id) }));
     return true;
   }
   const probe = parseProbePath(pathname);
@@ -296,29 +322,68 @@ function servePing(req: http.IncomingMessage, res: http.ServerResponse, requeste
  * restarted by then. Read on each request rather than cached, so editing it
  * in the console takes effect for the next agent without a restart.
  */
-const prePayloadPath = path.join(repoRoot, SESSIONS_DIR, PRE_PAYLOAD_FILE);
+const sessionsDir = path.join(repoRoot, SESSIONS_DIR);
+/** The relay-wide file, from before there was one per project. */
+const legacyPrePayloadPath = path.join(sessionsDir, PRE_PAYLOAD_FILE);
+const prePayloadPathFor = (projectId: string): string => path.join(sessionsDir, prePayloadFileFor(projectId));
 
-async function readPrePayload(): Promise<string | null> {
-  try {
-    return await fs.readFile(prePayloadPath, 'utf8');
-  } catch {
-    return null; // never written, or removed
+/**
+ * The script to hand an agent, for the project its key named.
+ *
+ * The home project also answers from the relay-wide file, so a script set
+ * before pre-payloads were per-project keeps running for the engagement it
+ * was set for — but only for that one. Every other project starts with none,
+ * which is the correct answer for a project that has never been given one.
+ */
+async function readPrePayload(projectId: string | null): Promise<string | null> {
+  if (!projectId) return null;
+  const candidates = [prePayloadPathFor(projectId)];
+  if (projectId === projects.homeId()) candidates.push(legacyPrePayloadPath);
+  for (const file of candidates) {
+    try {
+      return await fs.readFile(file, 'utf8');
+    } catch {
+      /* never written, or removed */
+    }
   }
+  return null;
 }
 
 const serveAgent = createAgentHandler(path.join(repoRoot, 'packages/agent/dist/agent.js'), {
   publicOrigin: process.env.PUBLIC_ORIGIN,
-  prePayload: readPrePayload,
+  /*
+   * Resolved from the key in the request, not from who is asking — nobody is
+   * asking: this is a victim's browser fetching the bundle. A request with no
+   * key, or one this relay does not know, gets no pre-payload at all. Which
+   * is the same rule the hello is held to, and it has to be: handing the
+   * script to a payload whose run is about to be refused would run code in
+   * somebody's browser and then record none of it.
+   */
+  prePayload: (key) => readPrePayload(key ? (projects.byAgentKey(key)?.id ?? null) : keylessLanding),
 });
 
 /**
- * Read and write the stored pre-payload. Operator surface, not the victim's:
+ * Read and write a project's pre-payload. Operator surface, not the victim's:
  * a GET returns what is stored, a PUT replaces it, and an empty PUT body
  * removes it so no agent receives one.
+ *
+ * The owner's, not anybody who may read the project. Being shared an
+ * engagement is being able to read its recordings; this is arbitrary code in
+ * every browser that installs an agent for it, which is the owner's to set.
+ *
+ * `?project=` picks one, and no `project=` means the home project — so the
+ * console as it stands, which asks for `/pre-payload` and knows nothing about
+ * projects, still reaches the one a fresh install has.
  */
-async function servePrePayload(req: http.IncomingMessage, res: http.ServerResponse): Promise<void> {
+async function servePrePayload(req: http.IncomingMessage, res: http.ServerResponse, requested: URL): Promise<void> {
+  const wanted = requested.searchParams.get('project') ?? projects.homeId() ?? '';
+  const project = projects.get(wanted);
+  const actor = auth.actorFor(req);
+  if (!project || !mayAdminister(project, actor?.id)) return void plain(res, 404, 'no such project');
+  const prePayloadPath = prePayloadPathFor(project.id);
+
   if (req.method === 'GET') {
-    const source = await readPrePayload();
+    const source = await readPrePayload(project.id);
     res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' });
     return void res.end(JSON.stringify({ source: source ?? '' }));
   }
@@ -337,6 +402,13 @@ async function servePrePayload(req: http.IncomingMessage, res: http.ServerRespon
   await fs.mkdir(path.dirname(prePayloadPath), { recursive: true });
   if (source.trim()) await fs.writeFile(prePayloadPath, source);
   else await fs.rm(prePayloadPath, { force: true });
+  /*
+   * Clearing the home project's also clears the relay-wide file it still
+   * reads. Without this, "remove the pre-payload" would appear to work and
+   * the old script would come straight back on the next agent — the file it
+   * falls back to is invisible from the console.
+   */
+  if (!source.trim() && project.id === projects.homeId()) await fs.rm(legacyPrePayloadPath, { force: true });
   res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8' });
   res.end(JSON.stringify({ ok: true, bytes: source.trim() ? Buffer.byteLength(source) : 0 }));
 }
@@ -447,7 +519,7 @@ const server = http.createServer((req, res) => {
 
   if (pathname === '/agent.js') return void serveAgent(req, res);
   if (pathname === '/pre-payload') {
-    return void servePrePayload(req, res).catch(() => plain(res, 500, 'pre-payload error'));
+    return void servePrePayload(req, res, requested).catch(() => plain(res, 500, 'pre-payload error'));
   }
   if (pathname === '/ping' || pathname.startsWith('/ping/')) {
     if (servePing(req, res, requested)) return;
@@ -609,16 +681,62 @@ await registry.loadFromDisk();
  */
 await projects.load();
 await projects.migrateInto(auth.ownerForMigration(), registry.all(), (meta) => store.writeMeta(meta));
+
+/*
+ * ACCEPT_KEYLESS: the project a payload with no key lands in.
+ *
+ * The transition, and it is off unless asked for. Keys did not exist when
+ * the payloads now in flight were built, and those are in browsers nobody
+ * can reach — so an operator names a project to catch them, replaces the
+ * payloads, and unsets this. Checked here rather than on each hello: a name
+ * that is not a project is a thing to say once at startup, not to discover
+ * when a session fails to appear.
+ */
+keylessLanding = ((): string | null => {
+  const wanted = process.env.ACCEPT_KEYLESS?.trim();
+  if (!wanted) return null;
+  const project = projects.get(wanted);
+  if (!project) {
+    console.error(`[bxconsole] ACCEPT_KEYLESS names "${wanted}", which is not a project on this relay.`);
+    console.error('[bxconsole] Keyless runs stay refused. Pick one of:');
+    for (const p of projects.all()) console.error(`[bxconsole]   ${p.id}  ${p.name}`);
+    return null;
+  }
+  console.log(`[bxconsole] ACCEPT_KEYLESS: payloads with no key land in "${project.name}" (${project.id})`);
+  return project.id;
+})();
 relay.useProjects(projects);
 relay.useAccountIds(() => auth.accountIds());
-registry.useProjectSource(() => projects.homeId() ?? undefined);
+relay.useKeylessLanding(() => keylessLanding);
 
 relay.startRetention(RETENTION_DAYS);
 
 server.listen(PORT, HOST, () => {
   console.log(`[bxconsole] relay listening on http://localhost:${PORT}`);
   const origin = process.env.PUBLIC_ORIGIN ?? `http://localhost:${PORT}`;
-  console.log(`[bxconsole] agent:   <script src="${origin}/agent.js" data-name="..."></script>  or  import("${origin}/agent.js?name=...")`);
+  /*
+   * The snippet, with a key in it.
+   *
+   * Printed because there is nowhere else to get one yet: a payload needs a
+   * project key, and the console has no screen that shows them. The home
+   * project's is the one a fresh install wants. It is not a secret — it rides
+   * in the injected script, where the page can read it — and all it can do is
+   * write runs into that project.
+   */
+  const home = projects.get(projects.homeId() ?? '');
+  const keyed = home ? ` data-key="${home.agentKey}"` : '';
+  console.log(`[bxconsole] agent:   <script src="${origin}/agent.js"${keyed} data-name="..."></script>`);
+  if (home) {
+    console.log(`[bxconsole]          or  import("${origin}/agent.js?key=${home.agentKey}&name=...")`);
+    const keyless = keylessLanding ? projects.get(keylessLanding) : undefined;
+    console.log(
+      keyless
+        ? `[bxconsole]          that key puts runs in "${home.name}"; a payload with no key lands in "${keyless.name}".`
+        : `[bxconsole]          that key puts runs in "${home.name}"; a payload with no key is refused. Set ACCEPT_KEYLESS to change that.`,
+    );
+  } else {
+    console.log(`[bxconsole]          or  import("${origin}/agent.js?name=...")`);
+  }
   console.log(`[bxconsole] console: http://localhost:${PORT}/  (dev: http://localhost:5173/)`);
   if (HOST !== '127.0.0.1' && HOST !== 'localhost') {
     /*

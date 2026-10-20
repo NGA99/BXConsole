@@ -419,7 +419,9 @@ describe('what one console may see', () => {
     const his = await projects.create('Bo’s', bo.id);
     relay.useProjects(projects);
     relay.useAccountIds(() => new Set([ana.id, bo.id, root.id]));
-    registry.useProjectSource(() => projects.homeId() ?? undefined);
+    // The home project stands in for ACCEPT_KEYLESS, so the run that says
+    // hello below lands somewhere without the test minting a key first.
+    relay.useKeylessLanding(() => projects.homeId());
     const agent = await join(relay);
     return { relay, agent, projects, hers, his, registry };
   }
@@ -550,7 +552,9 @@ describe('projects over the console socket', () => {
     const hers = await projects.create('Ana’s', ana.id);
     relay.useProjects(projects);
     relay.useAccountIds(() => new Set([ana.id, bo.id, root.id]));
-    registry.useProjectSource(() => projects.homeId() ?? undefined);
+    // The home project stands in for ACCEPT_KEYLESS, so the run that says
+    // hello below lands somewhere without the test minting a key first.
+    relay.useKeylessLanding(() => projects.homeId());
     const agent = await join(relay);
     return { relay, registry, projects, hers, agent };
   }
@@ -733,5 +737,149 @@ describe('projects over the console socket', () => {
     await hersSocket.deliver({ type: 'session.subscribe', sessionId: 'sess01', replay: true } satisfies ConsoleToServer);
     await settle();
     assert.equal(hersSocket.sent.length, before, 'the old owner still reads the recordings');
+  });
+});
+
+describe('which project a payload’s run lands in', () => {
+  const ana: Account = { user: 'ana', record: 'x', id: 'a1a1a1', role: 'member' };
+  const bo: Account = { user: 'bo', record: 'x', id: 'b2b2b2', role: 'member' };
+
+  /** A relay with two keyed projects and no keyless landing. */
+  async function keyed() {
+    const store = new SessionStore(dir);
+    const registry = new SessionRegistry(store);
+    const relay = new Relay(registry, store);
+    relay.useBlobs(new BlobStore(dir, Number.POSITIVE_INFINITY));
+    const projects = new ProjectStore(dir);
+    await projects.load();
+    const hers = await projects.create('Ana’s', ana.id);
+    const his = await projects.create('Bo’s', bo.id);
+    relay.useProjects(projects);
+    relay.useAccountIds(() => new Set([ana.id, bo.id]));
+    return { relay, registry, projects, hers, his };
+  }
+
+  /** Say hello without waiting for an ack, since there may not be one. */
+  async function sayHello(relay: Relay, over: Record<string, unknown>): Promise<FakeSocket> {
+    const agent = new FakeSocket();
+    relay.attachAgent(agent as unknown as WebSocket);
+    await agent.deliver(hello(over));
+    await settle();
+    return agent;
+  }
+
+  test('a key puts the run in the project it belongs to', async () => {
+    const { relay, registry, hers, his } = await keyed();
+    await sayHello(relay, { sessionId: 'inHers', key: hers.agentKey });
+    await sayHello(relay, { sessionId: 'inHis', key: his.agentKey });
+    assert.equal(registry.get('inHers')?.meta.projectId, hers.id);
+    assert.equal(registry.get('inHis')?.meta.projectId, his.id);
+  });
+
+  test('two projects never share a key', async () => {
+    const { hers, his } = await keyed();
+    assert.notEqual(hers.agentKey, his.agentKey);
+    assert.match(hers.agentKey, /^[a-f0-9]{32}$/);
+  });
+
+  test('a key this relay does not know is refused, and the agent is told why', async () => {
+    const { relay, registry } = await keyed();
+    const agent = await sayHello(relay, { sessionId: 'nope', key: 'f'.repeat(32) });
+    assert.equal(registry.get('nope'), undefined, 'a run was recorded for an unknown key');
+    assert.equal(agent.received('session.ack').length, 0);
+    const refused = agent.received('session.refused')[0];
+    assert.ok(refused, 'the agent must be told, or it reconnects forever with nothing said anywhere');
+    assert.match(String(refused!['reason']), /not one this relay knows/);
+  });
+
+  test('a key of the wrong shape never reaches the project list', async () => {
+    const { relay, registry } = await keyed();
+    for (const [i, key] of ['', 'short', 'g'.repeat(32), 'A'.repeat(32), '../../etc'].entries()) {
+      const agent = await sayHello(relay, { sessionId: `bad${i}`, key });
+      assert.equal(registry.get(`bad${i}`), undefined, JSON.stringify(key));
+      assert.equal(agent.received('session.ack').length, 0, JSON.stringify(key));
+    }
+  });
+
+  test('no key at all is refused while nothing says where keyless runs go', async () => {
+    const { relay, registry } = await keyed();
+    const agent = await sayHello(relay, { sessionId: 'keyless' });
+    assert.equal(registry.get('keyless'), undefined);
+    assert.match(String(agent.received('session.refused')[0]!['reason']), /no project key/);
+  });
+
+  test('ACCEPT_KEYLESS catches the payloads that were built before keys', async () => {
+    // Those are in browsers nobody can reach, so a relay that refused them
+    // would drop the engagements it was installed for.
+    const { relay, registry, hers } = await keyed();
+    relay.useKeylessLanding(() => hers.id);
+    const agent = await sayHello(relay, { sessionId: 'oldPayload' });
+    assert.equal(registry.get('oldPayload')?.meta.projectId, hers.id);
+    assert.equal(agent.received('session.refused').length, 0);
+    assert.equal(agent.received('session.ack').length, 1);
+  });
+
+  test('a run that exists keeps its project, whatever key turns up next', async () => {
+    /*
+     * Otherwise anyone holding any key could pull somebody else's run into
+     * their own project by reconnecting to its id — and sessions are not
+     * supposed to move between projects at all.
+     */
+    const { relay, registry, hers, his } = await keyed();
+    await sayHello(relay, { sessionId: 'theirs', key: hers.agentKey });
+    assert.equal(registry.get('theirs')?.meta.projectId, hers.id);
+
+    const second = await sayHello(relay, { sessionId: 'theirs', tabId: 'tabB', key: his.agentKey });
+    assert.equal(registry.get('theirs')?.meta.projectId, hers.id, 'a key moved a run between projects');
+    assert.equal(second.received('session.ack').length, 1, 'and the window still joined the run');
+  });
+
+  test('a window of a run that exists is taken without a key', async () => {
+    // Not creating anything: a second window of a run already being
+    // recorded, and the payload that opened it may predate keys.
+    const { relay, registry, hers } = await keyed();
+    await sayHello(relay, { sessionId: 'spread', key: hers.agentKey });
+    const second = await sayHello(relay, { sessionId: 'spread', tabId: 'tabB' });
+    assert.equal(second.received('session.ack').length, 1);
+    assert.equal(registry.get('spread')?.meta.tabs.length, 2);
+  });
+
+  test('rotating a key stops the payloads carrying the old one', async () => {
+    const { relay, registry, projects, hers } = await keyed();
+    const was = hers.agentKey;
+    const rotated = await projects.rotateKey(hers.id);
+    assert.ok(rotated);
+    assert.notEqual(rotated!.agentKey, was);
+
+    const old = await sayHello(relay, { sessionId: 'withOldKey', key: was });
+    assert.equal(registry.get('withOldKey'), undefined, 'the rotated-out key still worked');
+    assert.ok(old.received('session.refused')[0]);
+
+    await sayHello(relay, { sessionId: 'withNewKey', key: rotated!.agentKey });
+    assert.equal(registry.get('withNewKey')?.meta.projectId, hers.id);
+  });
+
+  test('only the owner rotates a key', async () => {
+    const { relay, projects, hers } = await keyed();
+    const was = hers.agentKey;
+    const hisSocket = new FakeSocket();
+    relay.attachConsole(hisSocket as unknown as WebSocket, bo);
+    await hisSocket.deliver({ type: 'project.rotateKey', projectId: hers.id } satisfies ConsoleToServer);
+    await settle();
+    assert.equal(projects.get(hers.id)?.agentKey, was, 'another account rotated her key');
+
+    const hersSocket = new FakeSocket();
+    relay.attachConsole(hersSocket as unknown as WebSocket, ana);
+    await hersSocket.deliver({ type: 'project.rotateKey', projectId: hers.id } satisfies ConsoleToServer);
+    await until(() => projects.get(hers.id)?.agentKey !== was, 'her own rotation');
+  });
+
+  test('a refused run writes nothing to disk', async () => {
+    // The refusal happens before upsertFromHello, so there is no session
+    // directory and no meta.json for a run that was turned away.
+    const { relay } = await keyed();
+    await sayHello(relay, { sessionId: 'turnedAway' });
+    assert.deepEqual(await linesOf('turnedAway', 'console'), []);
+    await assert.rejects(() => fs.stat(path.join(dir, sessionDirName('turnedAway'))));
   });
 });

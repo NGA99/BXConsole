@@ -28,6 +28,25 @@ export function isValidProjectId(projectId: string): boolean {
   return PROJECT_ID_RE.test(projectId);
 }
 
+/**
+ * The shape of an agent key.
+ *
+ * Where this earns its keep is reading the project file: a project whose key
+ * is not this shape is a malformed row and is dropped, so a hand-written
+ * `agentKey: "x"` cannot become a key anyone could guess. Checking a key
+ * arriving from a page is only an early no — an unknown key matches nothing
+ * either way — and it keeps a pathological one from being compared against
+ * every project on the relay.
+ */
+const AGENT_KEY_RE = /^[a-f0-9]{32}$/;
+
+export function isValidAgentKey(key: string): boolean {
+  return AGENT_KEY_RE.test(key);
+}
+
+/** Sixteen bytes: too many to guess, short enough to paste into a snippet. */
+export const AGENT_KEY_BYTES = 16;
+
 /** Longer than this is a paragraph, not a name. */
 export const PROJECT_NAME_MAX = 80;
 
@@ -47,6 +66,20 @@ export interface Project {
    * here makes the project readable to that account the moment it does.
    */
   sharedWith: string[];
+  /**
+   * The token a payload carries to say which project its run belongs in.
+   *
+   * Not a secret from the page. It rides in the injected script, so a victim
+   * who goes looking can read it — and that is survivable, because the key
+   * only writes. It says where a recording goes; it does not open one. The
+   * worst anyone can do with a key they found is fill that project with runs
+   * of their own, which is a nuisance to be noticed and rotated, not a way
+   * into anybody's data.
+   *
+   * It is long enough not to be guessed, because guessing one would be the
+   * same nuisance without having to find a payload first.
+   */
+  agentKey: string;
   createdAt: number;
   /**
    * When it was moved to the trash. A trashed project keeps every recording

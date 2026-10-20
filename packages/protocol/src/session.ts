@@ -78,6 +78,20 @@ export interface SessionMeta {
 
 /** What the agent sends on hello. The server fills in the rest. */
 export type SessionHello = Omit<SessionMeta, 'lastSeenAt' | 'connected' | 'tabs' | 'projectId'> & {
+  /**
+   * The project key out of the payload, which is how a run finds its project.
+   *
+   * The key and not the project id, deliberately. An id would be a claim —
+   * "put this in project p3" — and the page is in no position to make one.
+   * A key is something the operator put in the payload, and the relay is
+   * what turns it into a project. A page that sends a key it found can write
+   * to that project and read nothing, which is the whole reason this is
+   * allowed to arrive from the page at all.
+   *
+   * Absent on a payload built before keys existed, and on one built by hand.
+   * What happens then is ACCEPT_KEYLESS's business.
+   */
+  key?: string;
   tabId: string;
   /** when this window first got an agent, as opposed to when the session began */
   tabStartedAt: number;

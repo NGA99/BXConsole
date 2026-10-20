@@ -10,7 +10,7 @@
  * and with hosting on by default that meant trying to frame pages that refuse
  * to be framed.
  */
-export const AGENT_PARAMS = ['name', 'server', 'bodies', 'screen', 'adopt', 'collect', 'frame', 'session', 'tab', 'mark', 'pre'] as const;
+export const AGENT_PARAMS = ['name', 'server', 'bodies', 'screen', 'adopt', 'collect', 'frame', 'session', 'tab', 'mark', 'pre', 'key'] as const;
 
 export type AgentParam = (typeof AGENT_PARAMS)[number];
 

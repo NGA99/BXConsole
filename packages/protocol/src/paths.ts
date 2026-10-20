@@ -2,8 +2,13 @@
  * On-disk layout for persisted session data, relative to the repo root:
  *
  *   sessions/
+ *     projects.json              who owns which recordings (see project.ts)
+ *     pre-payload-{projectId}.js the script agents for that project run at install
+ *     pre-payload.js             the relay-wide one from before projects
+ *     ping-tokens.json           live probe tokens and the account each belongs to
+ *     blobs/{aa}/{bb}/{sha256}   bytes from the debugged pages, shared by every session
  *     session-{sessionId}/
- *       meta.json          SessionMeta
+ *       meta.json          SessionMeta, including which project the run is in
  *       console.ndjson     console.* and error.* events, one SequencedEvent per line
  *       network.ndjson     network.* events
  *       page.ndjson        page.* events
@@ -11,9 +16,20 @@
  *       screen.ndjson      the Screen recording: one ScreenRecord per line,
  *                          keyframes (`{"k":1`) interleaved with op batches,
  *                          trimmed from the front once it passes the budget
+ *       files.ndjson       which url this run saw holding which blob
+ *       bodies.ndjson      which request and response bodies it put in the store
+ *       assets/            subresources kept for the Screen mirror
+ *
+ * Sessions stay flat rather than nesting under their project. The project a
+ * path would be built from is itself looked up from the session id, so
+ * nesting buys no containment — a forgotten check resolves the right project
+ * and reads it either way — and it would have made adopting projects a move
+ * of every recording rather than a field added to a file.
  *
  * The console UI mirrors this as a route: #/sessions/session-{sessionId}/{panel}
  */
+
+import { isValidProjectId } from './project';
 
 export const SESSIONS_DIR = 'sessions';
 
@@ -58,13 +74,28 @@ export const SCREEN_FRAME_FILE = 'screen.json';
  * that: arbitrary JS, run once per agent, after the hooks are in place so
  * whatever it fetches or logs is captured like any other page activity.
  *
- * It is global, which is the thing to be careful about. The relay has no
- * authentication, so anyone who can reach it can set this, and every agent
- * that connects afterwards will run it — in every engagement on that relay.
- * Reading recordings is one thing; this is code execution in someone else's
- * browser. Do not expose a relay that has one of these set.
+ * This is code execution in someone else's browser, so who can set one and
+ * whose browsers run it are the whole of what matters about it. It used to be
+ * one file for the relay, which meant a script set for one engagement ran in
+ * every browser that installed an agent from that relay — other people's
+ * engagements included — and the relay had no accounts, so anyone who could
+ * reach it could set it. Both halves are now closed: the file below is per
+ * project, only the project's owner may write it, and an agent is handed only
+ * the one belonging to the project its key names.
+ *
+ * This name is the relay-wide file from before that. It is still read, as the
+ * home project's, so a script set before the split keeps running for the
+ * engagement it was set for.
  */
 export const PRE_PAYLOAD_FILE = 'pre-payload.js';
+
+/** The file holding one project's pre-payload. */
+export function prePayloadFileFor(projectId: string): string {
+  // It reaches a filename, so `..` must not — the same rule as a session id.
+  if (!isValidProjectId(projectId)) throw new Error(`refusing to use ${JSON.stringify(projectId)} as a project id`);
+  return `pre-payload-${projectId}.js`;
+}
+
 /** Nothing longer is served: it travels inline with every agent.js request. */
 export const PRE_PAYLOAD_MAX_BYTES = 64 * 1024;
 

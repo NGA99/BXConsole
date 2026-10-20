@@ -92,6 +92,13 @@ export interface AgentConfig {
    * to shape its agent's URL could choose what that agent executes.
    */
   pre: string | null;
+  /**
+   * The project key, which is what tells the relay where this run belongs.
+   *
+   * Passed through untouched: the agent has no use for it and no business
+   * reading it. It goes in the hello and the relay turns it into a project.
+   */
+  key: string | null;
 }
 
 export function readConfig(): AgentConfig {
@@ -118,6 +125,7 @@ export function readConfig(): AgentConfig {
     collect: (ds.collect ?? injected.collect ?? queryParam(scriptSrc, 'collect')) !== '0',
     mark: ds.mark ?? injected.mark ?? queryParam(scriptSrc, 'mark') ?? null,
     pre: injected.pre ?? null,
+    key: ds.key ?? injected.key ?? queryParam(scriptSrc, 'key') ?? null,
   };
 }
 

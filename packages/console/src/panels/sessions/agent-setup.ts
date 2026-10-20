@@ -21,6 +21,14 @@ export interface Options {
 /** What the tab was last set up to hand out, so a reload does not undo it. */
 export interface Setup extends Options {
   name: string;
+  /**
+   * The key of the project this run should land in.
+   *
+   * Filled from the project list when a snippet is built, never saved — see
+   * paramsFor. Empty means this account has no project for new runs, and the
+   * tab says so instead of handing out a payload that will be turned away.
+   */
+  key: string;
 }
 
 /**
@@ -34,6 +42,7 @@ export interface Setup extends Options {
  */
 export const DEFAULTS: Setup = {
   name: "my-app",
+  key: "",
   record: true,
   bodies: true,
   adopt: true,
@@ -57,6 +66,10 @@ export function loadSetup(
     return {
       ...DEFAULTS,
       ...(JSON.parse(storage.getItem(SETUP_KEY) ?? "{}") as Partial<Setup>),
+      // Never from storage, even if an older build put one there: a rotated
+      // key read back out of the browser is a snippet that looks right and
+      // records nothing. The live project list is the only source.
+      key: "",
     };
   } catch {
     return DEFAULTS;
@@ -68,7 +81,11 @@ export function saveSetup(
   storage: Pick<Storage, "setItem"> = localStorage,
 ): void {
   try {
-    storage.setItem(SETUP_KEY, JSON.stringify(setup));
+    // Without the key. It belongs to the project, not to this browser's idea
+    // of how the tab was last left, and it can be rotated out from under a
+    // saved copy.
+    const { key: _live, ...kept } = setup;
+    storage.setItem(SETUP_KEY, JSON.stringify(kept));
   } catch {
     /* a console in a private window still works, it just forgets */
   }
@@ -82,6 +99,20 @@ export function saveSetup(
  */
 export function paramsFor(setup: Setup): Array<[string, string]> {
   const out: Array<[string, string]> = [];
+  /*
+   * The project key first, because it is the one that is not an option.
+   *
+   * Every other parameter here changes how a run is recorded; this one
+   * decides whether it is recorded at all. A payload with no key is refused,
+   * so a snippet without it is a snippet that does nothing — which is the
+   * failure this tool is worst at, since it fires in a browser nobody can
+   * reach and there is nothing to look at afterwards.
+   *
+   * It is not part of the saved setup, and must not be: a key can be rotated,
+   * and a copy kept in the browser would go on being pasted into pages long
+   * after it stopped working. It comes from the project list each time.
+   */
+  if (setup.key) out.push(["key", setup.key]);
   if (setup.name.trim()) out.push(["name", setup.name.trim()]);
   // Only the switches that are off: a parameter in the snippet should mean
   // "this run is not the usual one", so that reading it tells you what the
@@ -130,13 +161,27 @@ export function queryFor(setup: Setup): string {
 export function attrsFor(setup: Setup): string {
   return paramsFor(setup)
     .filter(([k]) => k !== "pre")
+    // The key is already on the src when the pre-payload is asked for, since
+    // the relay has to read it off the request; twice would just be noise in
+    // something someone has to paste by hand.
+    .filter(([k]) => !(k === "key" && setup.pre))
     .map(([k, v]) => ` data-${k}="${escapeAttr(v)}"`)
     .join("");
 }
 
-/** What a script tag puts on its `src`, which today is only the pre-payload. */
+/**
+ * What a script tag puts on its `src`.
+ *
+ * `pre` has to be here because the relay reads it off the request to know to
+ * send the script, and it never sees a data attribute. The key goes with it
+ * when `pre` is asked for, for the same reason: the relay has to know which
+ * project's script to send, and `data-key` is invisible to it. Otherwise the
+ * key travels as `data-key` like every other choice, where it is not sitting
+ * in a URL that ends up in access logs and `Referer` headers.
+ */
 export function srcQueryFor(setup: Setup): string {
-  return setup.pre ? "?pre=1" : "";
+  if (!setup.pre) return "";
+  return setup.key ? `?pre=1&key=${encodeForSnippet(setup.key)}` : "?pre=1";
 }
 
 /** A session name is free text, and it is being pasted into markup. */

@@ -31,8 +31,16 @@ export function createAgentHandler(
   bundlePath: string,
   opts: {
     publicOrigin?: string | undefined;
-    /** The stored pre-payload, read fresh so editing it needs no restart. */
-    prePayload?: () => Promise<string | null>;
+    /**
+     * The stored pre-payload for the project this payload's key names, read
+     * fresh so editing it needs no restart.
+     *
+     * The key, not the project: this request comes from a victim's browser
+     * and there is nobody to ask who they are. Turning the key into a
+     * project is the relay's job, and a key it does not know gets nothing —
+     * the same answer the hello would give that payload a moment later.
+     */
+    prePayload?: (key: string | null) => Promise<string | null>;
   },
 ) {
   return async (req: IncomingMessage, res: ServerResponse): Promise<void> => {
@@ -52,7 +60,7 @@ export function createAgentHandler(
       if (v) config[key] = v;
     }
     if (url.searchParams.get('pre') === '1' && opts.prePayload) {
-      const source = await opts.prePayload();
+      const source = await opts.prePayload(config.key ?? null);
       if (source) config.pre = source;
     }
     const header = injectedHeader(config);

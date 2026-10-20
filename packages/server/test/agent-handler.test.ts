@@ -208,6 +208,34 @@ describe('the pre-payload', () => {
     assert.equal(injected(res.body).pre, undefined);
   });
 
+  test('the key decides which pre-payload is served', async () => {
+    /*
+     * The thing the key fixed. There was one pre-payload for the relay, so a
+     * script set for one engagement ran in every browser that installed an
+     * agent from it — other people's engagements included. The handler asks
+     * for the key's, and a key it does not know gets nothing.
+     */
+    const byKey: Record<string, string> = { ['a'.repeat(32)]: 'hers', ['b'.repeat(32)]: 'his' };
+    const handler = createAgentHandler(bundle, {
+      publicOrigin: undefined,
+      prePayload: async (key) => (key ? (byKey[key] ?? null) : null),
+    });
+    const got = async (query: string) => {
+      const res = fakeRes();
+      await handler({ url: `/agent.js${query}`, headers: { host: 'h' }, socket: {} } as never, res as never);
+      return injected(res.body).pre;
+    };
+    assert.equal(await got(`?pre=1&key=${'a'.repeat(32)}`), 'hers');
+    assert.equal(await got(`?pre=1&key=${'b'.repeat(32)}`), 'his');
+    assert.equal(await got(`?pre=1&key=${'c'.repeat(32)}`), undefined, 'an unknown key must not get anybody’s');
+    assert.equal(await got('?pre=1'), undefined, 'and neither must no key at all');
+  });
+
+  test('the key also rides in the config, so the hello can carry it', async () => {
+    const res = await serve(`?key=${'a'.repeat(32)}`);
+    assert.equal(injected(res.body).key, 'a'.repeat(32));
+  });
+
   test('it is read per request, so editing it needs no restart', async () => {
     let current = 'first';
     const handler = createAgentHandler(bundle, { publicOrigin: undefined, prePayload: async () => current });

@@ -11,27 +11,31 @@ import path from 'node:path';
 import { PING_PER_TOKEN, PROBES } from '@bxconsole/protocol';
 import { PingBoard, describeRequest, parseProbePath, scriptProbeBody } from '../src/ping';
 
+/** Account ids: a token belongs to the account that asked for it. */
+const ANA = 'a1a1a1';
+const BO = 'b2b2b2';
+
 describe('tokens', () => {
   test('a fresh token is known, a made-up one is not', () => {
     const board = new PingBoard();
-    const { token } = board.issue();
+    const { token } = board.issue(ANA);
     assert.ok(board.knows(token));
     assert.ok(!board.knows('neverissued'));
   });
 
   test('two runs do not collide', () => {
     const board = new PingBoard();
-    const tokens = new Set(Array.from({ length: 50 }, () => board.issue().token));
+    const tokens = new Set(Array.from({ length: 50 }, () => board.issue(ANA).token));
     assert.equal(tokens.size, 50);
     for (const t of tokens) assert.match(t, /^[A-Za-z0-9]{6,32}$/, 'must survive the URL and the validator');
   });
 
   test('an expiry in the past is not known', () => {
     const board = new PingBoard();
-    const { token, expiresAt } = board.issue();
+    const { token, expiresAt } = board.issue(ANA);
     assert.ok(expiresAt > Date.now());
     // Reach in rather than wait half an hour.
-    (board as unknown as { tokens: Map<string, number> }).tokens.set(token, Date.now() - 1);
+    (board as unknown as { tokens: Map<string, { until: number; owner: string }> }).tokens.set(token, { until: Date.now() - 1, owner: ANA });
     assert.ok(!board.knows(token));
   });
 });
@@ -39,27 +43,66 @@ describe('tokens', () => {
 describe('arrivals', () => {
   test('are reported to listeners and readable afterwards', () => {
     const board = new PingBoard();
-    const { token } = board.issue();
+    const { token } = board.issue(ANA);
     const seen: string[] = [];
     board.onArrival((a) => seen.push(a.probe));
     board.record({ id: 'a1', token, probe: 'img', ts: 1 });
     board.record({ id: 'a2', token, probe: 'script', ts: 2 });
     assert.deepEqual(seen, ['img', 'script']);
-    assert.deepEqual(board.since(token).map((a) => a.probe), ['img', 'script']);
+    assert.deepEqual(board.since(token, ANA).map((a) => a.probe), ['img', 'script']);
   });
 
   test('one token cannot push out another', () => {
     const board = new PingBoard();
-    const a = board.issue().token;
-    const b = board.issue().token;
+    const a = board.issue(ANA).token;
+    const b = board.issue(ANA).token;
     board.record({ id: 'b0', token: b, probe: 'img', ts: 0 });
     for (let i = 0; i < PING_PER_TOKEN * 3; i++) board.record({ id: `a${i}`, token: a, probe: 'img', ts: i });
-    assert.equal(board.since(a).length, PING_PER_TOKEN, 'the noisy one is trimmed');
-    assert.equal(board.since(b).length, 1, 'the quiet one is kept');
+    assert.equal(board.since(a, ANA).length, PING_PER_TOKEN, 'the noisy one is trimmed');
+    assert.equal(board.since(b, ANA).length, 1, 'the quiet one is kept');
   });
 
   test('a token nobody asked about reads as empty', () => {
-    assert.deepEqual(new PingBoard().since('nothing'), []);
+    assert.deepEqual(new PingBoard().since('nothing', ANA), []);
+  });
+
+  /*
+   * Whose probes these are.
+   *
+   * An arrival holds the client IP and the URL of the page the probe fired
+   * on. The board used to be asked only for a token, and tokens are handed
+   * to whoever asks — so any signed-in account could subscribe to any token
+   * and read someone else's. The board remembers who it handed each one to.
+   */
+  test('only the account that asked for a token can read its arrivals', () => {
+    const board = new PingBoard();
+    const { token } = board.issue(ANA);
+    board.record({ id: 'a1', token, probe: 'img', ts: 1 });
+
+    assert.equal(board.since(token, ANA).length, 1);
+    assert.deepEqual(board.since(token, BO), [], 'bo read ana’s probes');
+    assert.deepEqual(board.since(token, undefined), [], 'a socket with no account read them');
+    assert.equal(board.isOwnedBy(token, ANA), true);
+    assert.equal(board.isOwnedBy(token, BO), false);
+    assert.equal(board.isOwnedBy(token, undefined), false);
+  });
+
+  test('a probe still arrives for a token whoever fires it, because nobody is at the keyboard', () => {
+    // `knows` is what the probe routes ask, and they are reached by a
+    // victim's browser. It says whether to record, not who may read.
+    const board = new PingBoard();
+    const { token } = board.issue(ANA);
+    assert.equal(board.knows(token), true);
+    board.record({ id: 'a1', token, probe: 'img', ts: 1 });
+    assert.equal(board.since(token, ANA).length, 1);
+  });
+
+  test('a token that has lapsed is nobody’s, not its owner’s', () => {
+    const board = new PingBoard();
+    const { token } = board.issue(ANA);
+    (board as unknown as { tokens: Map<string, { until: number; owner: string }> }).tokens.set(token, { until: Date.now() - 1, owner: ANA });
+    assert.equal(board.isOwnedBy(token, ANA), false);
+    assert.deepEqual(board.since(token, ANA), []);
   });
 });
 
@@ -229,7 +272,7 @@ describe('tokens outliving the relay', () => {
     // looked fine and the tab stayed empty.
     const before = new PingBoard();
     before.useFile(file());
-    const { token } = before.issue();
+    const { token } = before.issue(ANA);
 
     const after = new PingBoard();
     after.useFile(file());
@@ -237,32 +280,40 @@ describe('tokens outliving the relay', () => {
   });
 
   test('a lapsed token is not brought back by the file', async () => {
-    await fs.writeFile(file(), JSON.stringify({ staleToken12: Date.now() - 1000 }));
+    await fs.writeFile(file(), JSON.stringify({ staleToken12: { until: Date.now() - 1000, owner: ANA } }));
     const board = new PingBoard();
     board.useFile(file());
     assert.equal(board.knows('staleToken12'), false);
   });
 
   test('rubbish in the file is ignored rather than trusted', async () => {
-    await fs.writeFile(file(), JSON.stringify({ 'bad token': Date.now() + 60_000, ok12345678: 'not a number' }));
+    await fs.writeFile(
+      file(),
+      JSON.stringify({
+        'bad token': { until: Date.now() + 60_000, owner: ANA },
+        ok12345678: { until: 'not a number', owner: ANA },
+        noowner1234: { until: Date.now() + 60_000 },
+      }),
+    );
     const board = new PingBoard();
     board.useFile(file());
     assert.equal(board.knows('bad token'), false);
     assert.equal(board.knows('ok12345678'), false);
+    assert.equal(board.knows('noowner1234'), false, 'a token with no owner is nobody’s');
   });
 
   test('an unreadable file leaves an empty board rather than stopping the relay', () => {
     const board = new PingBoard();
     assert.doesNotThrow(() => board.useFile(path.join(dir, 'does', 'not', 'exist.json')));
-    const { token } = board.issue();
+    const { token } = board.issue(ANA);
     assert.equal(board.knows(token), true, 'and issuing still works');
   });
 
   test('every live token is written, not only the newest', () => {
     const board = new PingBoard();
     board.useFile(file());
-    const a = board.issue().token;
-    const b = board.issue().token;
+    const a = board.issue(ANA).token;
+    const b = board.issue(ANA).token;
     const reopened = new PingBoard();
     reopened.useFile(file());
     assert.equal(reopened.knows(a), true);

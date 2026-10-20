@@ -50,7 +50,7 @@ async function passwdWithAll(
 
 describe('what stays open', () => {
   // A victim's browser reaches these with nobody at the keyboard.
-  for (const p of ['/agent.js', '/ping', '/ping/new', '/ping/img/abc123', '/ping/websocket/abc123', '/ping/check/tok']) {
+  for (const p of ['/agent.js', '/ping', '/ping/img/abc123', '/ping/websocket/abc123', '/ping/style/x', '/ping/script/x', '/ping/fetch/x']) {
     test(`${p} needs no password`, () => assert.equal(isVictimPath(p), true));
   }
 });
@@ -59,6 +59,25 @@ describe('what is closed', () => {
   for (const p of ['/', '/index.html', '/pre-payload', '/body/s1/abc', '/asset/s1/xyz', '/agent.source.js', '/ws/console', '/assets/app.js']) {
     test(`${p} needs the password`, () => assert.equal(isVictimPath(p), false));
   }
+
+  test('minting a ping token and checking one are the console’s, not a page’s', () => {
+    /*
+     * These two used to be open, along with the whole of /ping/. Nothing in a
+     * page ever asks for a token — the console mints one and bakes it into
+     * the snippet, and the page only fetches /ping/{probe}/{token} — so open
+     * they let anyone who found the port mint tokens and sweep for live ones.
+     */
+    assert.equal(isVictimPath('/ping/new'), false);
+    assert.equal(isVictimPath('/ping/check/tok'), false);
+  });
+
+  test('a probe route that is not a probe is closed', () => {
+    // The list is what is open, so something added under /ping/ later is
+    // closed without anyone remembering to close it.
+    for (const p of ['/ping/newish/x', '/ping/admin/x', '/ping/tokens/x', '/ping/', '/ping/img']) {
+      assert.equal(isVictimPath(p), false, p);
+    }
+  });
 
   test('a new endpoint is closed without anyone remembering to close it', () => {
     // The whole reason this lives in code: /pre-payload was added and no

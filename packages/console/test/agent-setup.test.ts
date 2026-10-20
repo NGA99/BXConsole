@@ -27,8 +27,10 @@ function fakeStorage(seed: Record<string, string> = {}) {
  * the same as the tab. So a run with nothing turned off needs no parameters,
  * and the snippet is a bare script tag.
  */
-const AGENT_DEFAULTS: Omit<Setup, 'name'> = { record: true, bodies: true, adopt: true, frame: true, collect: true, pre: false };
+const AGENT_DEFAULTS: Omit<Setup, 'name'> = { record: true, bodies: true, adopt: true, frame: true, collect: true, pre: false, key: '' };
 const asAgent = (over: Partial<Setup> = {}): Setup => ({ name: 'my-app', ...AGENT_DEFAULTS, ...over });
+/** A project key is 16 bytes of hex; the value does not matter here, the shape does. */
+const KEY = 'a'.repeat(32);
 
 describe('the choices', () => {
   test('the tab starts where the agent already is, so nothing needs saying', () => {
@@ -186,5 +188,71 @@ describe('every parameter a snippet can emit is one the agent reads', () => {
     const allOff: Setup = { name: 'n', record: false, bodies: false, adopt: false, frame: false, collect: false, pre: false };
     const written = paramsFor(allOff).map(([k]) => k);
     assert.deepEqual(written.sort(), ['adopt', 'bodies', 'collect', 'frame', 'name', 'screen']);
+  });
+});
+
+/**
+ * The project key in the snippet.
+ *
+ * Unlike every other parameter here, this one is not an option: it decides
+ * whether the run is recorded at all. A payload with no key is refused, and
+ * refused in the worst place to find out — a browser nobody can reach, with
+ * nothing to look at afterwards. So a snippet without it is a snippet that
+ * silently does nothing.
+ */
+describe('the project key', () => {
+  test('it leads the parameters, ahead of the options', () => {
+    assert.deepEqual(paramsFor(asAgent({ key: KEY })), [['key', KEY], ['name', 'my-app']]);
+  });
+
+  test('every snippet carries it, because every one of them installs an agent', () => {
+    const snippets = snippetsFor(asAgent({ key: KEY }), ORIGIN);
+    for (const s of snippets) assert.ok(s.code.includes(KEY), `${s.id} has no key: ${s.code}`);
+  });
+
+  test('a script tag carries it as data-key, not in the url', () => {
+    // A URL ends up in access logs and in Referer headers on the way out of
+    // the page; a data attribute does not.
+    const [script] = snippetsFor(asAgent({ key: KEY }), ORIGIN);
+    assert.equal(script!.code, `<script src="${ORIGIN}/agent.js" data-key="${KEY}" data-name="my-app"></script>`);
+  });
+
+  test('asking for the pre-payload moves it to the url, and only once', () => {
+    /*
+     * The relay has to read the key off the request to know whose
+     * pre-payload to send — it never sees a data attribute. So when `pre` is
+     * asked for the key goes on the src, and the attribute is dropped rather
+     * than written twice into something a person pastes by hand.
+     */
+    const [script] = snippetsFor(asAgent({ key: KEY, pre: true }), ORIGIN);
+    assert.equal(script!.code, `<script src="${ORIGIN}/agent.js?pre=1&key=${KEY}" data-name="my-app"></script>`);
+    assert.equal(script!.code.match(new RegExp(KEY, 'g'))?.length, 1);
+  });
+
+  test('no key means no key in the snippet, not an empty one', () => {
+    const [script] = snippetsFor(asAgent({ key: '' }), ORIGIN);
+    assert.equal(script!.code, `<script src="${ORIGIN}/agent.js" data-name="my-app"></script>`);
+    assert.deepEqual(paramsFor(asAgent({ key: '' })), [['name', 'my-app']]);
+  });
+
+  test('it is never saved, and never read back from storage', () => {
+    /*
+     * A key can be rotated. A copy kept in the browser would go on being
+     * pasted into pages long after the relay stopped honouring it — a
+     * snippet that reads correctly and records nothing.
+     */
+    const held: Record<string, string> = {};
+    const storage = {
+      getItem: (k: string) => held[k] ?? null,
+      setItem: (k: string, v: string) => void (held[k] = v),
+    };
+    saveSetup(asAgent({ key: KEY, name: 'kept' }), storage);
+    assert.ok(!JSON.stringify(held).includes(KEY), `the key was written: ${JSON.stringify(held)}`);
+    assert.equal(loadSetup(storage).name, 'kept', 'the rest of the setup still is');
+    assert.equal(loadSetup(storage).key, '');
+
+    // And an older build that did write one is not trusted either.
+    held[SETUP_KEY] = JSON.stringify({ ...asAgent({ key: KEY }), name: 'kept' });
+    assert.equal(loadSetup(storage).key, '');
   });
 });

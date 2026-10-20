@@ -265,6 +265,16 @@ export type AgentToServer =
 export type ServerToAgent =
   /** `tabId` is the window id the relay settled on, which may differ from the one asked for */
   | { type: 'session.ack'; sessionId: string; tabId?: string }
+  /**
+   * This run is not being recorded, and retrying will not change that.
+   *
+   * The relay could close the socket instead, and that is the wrong answer:
+   * the transport reconnects on close, so a payload with no project would
+   * knock on the door every few seconds for as long as the page is open,
+   * while the operator sees nothing anywhere saying why no session appeared.
+   * This says so, once, and the agent gives up.
+   */
+  | { type: 'session.refused'; reason: string }
   /** `context.selectedNodeId` is the Elements selection (a screen node id): exposed to the expression as `$0` */
   | { type: 'eval.request'; commandId: string; expression: string; context?: { selectedNodeId?: number } }
   | { type: 'object.getProperties'; requestId: string; objectId: ObjectId }
@@ -331,6 +341,14 @@ export type ConsoleToServer =
    * behind with its id still on them, and this is what clears that up.
    */
   | { type: 'project.transfer'; projectId: string; toAccountId: string }
+  /**
+   * Draw a new agent key for this project.
+   *
+   * Every payload carrying the old one stops arriving, which is the point:
+   * a key that has been noticed in a page, or pasted somewhere it should not
+   * have been, is a key to stop honouring.
+   */
+  | { type: 'project.rotateKey'; projectId: string }
   | { type: 'session.subscribe'; sessionId: string; replay: boolean }
   | { type: 'session.unsubscribe'; sessionId: string }
   /** move to the trash: keeps the recording, hides it from the main list */

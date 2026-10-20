@@ -340,6 +340,83 @@ describe('a file that did not parse', () => {
     assert.match(made.warnings.join('\n'), /ignored 3 malformed entries/);
   });
 
+  test('a project whose key is the wrong shape is dropped, not honoured', async () => {
+    /*
+     * The check that matters. A key is the whole of what a payload presents,
+     * so a hand-edited `agentKey: "x"` would be a key anyone could guess —
+     * and the row is the only place a key of the wrong shape can come from,
+     * since the generator only makes one kind.
+     */
+    const made = store();
+    writeFileSync(
+      path.join(made.dir, PROJECTS_FILE),
+      JSON.stringify({
+        home: 'aaaaaa',
+        projects: [
+          { id: 'aaaaaa', name: 'Good', owner: ANA, sharedWith: [], agentKey: 'a'.repeat(32), createdAt: 1 },
+          { id: 'bbbbbb', name: 'Guessable', owner: ANA, sharedWith: [], agentKey: 'x', createdAt: 2 },
+          { id: 'cccccc', name: 'Upper case', owner: ANA, sharedWith: [], agentKey: 'A'.repeat(32), createdAt: 3 },
+        ],
+      }),
+    );
+    await made.store.load();
+    assert.deepEqual(made.store.all().map((p) => p.id), ['aaaaaa']);
+    assert.equal(made.store.byAgentKey('x'), null);
+    assert.equal(made.store.byAgentKey('A'.repeat(32)), null);
+    assert.equal(made.store.byAgentKey('a'.repeat(32))?.id, 'aaaaaa');
+  });
+
+  test('a project written before keys existed is given one, and keeps everything else', async () => {
+    /*
+     * Every project the previous version wrote. Making the field required
+     * without this would turn each of those rows into a malformed one, drop
+     * them all, and leave a file that looks like a fresh install — which the
+     * migration would then write over.
+     */
+    const made = store();
+    writeFileSync(
+      path.join(made.dir, PROJECTS_FILE),
+      JSON.stringify({
+        home: 'aaaaaa',
+        projects: [{ id: 'aaaaaa', name: 'From before', owner: ANA, sharedWith: [BO], createdAt: 7 }],
+      }),
+    );
+    await made.store.load();
+    assert.equal(made.store.isBroken, false);
+    const got = made.store.get('aaaaaa');
+    assert.equal(got?.name, 'From before');
+    assert.equal(got?.owner, ANA, 'the owner moved');
+    assert.deepEqual(got?.sharedWith, [BO]);
+    assert.match(got?.agentKey ?? '', /^[a-f0-9]{32}$/);
+    assert.equal(made.store.homeId(), 'aaaaaa');
+    assert.match(made.warnings.join('\n'), /drew an agent key for "From before"/);
+
+    // Written down, so the next boot does not draw a different one.
+    const again = new ProjectStore(made.dir);
+    await again.load();
+    assert.equal(again.get('aaaaaa')?.agentKey, got?.agentKey);
+  });
+
+  test('a file whose every project is unreadable is broken, not empty', async () => {
+    /*
+     * The near miss this came from: making `agentKey` required turned every
+     * row the previous version wrote into a malformed one. All of them
+     * dropped looks exactly like a fresh install, and a fresh install is
+     * what the migration writes a new home project over.
+     */
+    const made = store();
+    writeFileSync(
+      path.join(made.dir, PROJECTS_FILE),
+      JSON.stringify({ home: 'aaaaaa', projects: [{ id: 'aaaaaa' }, { id: 'bbbbbb' }] }),
+    );
+    const before = readFileSync(path.join(made.dir, PROJECTS_FILE), 'utf8');
+    await made.store.load();
+    assert.equal(made.store.isBroken, true);
+    assert.equal(await made.store.migrateInto(ANA, [session('one')], async () => undefined), null);
+    assert.equal(readFileSync(path.join(made.dir, PROJECTS_FILE), 'utf8'), before, 'the file was overwritten');
+    assert.match(made.warnings.join('\n'), /none of its 2 project\(s\) could be read/);
+  });
+
   test('a home naming a project that is not there falls back to one that is', async () => {
     const made = store();
     writeFileSync(

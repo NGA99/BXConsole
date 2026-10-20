@@ -37,6 +37,7 @@ import {
   type SourceText,
   PROTOCOL_VERSION,
   type SessionMeta,
+  type SessionHello,
   type Project,
   mayAdminister,
   mayRead,
@@ -109,6 +110,10 @@ export class Relay {
   private retentionDays = 0;
   private projects: ProjectStore | null = null;
   private knownAccountIds: () => Set<string> = () => new Set();
+  /** ACCEPT_KEYLESS, as a project id, or null when keyless runs are refused. */
+  private acceptKeyless: () => string | null = () => null;
+  /** reason -> how many since it was last logged, and when that was */
+  private readonly refusals = new Map<string, { count: number; last: number }>();
   /** consoles mid-replay, with the live events waiting for it to finish */
   private readonly replaying = new Map<WebSocket, ServerToConsole[]>();
   /** replies the relay itself is waiting for (the asset proxy), not a console */
@@ -163,7 +168,19 @@ export class Relay {
             `[bxconsole] an agent says protocol v${String(msg.v)} and this relay speaks v${PROTOCOL_VERSION}; taking it anyway`,
           );
         }
-        const joined = await this.registry.upsertFromHello(msg.hello, ws);
+        /*
+         * Which project this run goes into, decided before anything is
+         * written. A payload with no project to go to is told so and stops;
+         * see landingFor and session.refused.
+         */
+        const landing = this.landingFor(msg.hello);
+        if (!landing.ok) {
+          send(ws, { type: 'session.refused', reason: landing.reason } satisfies ServerToAgent);
+          this.noteRefusal(landing.reason, msg.hello);
+          ws.close();
+          return;
+        }
+        const joined = await this.registry.upsertFromHello(msg.hello, ws, landing.projectId);
         entry = joined.entry;
         // The relay may hand back a different window id than the page asked for
         // (two live windows claiming one id); the ack is how the page learns it.
@@ -438,6 +455,24 @@ export class Relay {
     this.knownAccountIds = ids;
   }
 
+  /**
+   * Where a payload with no project key lands, or null to refuse it.
+   *
+   * The transition, and it is meant to be temporary. Keys did not exist when
+   * the payloads now in flight were built, and those are in browsers nobody
+   * can reach — a relay that refused them would drop the engagements it was
+   * installed for. So an operator names a project to catch them, replaces
+   * the payloads, and unsets it.
+   *
+   * Off by default, because the other way round is worse: a relay that
+   * silently accepts any keyless run puts every stray payload anybody ever
+   * pasted into one shared project, which is the thing projects exist to
+   * stop.
+   */
+  useKeylessLanding(projectId: () => string | null): void {
+    this.acceptKeyless = projectId;
+  }
+
   /** Fetch the files a page loads as it loads them, for sessions that asked. */
   useCollector(collector: AssetCollector): void {
     this.collector = collector;
@@ -484,6 +519,17 @@ export class Relay {
     }
     switch (msg.type) {
       case 'ping.subscribe': {
+        /*
+         * Only the account the token was handed to.
+         *
+         * This is the one console message that names something other than a
+         * session or a project, so the gates above do not cover it — and it
+         * went uncovered: a probe record holds a client IP and the URL of
+         * the page it fired on, and any signed-in account could ask for any
+         * token's.
+         */
+        const actor = this.consoles.get(ws);
+        if (!this.pingBoard?.isOwnedBy(msg.token, actor?.id)) return;
         let watched = this.pingWatchers.get(ws);
         if (!watched) {
           watched = new Set();
@@ -491,7 +537,7 @@ export class Relay {
         }
         watched.add(msg.token);
         // Whatever already landed, so a console opened late is not told nothing happened.
-        for (const arrival of this.pingBoard?.since(msg.token) ?? []) send(ws, { type: 'ping.arrived', arrival });
+        for (const arrival of this.pingBoard.since(msg.token, actor?.id)) send(ws, { type: 'ping.arrived', arrival });
         return;
       }
 
@@ -580,6 +626,13 @@ export class Relay {
         }
         if (!(await this.projects!.remove(msg.projectId))) return;
         this.sendTo(audience, { type: 'project.removed', projectId: msg.projectId });
+        return;
+      }
+
+      case 'project.rotateKey': {
+        if (!this.mayAdministerFrom(ws, msg.projectId)) return;
+        const next = await this.projects!.rotateKey(msg.projectId);
+        if (next) this.tellAboutProject(next);
         return;
       }
 
@@ -991,6 +1044,69 @@ export class Relay {
     return mayAdminister(project, this.consoles.get(ws)?.id) ? project : null;
   }
 
+  /**
+   * Which project a run that has just said hello belongs in.
+   *
+   * Three answers, in this order, and the order is the point.
+   *
+   * A run that already exists keeps the project it is in, and the key is not
+   * consulted. Sessions do not move between projects — and if a key could
+   * move one, anybody holding any key could pull somebody else's run into
+   * their own project by reconnecting to its id. That also means a reconnect
+   * is accepted without a key: it is not creating anything, and a payload
+   * that knows a session id can already append to that run whatever it
+   * carries.
+   *
+   * A key that matches a project puts the run there. A key that matches
+   * nothing is refused rather than quietly treated as keyless, because the
+   * two mean different things: no key is an old payload, and a wrong key is
+   * a rotated or mistyped one, and an operator chasing a missing session
+   * needs to be told which.
+   *
+   * No key at all falls to ACCEPT_KEYLESS, which is how an engagement
+   * already in flight keeps arriving while its payloads are replaced. Unset,
+   * the run is refused.
+   */
+  private landingFor(hello: SessionHello): { ok: true; projectId?: string } | { ok: false; reason: string } {
+    const projects = this.projects;
+    if (!projects) return { ok: true };
+
+    const known = this.registry.get(hello.sessionId)?.meta.projectId;
+    if (known !== undefined) return { ok: true, projectId: known };
+
+    if (hello.key) {
+      const project = projects.byAgentKey(hello.key);
+      if (project) return { ok: true, projectId: project.id };
+      return { ok: false, reason: 'the project key in this payload is not one this relay knows' };
+    }
+    const keyless = this.acceptKeyless();
+    if (keyless) return { ok: true, projectId: keyless };
+    return { ok: false, reason: 'this payload carries no project key, and the relay is not accepting keyless runs' };
+  }
+
+  /**
+   * Say a run was turned away, without letting it fill the log.
+   *
+   * The thing to avoid in both directions. Silence here is the failure this
+   * tool is worst at — a payload that fires and never appears, with nothing
+   * anywhere saying why — and the operator has no other way to find out,
+   * because the only other party to the conversation is a victim's browser.
+   * But a payload mass-fired across a target writes one of these per page,
+   * so each reason is reported once a minute with however many it stood for.
+   */
+  private noteRefusal(reason: string, hello: SessionHello): void {
+    const now = Date.now();
+    const seen = this.refusals.get(reason) ?? { count: 0, last: 0 };
+    seen.count++;
+    if (now - seen.last < REFUSAL_LOG_MS) {
+      this.refusals.set(reason, seen);
+      return;
+    }
+    const also = seen.count > 1 ? ` (and ${seen.count - 1} more like it)` : '';
+    console.warn(`[bxconsole] refused a run from ${hello.url}: ${reason}${also}`);
+    this.refusals.set(reason, { count: 0, last: now });
+  }
+
   /** Which project a run counts as being in, home standing in for none. */
   private homeAwareProject(meta: SessionMeta): string | undefined {
     return meta.projectId ?? this.projects?.homeId() ?? undefined;
@@ -1071,6 +1187,9 @@ export class Relay {
 }
 
 // -------------------------------------------------------------------- helpers
+
+/** At most one line a minute per reason, however many runs it stood for. */
+const REFUSAL_LOG_MS = 60_000;
 
 const REPLY_TYPES = new Set<string>(['eval.result', 'object.properties', 'completions.result', 'object.property', 'object.stored', 'object.json', 'node.located', 'dom.styles', 'sources.list', 'sources.text', 'asset.data']);
 function isReply(msg: AgentEvent | AgentReply): msg is AgentReply {

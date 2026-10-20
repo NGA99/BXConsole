@@ -242,3 +242,54 @@ describe('the config global does not outlive the read', () => {
     assert.equal(c!.serverUrl, `wss://relay.test${WS_PATH.agent}`, 'the run goes on with what it could read');
   });
 });
+
+/**
+ * The project key.
+ *
+ * The one option the agent does not act on: it carries it to the relay and
+ * the relay turns it into a project. Reading it wrongly does not degrade the
+ * run, it loses it — a hello with no key is refused, and the operator sees a
+ * payload that fires and never appears.
+ */
+describe('the project key', () => {
+  const KEY = 'a'.repeat(32);
+
+  test('it is read from a script tag, from the injected config, and from the url', () => {
+    page({ data: { key: KEY } });
+    assert.equal(readConfig().key, KEY);
+    clear();
+
+    page({ src: 'https://relay.test/agent.js', injected: { key: KEY } });
+    assert.equal(readConfig().key, KEY);
+    clear();
+
+    page({ src: `https://relay.test/agent.js?key=${KEY}` });
+    assert.equal(readConfig().key, KEY);
+  });
+
+  test('a script tag wins over the injected config, which wins over the url', () => {
+    page({
+      src: `https://relay.test/agent.js?key=${'c'.repeat(32)}`,
+      data: { key: 'a'.repeat(32) },
+      injected: { key: 'b'.repeat(32) },
+    });
+    assert.equal(readConfig().key, 'a'.repeat(32));
+    clear();
+
+    page({ src: `https://relay.test/agent.js?key=${'c'.repeat(32)}`, injected: { key: 'b'.repeat(32) } });
+    assert.equal(readConfig().key, 'b'.repeat(32));
+  });
+
+  test('a payload with no key reads as none, not as an empty one', () => {
+    page({ src: 'https://relay.test/agent.js?name=run' });
+    assert.equal(readConfig().key, null);
+  });
+
+  test('it is passed through untouched, whatever it looks like', () => {
+    // The agent is not the one that judges a key; the relay is, and it
+    // refuses what it does not know. Trimming or rejecting one here would
+    // turn a wrong key into no key, and those get different answers.
+    page({ data: { key: 'not-a-key' } });
+    assert.equal(readConfig().key, 'not-a-key');
+  });
+});

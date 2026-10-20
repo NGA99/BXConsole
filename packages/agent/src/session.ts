@@ -125,6 +125,9 @@ export function buildHello(session: LocalSession, tab: LocalTab, config: AgentCo
     },
     startedAt: session.startedAt,
     collect: config.collect,
+    // Only when there is one: a hello with `key: null` in it would say the
+    // payload carried an empty key rather than none.
+    ...(config.key ? { key: config.key } : {}),
     // So the console can name this run's handle instead of guessing at it.
     mark: markName(),
   };

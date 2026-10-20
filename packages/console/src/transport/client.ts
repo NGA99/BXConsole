@@ -6,6 +6,7 @@
 import type { ConsoleToServer, ServerToConsole, AgentReply, SerializedValue, PropertyPreview, ScreenEvent, ScreenInput, ScreenSegment, ElementStyles, SourceEntry, SourceText, ProbeArrival } from '@bxconsole/protocol';
 import { WS_PATH } from '@bxconsole/protocol';
 import { useSessionsStore } from '../state/sessions';
+import { useProjectsStore } from '../state/projects';
 import { activeTabOf } from '../state/active-tab';
 import { dropDomModel } from '../state/dom-model';
 import { sessionData, dropSessionData } from '../state/session-data';
@@ -394,6 +395,15 @@ function dispatch(msg: ServerToConsole): void {
   switch (msg.type) {
     case 'sessions.snapshot':
       sessions.setAll(msg.sessions);
+      return;
+    case 'projects.snapshot':
+      useProjectsStore.getState().setAll(msg.projects, msg.homeProjectId);
+      return;
+    case 'project.updated':
+      useProjectsStore.getState().upsert(msg.project);
+      return;
+    case 'project.removed':
+      useProjectsStore.getState().remove(msg.projectId);
       return;
     case 'session.updated': {
       const was = sessions.byId[msg.session.sessionId]?.connected ?? false;

@@ -43,23 +43,7 @@ export class SessionRegistry {
   private readonly sessions = new Map<string, SessionEntry>();
   private readonly listeners = new Set<Listener>();
 
-  /**
-   * Which project a run that has just said hello belongs in.
-   *
-   * A function, and not taken from the hello, for two reasons. The page does
-   * not know — it knows which session it is, which is a different question —
-   * and letting it say would let a payload drop its recording into somebody
-   * else's engagement by naming it. One home project for the whole relay
-   * until the injected script carries a project key, which is what will
-   * answer this properly.
-   */
-  private homeProject: () => string | undefined = () => undefined;
-
   constructor(private readonly store: SessionStore) {}
-
-  useProjectSource(home: () => string | undefined): void {
-    this.homeProject = home;
-  }
 
   async loadFromDisk(): Promise<void> {
     for (const { meta, lastSeq } of await this.store.listSessions()) {
@@ -88,7 +72,18 @@ export class SessionRegistry {
    * An agent connected: a new window of this session, or an existing window
    * after a reload. The session row survives either way; only the tab changes.
    */
-  async upsertFromHello(hello: SessionHello, agent: WebSocket): Promise<{ entry: SessionEntry; tabId: string }> {
+  async upsertFromHello(
+    hello: SessionHello,
+    agent: WebSocket,
+    /**
+     * Which project this run belongs in, decided by the relay from the key
+     * in the payload — never read out of the hello. The page knows which
+     * session it is, which is a different question, and a page that could
+     * name a project could drop its recording into somebody else's
+     * engagement. Undefined only on a relay with no project list.
+     */
+    projectId?: string,
+  ): Promise<{ entry: SessionEntry; tabId: string }> {
     const now = Date.now();
     // Two live windows can arrive claiming the same id: duplicating a tab copies
     // sessionStorage without giving the copy an opener, so the collision rule in
@@ -113,8 +108,7 @@ export class SessionRegistry {
 
     let entry = existing;
     if (!entry) {
-      const { tabId: _tab, tabStartedAt: _tabStart, openedBy: _opener, ...base } = hello;
-      const projectId = this.homeProject();
+      const { tabId: _tab, tabStartedAt: _tabStart, openedBy: _opener, key: _key, ...base } = hello;
       entry = {
         meta: { ...base, ...(projectId ? { projectId } : {}), lastSeenAt: now, connected: true, tabs: [tab] },
         agents: new Map(),
@@ -133,13 +127,14 @@ export class SessionRegistry {
       else tabs.push(tab);
       // A page talking again means the run is in use: take it out of the trash.
       const { trashedAt: _trashed, ...kept } = entry.meta;
-      // A recording from before projects, or one the migration did not reach,
-      // gets the project written down now that it is talking again. It was
-      // already being read as being in this one.
-      const projectId = kept.projectId ?? this.homeProject();
+      // A recording from before projects, or one the migration did not
+      // reach, gets the project written down now that it is talking again.
+      // It was already being read as being in this one, and a run that has
+      // a project keeps it: see the relay's landingFor.
+      const landed = kept.projectId ?? projectId;
       entry.meta = {
         ...kept,
-        ...(projectId ? { projectId } : {}),
+        ...(landed ? { projectId: landed } : {}),
         url: hello.url,
         title: hello.title,
         name: hello.name ?? entry.meta.name,

@@ -14,8 +14,10 @@ import path from 'node:path';
 import { promises as fs } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import {
+  AGENT_KEY_BYTES,
   PROJECTS_FILE,
   PROJECT_NAME_MAX,
+  isValidAgentKey,
   isValidProjectId,
   mayRead,
   type Project,
@@ -24,6 +26,10 @@ import {
 
 export function newProjectId(): string {
   return randomBytes(6).toString('hex');
+}
+
+export function newAgentKey(): string {
+  return randomBytes(AGENT_KEY_BYTES).toString('hex');
 }
 
 /** The name the migration gives the project it puts everything in. */
@@ -84,12 +90,45 @@ export class ProjectStore {
     }
     const held = parsed as { projects?: unknown; home?: unknown };
     const list = Array.isArray(held.projects) ? held.projects : [];
-    this.projects = list.filter(isProject);
-    if (this.projects.length !== list.length) {
-      this.warn(`${PROJECTS_FILE}: ignored ${list.length - this.projects.length} malformed entr${list.length - this.projects.length === 1 ? 'y' : 'ies'}`);
+    const kept = list.filter(isStoredProject);
+    if (kept.length !== list.length) {
+      this.warn(`${PROJECTS_FILE}: ignored ${list.length - kept.length} malformed entr${list.length - kept.length === 1 ? 'y' : 'ies'}`);
     }
+    /*
+     * A file that parsed, held projects, and left us with none of them.
+     *
+     * That is a file to fix, not an empty relay — and the two look identical
+     * from here, which is the whole danger: an empty list is what a fresh
+     * install looks like, so the migration would make a home project and
+     * write it over the one that says who owns what. It has already nearly
+     * happened once, from making a newly added field required and so turning
+     * every existing row into a malformed one.
+     */
+    if (list.length > 0 && kept.length === 0) {
+      this.broken = true;
+      this.warn(`${PROJECTS_FILE}: none of its ${list.length} project(s) could be read`);
+      this.warn(`${PROJECTS_FILE} holds who owns which recordings, so nothing is written and no sessions are listed until it is fixed.`);
+      return;
+    }
+    /*
+     * Give a key to any project written before there were keys.
+     *
+     * Drawn here rather than derived, like an account id: a key that could be
+     * worked out from the project would be a key anyone could work out. The
+     * project keeps its id and its owner, so nothing moves — payloads simply
+     * could not have carried a key that did not exist yet, and ACCEPT_KEYLESS
+     * is what covers the ones already out there.
+     */
+    const keyless = kept.filter((p) => p.agentKey === undefined);
+    this.projects = kept.map((p) => (p.agentKey === undefined ? { ...p, agentKey: newAgentKey() } : (p as Project)));
+
     const home = typeof held.home === 'string' ? held.home : null;
     this.home = home && this.projects.some((p) => p.id === home) ? home : (this.projects[0]?.id ?? null);
+
+    if (keyless.length) {
+      await this.save();
+      this.warn(`${PROJECTS_FILE}: drew an agent key for ${keyless.map((p) => `"${p.name}"`).join(', ')}`);
+    }
   }
 
   private async save(): Promise<void> {
@@ -129,6 +168,26 @@ export class ProjectStore {
   }
 
   /**
+   * The project a payload's key names, or null.
+   *
+   * Shape first, so a key that is not one never reaches the list; then an
+   * exact match. A trashed project still answers: a payload from an
+   * engagement someone has just tidied away still has pages open, and
+   * dropping those runs would lose the tail of the engagement rather than
+   * tidy it. Taking it out of the trash is a click; the recording cannot be
+   * taken again.
+   */
+  byAgentKey(key: string): Project | null {
+    if (this.broken || !isValidAgentKey(key)) return null;
+    return this.projects.find((p) => p.agentKey === key) ?? null;
+  }
+
+  /** Draw this project a new key, so payloads carrying the old one stop. */
+  async rotateKey(projectId: string): Promise<Project | null> {
+    return this.update(projectId, { agentKey: newAgentKey() });
+  }
+
+  /**
    * Whether this account may read a run that is in this project.
    *
    * The one rule, because there are two ways to ask for a recording and they
@@ -160,6 +219,7 @@ export class ProjectStore {
       name: cleanName(name),
       owner,
       sharedWith: [],
+      agentKey: newAgentKey(),
       createdAt: Date.now(),
     };
     this.projects.push(project);
@@ -169,7 +229,7 @@ export class ProjectStore {
   }
 
   /** Change some of a project's fields, or null when there is no such project. */
-  async update(projectId: string, change: Partial<Pick<Project, 'name' | 'owner' | 'sharedWith'>>): Promise<Project | null> {
+  async update(projectId: string, change: Partial<Pick<Project, 'name' | 'owner' | 'sharedWith' | 'agentKey'>>): Promise<Project | null> {
     const at = this.projects.findIndex((p) => p.id === projectId);
     if (at < 0) return null;
     const next: Project = { ...this.projects[at]!, ...change };
@@ -264,7 +324,13 @@ function cleanName(name: string): string {
   return cleaned || 'Untitled';
 }
 
-function isProject(value: unknown): value is Project {
+/**
+ * A project as the file may hold it: everything but the key, which a file
+ * written before keys existed does not have. `load` fills those in.
+ */
+type StoredProject = Omit<Project, 'agentKey'> & { agentKey?: string };
+
+function isStoredProject(value: unknown): value is StoredProject {
   if (typeof value !== 'object' || value === null) return false;
   const p = value as Partial<Project>;
   return (
@@ -274,6 +340,10 @@ function isProject(value: unknown): value is Project {
     typeof p.owner === 'string' &&
     Array.isArray(p.sharedWith) &&
     p.sharedWith.every((s) => typeof s === 'string') &&
+    // agentKey is not required here: a file written before keys existed has
+    // none, and calling those rows malformed would drop every project on the
+    // relay — see the `keyless` handling in load().
+    (p.agentKey === undefined || (typeof p.agentKey === 'string' && isValidAgentKey(p.agentKey))) &&
     typeof p.createdAt === 'number' &&
     (p.trashedAt === undefined || typeof p.trashedAt === 'number')
   );

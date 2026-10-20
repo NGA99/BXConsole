@@ -6,6 +6,7 @@
  * no React in it and can therefore be tested; this file is the controls.
  */
 import { useState } from "react";
+import { useSnippetProject } from "../../state/projects";
 import { copyText } from "../network/copy";
 import { AgentSource } from "./AgentSource";
 import { PrePayloadEditor } from "./PrePayloadEditor";
@@ -89,7 +90,16 @@ export function AgentPanel({ onDiagnose }: { onDiagnose?: () => void }) {
   };
 
   const origin = location.origin;
-  const snippets = snippetsFor(setup, origin);
+  /*
+   * The key comes from the project, not from the saved setup.
+   *
+   * Which project is not a choice yet, so this is the one a run would land
+   * in — see useSnippetProject. Taken fresh each render, so a rotation is
+   * picked up without a reload. With no project at all there is no key, and
+   * the tab says so rather than handing out a payload that will be refused.
+   */
+  const project = useSnippetProject();
+  const snippets = snippetsFor({ ...setup, key: project?.agentKey ?? "" }, origin);
 
   const copy = async (id: string, code: string) => {
     await copyText(code);
@@ -155,6 +165,27 @@ export function AgentPanel({ onDiagnose }: { onDiagnose?: () => void }) {
 
         <div className="install-right">
           {showSource && <AgentSource origin={origin} />}
+          {/*
+            Where these runs end up.
+            
+            Worth a line of its own because the snippets carry a project key
+            and nothing else here says which project it is for. The failure it
+            heads off is the quiet one: a payload pasted for one engagement
+            that records into another, or — with no project at all — one the
+            relay refuses, in a browser nobody can reach.
+          */}
+          <div className={`install-lands${project ? "" : " bad"}`}>
+            {project ? (
+              <>
+                Runs from these land in <strong>{project.name}</strong>.
+              </>
+            ) : (
+              <>
+                You have no project for these to record into, so the relay will refuse them. Make one
+                first.
+              </>
+            )}
+          </div>
           {snippets.map((s) => (
             <div key={s.id} className="install-snippet">
               <div className="install-snippet-head">

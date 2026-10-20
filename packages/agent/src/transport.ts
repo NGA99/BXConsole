@@ -30,6 +30,12 @@ export class Transport {
   private handlers: MessageHandler[] = [];
   private attempt = 0;
   private closedByUser = false;
+  /**
+   * The relay said this run is not wanted. One way, and not cleared by
+   * `connect()`: a refusal is about the payload, so coming back round to
+   * ask again would be answered the same way, forever.
+   */
+  private refused = false;
 
   constructor(
     private readonly url: string,
@@ -37,6 +43,7 @@ export class Transport {
   ) {}
 
   connect(): void {
+    if (this.refused) return;
     this.closedByUser = false;
     this.open();
   }
@@ -120,13 +127,32 @@ export class Transport {
         this.ready = true;
         this.flush();
       }
+      if (msg.type === 'session.refused') {
+        /*
+         * Stop, rather than close and come back.
+         *
+         * A refusal is about the payload, not the connection — no project to
+         * put the run in — so reconnecting asks the same question and gets
+         * the same answer. Left to the ordinary close handling this would
+         * knock every few seconds for as long as the page is open, from
+         * every window the run spread to.
+         *
+         * The queue is dropped with it. Nothing is going to be sent, and
+         * holding the events would only grow until the cap threw them away
+         * one at a time.
+         */
+        this.refused = true;
+        this.ready = false;
+        this.queue = [];
+        this.ws?.close();
+      }
       for (const h of this.handlers) h(msg);
     });
 
     ws.addEventListener('close', () => {
       this.ready = false;
       this.ws = null;
-      if (!this.closedByUser) this.scheduleReconnect();
+      if (!this.closedByUser && !this.refused) this.scheduleReconnect();
     });
 
     ws.addEventListener('error', () => {

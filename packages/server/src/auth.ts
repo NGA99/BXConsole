@@ -29,6 +29,7 @@
  */
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
+import { PROBES } from '@bxconsole/protocol';
 import { type Account, PasswordFile, accountFromEnv, verifyPassword } from './passwd';
 
 /**
@@ -44,7 +45,23 @@ export const COOKIE_NAME = '__wvs';
 
 /** Paths a browser nobody is sitting at has to reach. Everything else is closed. */
 export function isVictimPath(pathname: string): boolean {
-  return pathname === '/agent.js' || pathname === '/ping' || pathname.startsWith('/ping/');
+  if (pathname === '/agent.js' || pathname === '/ping') return true;
+  /*
+   * The probe routes, and only those.
+   *
+   * `/ping/*` used to be open wholesale, and two of the paths under it are
+   * not a victim's at all. `/ping/new` mints a token and `/ping/check/{t}`
+   * says whether one is live, and both are asked by the console — nothing in
+   * a page ever asks for a token, it only fetches `/ping/{probe}/{token}`
+   * with the one the console put in the snippet. Open, they let anyone who
+   * found the port mint tokens and sweep for live ones.
+   *
+   * Written as a list of what is open rather than a list of what is not, for
+   * the same reason the whole function is: a path added under /ping/ next
+   * month is closed without anybody remembering to close it.
+   */
+  const probe = /^\/ping\/([a-z]+)\//.exec(pathname)?.[1];
+  return probe !== undefined && (PROBES as readonly string[]).includes(probe);
 }
 
 export interface AuthOptions {

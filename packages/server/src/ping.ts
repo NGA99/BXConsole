@@ -31,9 +31,29 @@ const PIXEL = Buffer.from(
   'base64',
 );
 
+/** A live token: when it lapses, and the account that asked for it. */
+interface Issued {
+  until: number;
+  /**
+   * The account id that asked for this token.
+   *
+   * A probe record holds a client IP and the URL of the page it fired on, and
+   * for a while any signed-in account could subscribe to any token and read
+   * them — the token was the only thing asked for, and tokens are handed out
+   * to whoever asks. So the board remembers who it handed each one to, and
+   * only they can watch it.
+   *
+   * The account rather than the project because nothing chooses a project
+   * when a token is issued: the console has no switcher yet. Per project is
+   * the right shape once it has one, and this is the isolation that does not
+   * need it.
+   */
+  owner: string;
+}
+
 export class PingBoard {
-  /** live tokens and when they lapse */
-  private readonly tokens = new Map<string, number>();
+  /** live tokens, by token */
+  private readonly tokens = new Map<string, Issued>();
   /**
    * Where to write them.
    *
@@ -47,12 +67,12 @@ export class PingBoard {
   private arrivals: ProbeArrival[] = [];
   private readonly listeners = new Set<(a: ProbeArrival) => void>();
 
-  /** A fresh token for one diagnosis run. */
-  issue(): { token: string; expiresAt: number } {
+  /** A fresh token for one diagnosis run, for the account that asked. */
+  issue(owner: string): { token: string; expiresAt: number } {
     this.sweep();
     const token = randomBytes(8).toString('base64url').replace(/[^A-Za-z0-9]/g, '').slice(0, 12);
     const expiresAt = Date.now() + PING_TOKEN_TTL_MS;
-    this.tokens.set(token, expiresAt);
+    this.tokens.set(token, { until: expiresAt, owner });
     this.persist();
     return { token, expiresAt };
   }
@@ -67,10 +87,25 @@ export class PingBoard {
   useFile(file: string): void {
     this.file = file;
     try {
-      const held = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, number>;
+      const held = JSON.parse(fs.readFileSync(file, 'utf8')) as Record<string, unknown>;
       const now = Date.now();
-      for (const [token, until] of Object.entries(held)) {
-        if (isValidPingToken(token) && typeof until === 'number' && until > now) this.tokens.set(token, until);
+      for (const [token, value] of Object.entries(held)) {
+        if (!isValidPingToken(token)) continue;
+        /*
+         * A bare number is the old format, from before tokens had an owner,
+         * and those are dropped rather than taken in as anybody's.
+         *
+         * Letting them through would mean keeping the leak they were written
+         * under for as long as they last — a day — and the leak is the part
+         * nobody can see. A dropped token is visible and fixable instead:
+         * the console asks whether a token is live before it listens, and
+         * says "expired, make a new one" when it is not.
+         */
+        if (typeof value !== 'object' || value === null) continue;
+        const { until, owner } = value as Partial<Issued>;
+        if (typeof until !== 'number' || until <= now) continue;
+        if (typeof owner !== 'string' || !owner) continue;
+        this.tokens.set(token, { until, owner });
       }
     } catch {
       /* no file yet, or an unreadable one: start empty */
@@ -86,19 +121,32 @@ export class PingBoard {
     }
   }
 
-  /** Whether a token is one we handed out and has not lapsed. */
+  /**
+   * Whether a token is one we handed out and has not lapsed.
+   *
+   * No account here, and there cannot be one: this is what the probe routes
+   * ask, and they are reached by a victim's browser with nobody at the
+   * keyboard. It says whether to record an arrival, not who may read it.
+   */
   knows(token: string): boolean {
-    const until = this.tokens.get(token);
-    if (until === undefined) return false;
-    if (until <= Date.now()) {
+    const issued = this.tokens.get(token);
+    if (issued === undefined) return false;
+    if (issued.until <= Date.now()) {
       this.tokens.delete(token);
       return false;
     }
     return true;
   }
 
-  /** What has arrived so far for a token, oldest first. */
-  since(token: string): ProbeArrival[] {
+  /** Whether this account is the one this token was handed to. */
+  isOwnedBy(token: string, accountId: string | undefined): boolean {
+    if (accountId === undefined) return false;
+    return this.knows(token) && this.tokens.get(token)?.owner === accountId;
+  }
+
+  /** What has arrived so far for a token, oldest first, for its owner. */
+  since(token: string, accountId: string | undefined): ProbeArrival[] {
+    if (!this.isOwnedBy(token, accountId)) return [];
     return this.arrivals.filter((a) => a.token === token);
   }
 
@@ -121,7 +169,7 @@ export class PingBoard {
 
   private sweep(): void {
     const now = Date.now();
-    for (const [token, until] of this.tokens) if (until <= now) this.tokens.delete(token);
+    for (const [token, issued] of this.tokens) if (issued.until <= now) this.tokens.delete(token);
   }
 }
 

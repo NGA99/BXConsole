@@ -284,6 +284,26 @@
   white-space: nowrap;
 }
 /* The spacer only earns its place when everything is still on one line. */
+/*
+ * Which project the snippets below record into.
+ *
+ * Quiet by default and loud when there is no project, because those are the
+ * two things to say: normally a reminder, and otherwise the reason nothing
+ * will arrive.
+ */
+.install-lands {
+  font-size: 11px;
+  color: var(--sys-color-token-subtle);
+  padding: 4px 0 8px;
+}
+.install-lands strong {
+  color: var(--sys-color-on-surface);
+  font-weight: 500;
+}
+.install-lands.bad {
+  color: var(--sys-color-error);
+}
+
 .install-head-spacer {
   flex: 1 1 0;
   min-width: 0;
