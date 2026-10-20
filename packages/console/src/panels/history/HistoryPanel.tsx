@@ -24,7 +24,7 @@ import { revealScreenAt, useScreenReplay } from '../../state/screen-replay';
 import { RewindToIcon, RevealIcon } from '../../devtools-ui/icons';
 import { buildItems, LANES, type HistItem, type LaneId } from './items';
 import { clockTime, clockTimeShort, fullTimestamp, friendlyTimestamp } from '../../devtools-ui/time';
-import { setActiveTab } from '../../state/active-tab';
+import { setActiveTab, useActiveTab } from '../../state/active-tab';
 import { niceTimeStep } from '../../devtools-ui/scale';
 import './HistoryPanel.css';
 
@@ -57,7 +57,8 @@ export function HistoryPanel({ sessionId, active = true }: { sessionId: string; 
   );
   const connected = useSessionsStore((s) => s.byId[sessionId]?.connected ?? false);
 
-  // History deliberately spans every window of the run; the column says which one.
+  // History can span every window of the run or stay on the one the strip
+  // points at; the column says which window a row came from either way.
   const tabs = useSessionsStore((s) => s.byId[sessionId]?.tabs) ?? [];
   const tabLabel = useMemo(() => {
     const m = new Map<string, string>();
@@ -70,6 +71,16 @@ export function HistoryPanel({ sessionId, active = true }: { sessionId: string; 
     return m;
   }, [tabs]);
   const multiTab = tabs.length > 1;
+  const activeTab = useActiveTab(sessionId);
+  /*
+   * One window at a time by default, like every other panel.
+   *
+   * Spanning the whole run is the more useful answer often enough to keep —
+   * a flow that crosses windows is one story, and reading it in three lists
+   * loses the order. It just should not be the only answer: a run with three
+   * windows put two windows of noise between every pair of rows that mattered.
+   */
+  const [wholeRun, setWholeRun] = useState(false);
 
   // Panels stay mounted and are only hidden, and this walks every console,
   // network and history entry and sorts the result. Doing that for each
@@ -164,7 +175,13 @@ export function HistoryPanel({ sessionId, active = true }: { sessionId: string; 
   }, [mode, customView, recentWindow, bounds]);
   const span = Math.max(window_.end - window_.start, MIN_SPAN);
 
-  const visible = useMemo(() => items.filter((i) => lanes[i.lane]), [items, lanes]);
+  const visible = useMemo(() => {
+    const byLane = items.filter((i) => lanes[i.lane]);
+    if (wholeRun || !multiTab || !activeTab) return byLane;
+    // Rows with no window are from a recording made before windows were
+    // tracked; dropping them would empty the panel for every old run.
+    return byLane.filter((i) => i.tabId === undefined || i.tabId === activeTab);
+  }, [items, lanes, wholeRun, multiTab, activeTab]);
 
   const matched = useMemo(() => {
     const q = filter.trim().toLowerCase();
@@ -337,6 +354,19 @@ export function HistoryPanel({ sessionId, active = true }: { sessionId: string; 
               <span className="hist-chip-count">{counts[l.id]}</span>
             </button>
           ))}
+          {multiTab && (
+            <button
+              className={`hist-chip${wholeRun ? ' on' : ''}`}
+              title={
+                wholeRun
+                  ? 'Showing every window of the run. Click to show only the one the tab strip points at.'
+                  : `Showing ${tabTitle.get(activeTab ?? '') ?? 'one window'}. Click to show every window of the run.`
+              }
+              onClick={() => setWholeRun((v) => !v)}
+            >
+              {wholeRun ? `All ${tabs.length} windows` : 'This window'}
+            </button>
+          )}
         </div>
         <div style={{ flex: 1 }} />
         {/* Grouped so a wrap never splits the zoom pair across two rows. */}

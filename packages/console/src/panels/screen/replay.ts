@@ -47,6 +47,13 @@ export interface ReplayStatus {
   atEnd: boolean;
   /** url of the keyframe in view, as the page's address at that moment */
   url: string;
+  /**
+   * The window the keyframe in view came from. Only one window of a run
+   * streams at a time, so scrubbing moves between them, and the viewer has
+   * to be able to say which one it has landed on. Undefined on a recording
+   * made before windows were written down.
+   */
+  tab?: string;
   /** position in the recording, counted in batches of DOM changes */
   step: number;
   /** batches in the whole recording, known from the first answer the relay gives */
@@ -119,6 +126,7 @@ export class ScreenReplayer {
     loading: false,
     atEnd: false,
     url: '',
+    tab: undefined,
     step: 0,
     total: 0,
       pointer: null,
@@ -189,7 +197,7 @@ export class ScreenReplayer {
     this.hasAllToEnd = segment.done;
     this.hooks.loadSnapshot(segment.snapshot);
     const target = Math.max(ts ?? segment.bounds?.end ?? segment.snapshot.ts, segment.snapshot.ts);
-    this.setStatus({ loading: false, bounds: segment.bounds, url: segment.snapshot.url, atEnd: false });
+    this.setStatus({ loading: false, bounds: segment.bounds, url: segment.snapshot.url, tab: segment.tab, atEnd: false });
     this.applyUpTo(target);
     this.setStatus({ ts: target });
   }

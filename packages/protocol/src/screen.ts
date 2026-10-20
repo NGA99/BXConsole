@@ -119,9 +119,17 @@ export function isScreenEvent(msg: { type: string }): msg is ScreenEvent {
  * One line of `screen.ndjson`. `k` comes first so a scan can tell keyframe
  * lines from op lines by their prefix (`{"k":1`) without parsing them.
  */
+/**
+ * `tab` says which window of the run a line came from.
+ *
+ * It goes after `ts` because the index reads only the first bytes of a line
+ * to find keyframes and their times, and that prefix must keep its shape.
+ * Absent on recordings made before windows were written down, which read as
+ * one undifferentiated run — the behaviour they had.
+ */
 export type ScreenRecord =
-  | { k: 1; ts: number; snapshot: ScreenSnapshot }
-  | { k: 0; ts: number; ops: ScreenOp[] }
+  | { k: 1; ts: number; tab?: string; snapshot: ScreenSnapshot }
+  | { k: 0; ts: number; tab?: string; ops: ScreenOp[] }
   /**
    * Where the pointer was. Neither a keyframe nor a change to the DOM, so it
    * does not move the batch counter — a recording with a hundred cursor
@@ -131,7 +139,7 @@ export type ScreenRecord =
    * per animation frame, and at sixty a second they would fill the recording's
    * budget and evict the keyframes they were meant to annotate.
    */
-  | { k: 2; ts: number; pointer: PointerSample };
+  | { k: 2; ts: number; tab?: string; pointer: PointerSample };
 
 /** A cursor position, with the anchor that survives the mirror being resized. */
 export interface PointerSample {
@@ -152,6 +160,14 @@ export interface PointerSample {
 export interface ScreenSegment {
   /** the whole recording's extent, for the scrubber; null when nothing is recorded */
   bounds: { start: number; end: number } | null;
+  /**
+   * The window this part of the recording came from.
+   *
+   * A run holds several windows and only one streams at a time, so scrubbing
+   * moves between them — silently, until this said which one you had landed
+   * on. Absent on a recording made before windows were written down.
+   */
+  tab?: string;
   snapshot?: ScreenSnapshot;
   batches: Array<{ ts: number; ops: ScreenOp[] }>;
   /** true when `batches` reaches the end of the recording */

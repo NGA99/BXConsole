@@ -58,6 +58,68 @@ async function readRecords(dir: string): Promise<ScreenRecord[]> {
   return text.split('\n').filter(Boolean).map((line) => JSON.parse(line) as ScreenRecord);
 }
 
+describe('which window a segment came from', () => {
+  /*
+   * A run holds several windows and only one streams at a time, so the
+   * recording is theirs in turn and scrubbing walks between them. The segment
+   * has to say which one it landed on, or the viewer shows one window under a
+   * tab strip pointing at another and says nothing about it.
+   *
+   * Both ways a keyframe reaches the index are pinned, because they are not
+   * the same code: a live run appends, and a restart scans. The append path
+   * was the one that forgot, which is the path a run being watched uses.
+   */
+  test('a live recording reports the window of the frame in view', async () => {
+    const { log } = await newLog();
+    log.append(SESSION, { k: 1, ts: T0, tab: 'tab-A', snapshot: snapshot(T0) });
+    log.append(SESSION, { k: 1, ts: T0 + 5_000, tab: 'tab-C', snapshot: snapshot(T0 + 5_000) });
+
+    assert.equal((await log.segment(SESSION, T0, 'seek')).tab, 'tab-A');
+    assert.equal((await log.segment(SESSION, T0 + 5_000, 'seek')).tab, 'tab-C');
+  });
+
+  test('and so does one read back from disk after a restart', async () => {
+    const { log, dir } = await newLog();
+    log.append(SESSION, { k: 1, ts: T0, tab: 'tab-A', snapshot: snapshot(T0) });
+    log.append(SESSION, { k: 1, ts: T0 + 5_000, tab: 'tab-C', snapshot: snapshot(T0 + 5_000) });
+    await log.segment(SESSION, T0, 'seek'); // flush
+
+    const fresh = reopen(dir);
+    assert.equal((await fresh.segment(SESSION, T0, 'seek')).tab, 'tab-A');
+    assert.equal((await fresh.segment(SESSION, T0 + 5_000, 'seek')).tab, 'tab-C');
+  });
+
+  test('a recording made before windows were written down has none, and still replays', async () => {
+    const { log, dir } = await newLog();
+    log.append(SESSION, { k: 1, ts: T0, snapshot: snapshot(T0) });
+    log.append(SESSION, batch(T0 + 10, 'hello'));
+    const live = await log.segment(SESSION, T0, 'seek');
+    assert.equal(live.tab, undefined);
+    assert.ok(live.snapshot, 'the frame still comes back');
+
+    const fresh = reopen(dir);
+    const read = await fresh.segment(SESSION, T0, 'seek');
+    assert.equal(read.tab, undefined);
+    assert.ok(read.snapshot);
+  });
+
+  test('the window does not disturb the index the scan builds from the line', async () => {
+    const { log, dir } = await newLog();
+    log.append(SESSION, { k: 1, ts: T0, tab: 'a-rather-long-window-id-0123456789', snapshot: snapshot(T0) });
+    log.append(SESSION, batch(T0 + 10, 'x'));
+    log.append(SESSION, { k: 1, ts: T0 + 1_000, tab: 'b', snapshot: snapshot(T0 + 1_000) });
+    await log.segment(SESSION, T0, 'seek');
+
+    // A long id pushes `tab` further along the line; ts and the batch count
+    // are read from the same prefix and must survive that.
+    const fresh = reopen(dir);
+    const seg = await fresh.segment(SESSION, T0 + 1_000, 'seek');
+    assert.equal(seg.tab, 'b');
+    assert.deepEqual(seg.bounds, { start: T0, end: T0 + 1_000 });
+    assert.equal(seg.changes, 1, 'the op batch is still counted');
+  });
+});
+
 describe('ScreenLog', () => {
   test('bounds span the first and last record', async () => {
     const { log } = await newLog();

@@ -188,12 +188,12 @@ export class Relay {
     const id = entry.meta.sessionId;
     if (event.type === 'screen.snapshot') {
       // Key order matters: screen-log.ts recognises keyframe lines by their prefix.
-      this.store.screen.append(id, { k: 1, ts: event.ts, snapshot: event });
+      this.store.screen.append(id, { k: 1, ts: event.ts, tab: tabId, snapshot: event });
       this.screenState.set(id, { lastKeyframeAt: event.ts, opsSinceKeyframe: 0, awaitingKeyframe: false, tabId });
       return;
     }
     if (event.type === 'screen.cursor') {
-      if (event.visible) this.recordCursor(id, event);
+      if (event.visible) this.recordCursor(id, event, tabId);
       return;
     }
     if (event.type !== 'screen.mutations') return;
@@ -209,7 +209,7 @@ export class Relay {
       return;
     }
 
-    this.store.screen.append(id, { k: 0, ts: event.ts, ops: event.ops });
+    this.store.screen.append(id, { k: 0, ts: event.ts, tab: tabId, ops: event.ops });
     state.opsSinceKeyframe += event.ops.length;
     const due = event.ts - state.lastKeyframeAt >= KEYFRAME_MS || state.opsSinceKeyframe >= KEYFRAME_OPS;
     // Back to the window that produced these ops: a keyframe from any other
@@ -271,7 +271,7 @@ export class Relay {
   }
 
   /** Sample the pointer into the recording; see CURSOR_SAMPLE_MS for why. */
-  private recordCursor(sessionId: string, event: ScreenCursor): void {
+  private recordCursor(sessionId: string, event: ScreenCursor, tabId: string): void {
     const last = this.lastCursor.get(sessionId);
     const moved = !last || Math.abs(event.x - last.x) >= CURSOR_MIN_PX || Math.abs(event.y - last.y) >= CURSOR_MIN_PX;
     const pressChanged = !last || last.pressed !== event.pressed;
@@ -293,6 +293,7 @@ export class Relay {
     this.store.screen.append(sessionId, {
       k: 2,
       ts: event.ts,
+      tab: tabId,
       pointer: { x: event.x, y: event.y, pressed: event.pressed, ...(keepAnchor ? { anchor: event.anchor } : {}) },
     });
   }

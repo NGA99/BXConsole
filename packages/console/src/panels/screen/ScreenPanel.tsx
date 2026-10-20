@@ -33,7 +33,7 @@ const MODES: Array<{ id: ViewMode; label: string; title: string }> = [
   { id: 'fit', label: 'Fit', title: 'Remote viewport, scaled to fit' },
   { id: 'actual', label: '1:1', title: 'Remote viewport at actual size' },
 ];
-import { useCallback, useEffect, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type WheelEvent as ReactWheelEvent } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ClipboardEvent as ReactClipboardEvent, type KeyboardEvent as ReactKeyboardEvent, type MouseEvent as ReactMouseEvent, type WheelEvent as ReactWheelEvent } from 'react';
 import type { PointerSample, ScreenEvent, ScreenOp, ScreenSnapshot } from '@bxconsole/protocol';
 import { subscribeScreen, refreshScreen, sendScreenInput } from '../../transport/client';
 import { useActiveTab } from '../../state/active-tab';
@@ -204,6 +204,20 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
   // old one streaming and the new one answers with a fresh snapshot.
   const activeTab = useActiveTab(sessionId);
   const tabCount = useSessionsStore((s) => s.byId[sessionId]?.tabs?.length ?? 0);
+  const sessionTabs = useSessionsStore((s) => s.byId[sessionId]?.tabs) ?? [];
+  /*
+   * Which window the replay has landed on, named only when it is not the one
+   * the strip points at. Scrubbing a run of several windows walks through all
+   * of them — one streams at a time, so the recording is theirs in turn — and
+   * it used to do that without a word, leaving a different page on screen
+   * than the tab above it claimed.
+   */
+  const replayWindow = useMemo(() => {
+    if (!replay?.tab || replay.tab === activeTab) return null;
+    const i = sessionTabs.findIndex((t) => t.tabId === replay.tab);
+    if (i < 0) return null;
+    return `window ${i + 1}: ${sessionTabs[i]!.title || sessionTabs[i]!.url}`;
+  }, [replay?.tab, activeTab, sessionTabs]);
   // Subscribing before the strip has picked a window would mirror an arbitrary
   // one for a moment; with tabs known, wait the one tick until there is a pick.
   const waitingForTab = tabCount > 1 && !activeTab;
@@ -474,7 +488,7 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
         <span className={`screen-status ${status.state}`} title={status.snapshotAt ? `frame ${new Date(status.snapshotAt).toLocaleTimeString()}` : undefined}>
           <span className="dot" />
           {replay
-            ? `replay · ${new Date(replay.ts).toLocaleTimeString()}`
+            ? `replay · ${new Date(replay.ts).toLocaleTimeString()}${replayWindow ? ` · ${replayWindow}` : ''}`
             : !connected
               ? status.snapshotAt
                 ? 'offline · last frame'

@@ -39,6 +39,13 @@ interface Keyframe {
   offset: number;
   /** op batches recorded before this keyframe, so a seek knows its absolute position */
   before: number;
+  /**
+   * The window this keyframe came from. Only one window of a run streams at a
+   * time, so a keyframe naming a different window than the one before it is
+   * where the recording moves from one window to the next — which is all a
+   * reader needs to be told which window they are watching.
+   */
+  tab?: string;
 }
 
 interface Index {
@@ -80,7 +87,12 @@ export class ScreenLog {
     const bytes = Buffer.byteLength(line);
 
     void this.ensureIndex(sessionId).then((idx) => {
-      if (record.k === 1) idx.keyframes.push({ ts: record.ts, offset: idx.size, before: idx.batches });
+      // The window goes in here too, not only in the scan. A keyframe reaches
+      // the index by this path for the whole life of a live run, and by the
+      // scan only after a restart — so leaving it out here meant the window
+      // was known for recordings read from disk and unknown for the one being
+      // made, which is the one being watched.
+      if (record.k === 1) idx.keyframes.push({ ts: record.ts, offset: idx.size, before: idx.batches, ...(record.tab ? { tab: record.tab } : {}) });
       // A cursor sample is neither: it annotates the recording without being a
       // change to it, so it must not move the batch counter the scrubber reads.
       else if (record.k === 0) idx.batches++;
@@ -120,7 +132,9 @@ export class ScreenLog {
     const kf = keyframeAtOrBefore(idx.keyframes, mode === 'seek' ? ts : ts) ?? idx.keyframes[0]!;
     const until = (mode === 'seek' ? Math.max(ts, kf.ts) : ts) + SEGMENT_MS;
 
-    const out: ScreenSegment = { bounds, batches: [], done: false, changes: idx.batches, from: kf.before };
+    // Which window this part of the recording belongs to, so the viewer can
+    // say so rather than quietly showing a different one.
+    const out: ScreenSegment = { bounds, batches: [], done: false, changes: idx.batches, from: kf.before, ...(kf.tab ? { tab: kf.tab } : {}) };
     let bytes = 0;
     let reachedEnd = true;
     /** batches the caller does not already have; the window never cuts before the first one */
@@ -298,7 +312,7 @@ export class ScreenLog {
         if (head) {
           idx.firstTs ??= head.ts;
           idx.lastTs = head.ts;
-          if (head.keyframe) idx.keyframes.push({ ts: head.ts, offset: base + pos, before: idx.batches });
+          if (head.keyframe) idx.keyframes.push({ ts: head.ts, offset: base + pos, before: idx.batches, ...(head.tab ? { tab: head.tab } : {}) });
           else idx.batches++;
         }
         pos = nl + 1;
@@ -311,13 +325,19 @@ export class ScreenLog {
 }
 
 // Tolerant of whitespace: the relay writes these with JSON.stringify, but a
-// hand-written or pretty-printed fixture should still be readable.
-const HEAD_RE = /^\{\s*"k"\s*:\s*([01])\s*,\s*"ts"\s*:\s*(\d+)/;
+// hand-written or pretty-printed fixture should still be readable. `tab` is
+// optional because a recording made before windows were written down has none.
+const HEAD_RE = /^\{\s*"k"\s*:\s*([01])\s*,\s*"ts"\s*:\s*(\d+)\s*(?:,\s*"tab"\s*:\s*"([^"]*)")?/;
 
-/** `{"k":1,"ts":123…` -> kind + time, read from the first bytes of a line. */
-function parseHead(buf: Buffer, pos: number): { keyframe: boolean; ts: number } | null {
-  const m = HEAD_RE.exec(buf.subarray(pos, pos + 40).toString('latin1'));
-  return m ? { keyframe: m[1] === '1', ts: Number(m[2]) } : null;
+/**
+ * `{"k":1,"ts":123,"tab":"abc"…` -> kind, time and window, from a line's first
+ * bytes. Wide enough to reach past a millisecond stamp and a window id, so a
+ * keyframe holding a whole document is still never parsed just to be indexed.
+ */
+function parseHead(buf: Buffer, pos: number): { keyframe: boolean; ts: number; tab?: string } | null {
+  const m = HEAD_RE.exec(buf.subarray(pos, pos + 96).toString('latin1'));
+  if (!m) return null;
+  return { keyframe: m[1] === '1', ts: Number(m[2]), ...(m[3] ? { tab: m[3] } : {}) };
 }
 
 function keyframeAtOrBefore(keyframes: Keyframe[], ts: number): Keyframe | null {
