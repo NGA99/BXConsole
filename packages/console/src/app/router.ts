@@ -5,6 +5,8 @@
  *   #/webhook                                the same page, showing what a page managed to send us
  *   #/trash                                  the same page, showing the trash
  *   #/agent                                  the same page, showing the agent: options, snippets, source
+ *   #/projects                               the same page, managing this account's projects
+ *   #/admin                                  the same page, managing accounts and who owns what
  *   #/sessions/session-{id}/elements         a session, Elements tab active on the right
  *   #/sessions/session-{id}/console          a session, Console tab active on the right
  *   #/sessions/session-{id}/network          a session, Network tab active on the right
@@ -20,12 +22,17 @@ import { useEffect, useState } from 'react';
 export type PanelId = 'sessions' | 'elements' | 'console' | 'sources' | 'network' | 'history';
 
 /**
- * The four faces of the sessions page, in the order they are shown. They are
+ * The faces of the sessions page, in the order they are shown. They are
  * routes rather than local state so each can be linked to, reloaded into, and
  * reached with the back button — the Webhook view in particular is something
  * you leave open, paste from, and come back to.
+ *
+ * `admin` is drawn only for an administrator, but it is a route like the rest:
+ * hiding the tab is what the console does with it, and refusing what it asks
+ * for is what the relay does. Reaching it by typing the address shows an
+ * empty screen rather than somebody else's accounts.
  */
-export const SESSION_VIEWS = ['sessions', 'webhook', 'trash', 'agent'] as const;
+export const SESSION_VIEWS = ['sessions', 'webhook', 'trash', 'agent', 'projects', 'admin'] as const;
 export type SessionView = (typeof SESSION_VIEWS)[number];
 
 /** What those views used to be called, so a link made earlier still lands. */

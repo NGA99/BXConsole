@@ -1,0 +1,165 @@
+/*
+ * The projects list.
+ *
+ * Each project is a card rather than a table row: a key, a count, a rename
+ * box and two confirmations do not fit in columns, and the things here are
+ * consequential enough to deserve the room.
+ */
+.projects {
+  overflow: auto;
+  padding: 10px 12px 16px;
+  flex: 1;
+  min-height: 0;
+}
+.projects-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 8px;
+}
+.projects-title {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sys-color-on-surface);
+}
+.projects-sub,
+.projects-empty,
+.project-note {
+  font-size: 11px;
+  color: var(--sys-color-token-subtle);
+}
+.projects-empty {
+  padding: 10px 0;
+}
+
+.projects-new {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-bottom: 10px;
+}
+.projects-new input {
+  width: 240px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--sys-color-on-surface);
+  background: var(--sys-color-cdt-base-container);
+  border: 1px solid var(--sys-color-neutral-outline);
+  border-radius: 2px;
+  padding: 2px 4px;
+}
+
+.project {
+  border: 1px solid var(--sys-color-divider);
+  border-radius: 3px;
+  padding: 7px 9px;
+  margin-bottom: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+/* The one being looked at, marked on the edge rather than by colouring the
+   whole card: it is where you are, not a warning. */
+.project.selected {
+  border-left: 3px solid var(--sys-color-primary);
+  padding-left: 7px;
+}
+.project.trashed {
+  opacity: 0.72;
+}
+
+.project-top {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+.project-name {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sys-color-on-surface);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 2px;
+  padding: 1px 3px;
+  min-width: 120px;
+}
+.project-name:hover,
+.project-name:focus {
+  border-color: var(--sys-color-neutral-outline);
+  background: var(--sys-color-cdt-base-container);
+}
+.project-name.readonly {
+  padding: 2px 4px;
+}
+.project-spacer {
+  flex: 1;
+}
+.project-count {
+  font-size: 11px;
+  color: var(--sys-color-token-subtle);
+  white-space: nowrap;
+}
+.project-tag {
+  border: 1px solid var(--sys-color-neutral-outline);
+  border-radius: 7px;
+  padding: 0 6px;
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--sys-color-token-subtle);
+  white-space: nowrap;
+}
+.project-tag.bad {
+  color: var(--sys-color-error);
+  border-color: var(--sys-color-error);
+}
+
+.project-key {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+}
+.project-key-label {
+  color: var(--sys-color-token-subtle);
+}
+.project-key code {
+  font-size: 11px;
+  color: var(--sys-color-on-surface);
+  background: var(--sys-color-surface2);
+  border-radius: 2px;
+  padding: 1px 4px;
+  user-select: all;
+}
+
+.project-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.detail-link.bad {
+  color: var(--sys-color-error);
+}
+
+/* The confirmation, which has to read as a stop rather than a prompt. */
+.project-confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--sys-color-error);
+  border: 1px solid var(--sys-color-error);
+  border-radius: 2px;
+  padding: 5px 7px;
+}
+.project-confirm input {
+  font: inherit;
+  font-size: 11px;
+  color: var(--sys-color-on-surface);
+  background: var(--sys-color-cdt-base-container);
+  border: 1px solid var(--sys-color-neutral-outline);
+  border-radius: 2px;
+  padding: 1px 4px;
+  width: 160px;
+}

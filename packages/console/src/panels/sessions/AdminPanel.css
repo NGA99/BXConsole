@@ -1,0 +1,143 @@
+/*
+ * The administrator's screen: two tables, deliberately plain.
+ *
+ * Nothing here is something to do often — somebody joins, somebody leaves, a
+ * project changes hands — so it is laid out to be read carefully rather than
+ * operated quickly.
+ */
+.admin {
+  overflow: auto;
+  padding: 10px 12px 20px;
+  flex: 1;
+  min-height: 0;
+}
+.admin-section {
+  padding-bottom: 18px;
+}
+.admin-section h2 {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--sys-color-on-surface);
+  margin: 0 0 2px;
+}
+.admin-sub,
+.admin-empty {
+  font-size: 11px;
+  color: var(--sys-color-token-subtle);
+  margin: 0 0 8px;
+  max-width: 68ch;
+}
+.admin-empty {
+  padding: 6px 0;
+}
+
+/* Loud, because it is the one place the relay explains a refusal. */
+.admin-error {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 11px;
+  color: var(--sys-color-error);
+  border: 1px solid var(--sys-color-error);
+  border-radius: 2px;
+  padding: 5px 8px;
+  margin-bottom: 12px;
+}
+
+.admin-table {
+  border-collapse: collapse;
+  font-size: 11px;
+  width: 100%;
+  max-width: 760px;
+}
+.admin-table th {
+  text-align: left;
+  font-weight: 400;
+  color: var(--sys-color-token-subtle);
+  border-bottom: 1px solid var(--sys-color-divider);
+  padding: 3px 8px 3px 0;
+}
+.admin-table td {
+  color: var(--sys-color-on-surface);
+  border-bottom: 1px solid var(--sys-color-divider);
+  padding: 3px 8px 3px 0;
+  vertical-align: middle;
+}
+.admin-table select {
+  font: inherit;
+  font-size: 11px;
+  color: var(--sys-color-on-surface);
+  background: var(--sys-color-cdt-base-container);
+  border: 1px solid var(--sys-color-neutral-outline);
+  border-radius: 2px;
+  padding: 1px 2px;
+}
+.admin-id {
+  color: var(--sys-color-token-subtle);
+}
+.admin-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  white-space: nowrap;
+}
+
+/* A project whose owner is not an account any more: nobody can read it, and
+   nothing else on the screen would say so. */
+.admin-orphan td {
+  background: color-mix(in srgb, var(--sys-color-error) 8%, transparent);
+}
+
+.admin-tag {
+  border: 1px solid var(--sys-color-neutral-outline);
+  border-radius: 7px;
+  padding: 0 5px;
+  margin-left: 6px;
+  font-size: 10px;
+  line-height: 13px;
+  color: var(--sys-color-token-subtle);
+}
+.admin-tag.bad {
+  color: var(--sys-color-error);
+  border-color: var(--sys-color-error);
+}
+
+.admin-add,
+.admin-reset {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-top: 8px;
+}
+.admin-reset {
+  padding: 5px 0;
+}
+.admin-add input,
+.admin-reset input {
+  font: inherit;
+  font-size: 11px;
+  color: var(--sys-color-on-surface);
+  background: var(--sys-color-cdt-base-container);
+  border: 1px solid var(--sys-color-neutral-outline);
+  border-radius: 2px;
+  padding: 2px 4px;
+}
+.admin-add input:first-child {
+  width: 140px;
+}
+.admin-add input:nth-child(2) {
+  width: 220px;
+}
+.admin-reset input {
+  width: 320px;
+}
+.admin-add select {
+  font: inherit;
+  font-size: 11px;
+  color: var(--sys-color-on-surface);
+  background: var(--sys-color-cdt-base-container);
+  border: 1px solid var(--sys-color-neutral-outline);
+  border-radius: 2px;
+  padding: 1px 2px;
+}

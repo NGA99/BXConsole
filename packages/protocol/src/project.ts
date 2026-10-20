@@ -50,6 +50,45 @@ export const AGENT_KEY_BYTES = 16;
 /** Longer than this is a paragraph, not a name. */
 export const PROJECT_NAME_MAX = 80;
 
+/**
+ * The shortest password either way in. Named here because there are two ways
+ * in now — the CLI and the admin screen — and a screen that accepted eight
+ * characters while the CLI demanded twelve would be a rule nobody could read.
+ */
+export const PASSWORD_MIN_LENGTH = 8;
+
+/** What the console is told about an account. Never the credential. */
+export interface AccountSummary {
+  readonly id: string;
+  readonly user: string;
+  readonly role: AccountRole;
+}
+
+/**
+ * Named for what it is a role of, because `Role` is already taken in this
+ * package by which end of a socket something is.
+ */
+export type AccountRole = 'admin' | 'member';
+
+/**
+ * A project as an administrator sees it, which is not as its owner does.
+ *
+ * Deliberately without the agent key. Reassigning a project is an
+ * administrator's job and reading it is not — see mayRead — and the key is a
+ * write capability for whatever engagement it belongs to: handing it over
+ * would make "list the projects" a way to start recording into any of them.
+ */
+export interface ProjectSummary {
+  readonly id: string;
+  readonly name: string;
+  readonly owner: string;
+  readonly sharedWith: readonly string[];
+  readonly createdAt: number;
+  readonly trashedAt?: number;
+  /** How many recordings are in it, so deleting one says what it costs. */
+  readonly sessions: number;
+}
+
 export interface Project {
   readonly id: string;
   name: string;

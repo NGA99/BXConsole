@@ -707,6 +707,10 @@ keylessLanding = ((): string | null => {
 })();
 relay.useProjects(projects);
 relay.useAccountIds(() => auth.accountIds());
+relay.useAccounts({
+  summaries: () => auth.summaries(),
+  change: (change) => auth.changeAccounts(change),
+});
 relay.useKeylessLanding(() => keylessLanding);
 
 relay.startRetention(RETENTION_DAYS);

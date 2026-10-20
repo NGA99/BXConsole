@@ -1,6 +1,6 @@
 import type { ObjectId, PropertyPreview, SerializedValue } from './values';
 import type { SessionHello, SessionMeta } from './session';
-import type { Project } from './project';
+import type { AccountRole, AccountSummary, Project, ProjectSummary } from './project';
 import type { ScreenEvent, ScreenInput, ScreenSegment } from './screen';
 import type { ElementStyles } from './dom';
 import type { AssetData, KeptFile, SourceEntry, SourceText } from './sources';
@@ -349,6 +349,19 @@ export type ConsoleToServer =
    * have been, is a key to stop honouring.
    */
   | { type: 'project.rotateKey'; projectId: string }
+  /** An administrator's list of accounts and projects; refused for anyone else. */
+  | { type: 'admin.list' }
+  | { type: 'account.create'; user: string; password: string; role: AccountRole }
+  | { type: 'account.remove'; user: string }
+  | { type: 'account.setRole'; user: string; role: AccountRole }
+  /**
+   * Set somebody's password, which is also how one is reset.
+   *
+   * It ends every cookie issued under the old one, because the cookie is
+   * keyed on the stored line — so this is the way to lock an account out
+   * without removing it and leaving its projects ownerless.
+   */
+  | { type: 'account.setPassword'; user: string; password: string }
   | { type: 'session.subscribe'; sessionId: string; replay: boolean }
   | { type: 'session.unsubscribe'; sessionId: string }
   /** move to the trash: keeps the recording, hides it from the main list */
@@ -415,9 +428,37 @@ export type ServerToConsole =
    * sessions are grouped by it: arriving second would mean a list that has to
    * be regrouped the moment it is drawn.
    */
+  /**
+   * Who this console is signed in as.
+   *
+   * Sent at attach, before anything else. The console had no way to know: it
+   * decides what to show from the account — an administrator's screen only
+   * an administrator sees — and the alternative is drawing it for everyone
+   * and letting the relay refuse what it does not allow, which teaches
+   * people that half the buttons do nothing.
+   */
+  | { type: 'console.whoami'; account: AccountSummary }
   | { type: 'projects.snapshot'; projects: Project[]; homeProjectId: string }
   | { type: 'project.updated'; project: Project }
   | { type: 'project.removed'; projectId: string }
+  /**
+   * Every account, and every project with its owner — an administrator's view.
+   *
+   * The projects come without their agent keys, because a key writes into the
+   * engagement it belongs to and listing them is not reading them. See
+   * ProjectSummary.
+   */
+  | { type: 'admin.snapshot'; accounts: AccountSummary[]; projects: ProjectSummary[] }
+  /**
+   * An administrator's action could not be done, and why.
+   *
+   * These say what went wrong where the rest of this protocol stays silent.
+   * Everywhere else a refusal is about a session or project the asker may not
+   * see, and naming it would confirm it exists; here the asker is an
+   * administrator acting on things they are shown, so "that name is taken"
+   * is the answer rather than a leak.
+   */
+  | { type: 'admin.error'; message: string }
   | { type: 'session.event'; sessionId: string; seq: number; event: AgentEvent; tabId?: string }
   | { type: 'session.reply'; sessionId: string; reply: AgentReply; tabId?: string }
   | { type: 'session.history'; sessionId: string; events: SequencedEvent[]; done: boolean }

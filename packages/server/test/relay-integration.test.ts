@@ -15,7 +15,8 @@ import os from 'node:os';
 import path from 'node:path';
 import type { WebSocket } from 'ws';
 import { SESSION_FILES, sessionDirName, PROTOCOL_VERSION } from '@bxconsole/protocol';
-import type { ConsoleToServer, Project, SessionMeta } from '@bxconsole/protocol';
+import type { AccountSummary, ConsoleToServer, Project, ProjectSummary, SessionMeta } from '@bxconsole/protocol';
+import type { AccountChange } from '../src/auth';
 import type { Account } from '../src/passwd';
 import { SessionStore } from '../src/store';
 import { SessionRegistry } from '../src/registry';
@@ -881,5 +882,185 @@ describe('which project a payload’s run lands in', () => {
     await sayHello(relay, { sessionId: 'turnedAway' });
     assert.deepEqual(await linesOf('turnedAway', 'console'), []);
     await assert.rejects(() => fs.stat(path.join(dir, sessionDirName('turnedAway'))));
+  });
+});
+
+describe('the administrator’s screen over the socket', () => {
+  const ana: Account = { user: 'ana', record: 'x', id: 'a1a1a1', role: 'member' };
+  const bo: Account = { user: 'bo', record: 'x', id: 'b2b2b2', role: 'member' };
+  const root: Account = { user: 'root', record: 'x', id: 'c3c3c3', role: 'admin' };
+
+  /** An account list that records what it was asked to do, and can refuse. */
+  function fakeAccounts(refuseWith: string | null = null) {
+    const asked: AccountChange[] = [];
+    const people = [ana, bo, root];
+    return {
+      asked,
+      summaries: () => people.map((a) => ({ id: a.id, user: a.user, role: a.role })),
+      change: async (change: AccountChange) => {
+        asked.push(change);
+        return refuseWith;
+      },
+    };
+  }
+
+  async function withAdmin(refuseWith: string | null = null) {
+    const store = new SessionStore(dir);
+    const registry = new SessionRegistry(store);
+    const relay = new Relay(registry, store);
+    relay.useBlobs(new BlobStore(dir, Number.POSITIVE_INFINITY));
+    const projects = new ProjectStore(dir);
+    await projects.load();
+    const hers = await projects.create('Ana’s', ana.id);
+    relay.useProjects(projects);
+    relay.useAccountIds(() => new Set([ana.id, bo.id, root.id]));
+    const accounts = fakeAccounts(refuseWith);
+    relay.useAccounts(accounts);
+    relay.useKeylessLanding(() => projects.homeId());
+    await join(relay);
+    return { relay, projects, accounts, hers };
+  }
+
+  function console_(relay: Relay, actor: Account): FakeSocket {
+    const ws = new FakeSocket();
+    relay.attachConsole(ws as unknown as WebSocket, actor);
+    return ws;
+  }
+
+  test('a console is told who it is, before anything it has to draw from that', async () => {
+    const { relay } = await withAdmin();
+    const ws = console_(relay, root);
+    const types = ws.sent.map((m) => m['type']);
+    assert.equal(types[0], 'console.whoami', types.join(', '));
+    assert.deepEqual(ws.received('console.whoami')[0]!['account'], { id: root.id, user: 'root', role: 'admin' });
+  });
+
+  test('a member asking for the list is answered with nothing at all', async () => {
+    const { relay } = await withAdmin();
+    const ws = console_(relay, ana);
+    const before = ws.sent.length;
+    await ws.deliver({ type: 'admin.list' } satisfies ConsoleToServer);
+    await settle();
+    assert.equal(ws.sent.length, before, `answered with ${JSON.stringify(ws.sent.slice(before))}`);
+  });
+
+  test('a member’s account changes are dropped, not attempted', async () => {
+    const { relay, accounts } = await withAdmin();
+    const ws = console_(relay, ana);
+    for (const msg of [
+      { type: 'account.create', user: 'mine', password: 'long enough', role: 'admin' },
+      { type: 'account.remove', user: 'root' },
+      { type: 'account.setRole', user: 'ana', role: 'admin' },
+      { type: 'account.setPassword', user: 'root', password: 'long enough' },
+    ] satisfies ConsoleToServer[]) {
+      await ws.deliver(msg);
+    }
+    await settle();
+    assert.deepEqual(accounts.asked, [], 'a member reached the account file');
+  });
+
+  test('an administrator gets the accounts and every project, without the keys', async () => {
+    const { relay, hers } = await withAdmin();
+    const ws = console_(relay, root);
+    await ws.deliver({ type: 'admin.list' } satisfies ConsoleToServer);
+    await until(() => ws.received('admin.snapshot')[0], 'the admin snapshot');
+
+    const snap = ws.received('admin.snapshot').at(-1)!;
+    assert.deepEqual((snap['accounts'] as AccountSummary[]).map((a) => a.user).sort(), ['ana', 'bo', 'root']);
+    const projects = snap['projects'] as ProjectSummary[];
+    assert.deepEqual(projects.map((p) => p.id), [hers.id]);
+    // The run that said hello landed in the home project, which is this one.
+    assert.equal(projects[0]!.sessions, 1);
+    // A key records into the engagement it belongs to; listing is not reading.
+    assert.ok(!JSON.stringify(snap).includes('agentKey'));
+  });
+
+  test('an administrator sees a project they cannot read, and only as a summary', async () => {
+    const { relay, projects } = await withAdmin();
+    const his = await projects.create('Bo’s', bo.id);
+    const ws = console_(relay, root);
+    await ws.deliver({ type: 'admin.list' } satisfies ConsoleToServer);
+    await until(() => ws.received('admin.snapshot')[0], 'the admin snapshot');
+
+    const listed = ws.received('admin.snapshot').at(-1)!['projects'] as ProjectSummary[];
+    assert.ok(listed.some((p) => p.id === his.id), 'an administrator must be able to reassign it');
+    // But not read it: the ordinary project list is still only theirs.
+    const mine = ws.received('projects.snapshot')[0]!['projects'] as Project[];
+    assert.deepEqual(mine, [], 'an administrator was given a project to read');
+  });
+
+  test('a change is pushed to every administrator with the screen open, and to no one else', async () => {
+    const { relay, accounts } = await withAdmin();
+    const root2: Account = { user: 'root2', record: 'x', id: 'd4d4d4', role: 'admin' };
+    const watching = console_(relay, root);
+    const alsoWatching = console_(relay, root2);
+    const notWatching = console_(relay, root2);
+    const member = console_(relay, ana);
+    await watching.deliver({ type: 'admin.list' } satisfies ConsoleToServer);
+    await alsoWatching.deliver({ type: 'admin.list' } satisfies ConsoleToServer);
+    const before = { a: watching.received('admin.snapshot').length, b: alsoWatching.received('admin.snapshot').length };
+
+    await watching.deliver({ type: 'account.create', user: 'new', password: 'long enough', role: 'member' } satisfies ConsoleToServer);
+    await until(() => watching.received('admin.snapshot').length > before.a, 'the asker to be told');
+
+    assert.ok(alsoWatching.received('admin.snapshot').length > before.b, 'the other open screen was left stale');
+    assert.equal(notWatching.received('admin.snapshot').length, 0, 'a console that never opened it was sent one');
+    assert.equal(member.received('admin.snapshot').length, 0);
+    assert.deepEqual(accounts.asked, [{ op: 'create', user: 'new', password: 'long enough', role: 'member' }]);
+  });
+
+  test('a refusal is said out loud, because this is the screen where that helps', async () => {
+    const { relay } = await withAdmin('There is already an account called "bo".');
+    const ws = console_(relay, root);
+    await ws.deliver({ type: 'admin.list' } satisfies ConsoleToServer);
+    const before = ws.received('admin.snapshot').length;
+    await ws.deliver({ type: 'account.create', user: 'bo', password: 'long enough', role: 'member' } satisfies ConsoleToServer);
+    await until(() => ws.received('admin.error')[0], 'the reason');
+
+    assert.match(String(ws.received('admin.error')[0]!['message']), /already an account/);
+    assert.equal(ws.received('admin.snapshot').length, before, 'a refusal must not look like a change');
+  });
+
+  test('a transfer updates the screen that made it', async () => {
+    /*
+     * The screen's whole purpose, and it used to be the one thing that did
+     * not refresh: the owner changed on disk and the table went on naming
+     * the old one until it was reopened.
+     */
+    const { relay, hers } = await withAdmin();
+    const ws = console_(relay, root);
+    await ws.deliver({ type: 'admin.list' } satisfies ConsoleToServer);
+    await until(() => ws.received('admin.snapshot')[0], 'the admin snapshot');
+
+    await ws.deliver({ type: 'project.transfer', projectId: hers.id, toAccountId: bo.id } satisfies ConsoleToServer);
+    await until(() => {
+      const listed = ws.received('admin.snapshot').at(-1)!['projects'] as ProjectSummary[];
+      return listed.find((p) => p.id === hers.id)?.owner === bo.id;
+    }, 'the table to show the new owner');
+  });
+
+  test('a project renamed by its owner reaches the administrator’s table too', async () => {
+    const { relay, hers } = await withAdmin();
+    const admin = console_(relay, root);
+    const owner = console_(relay, ana);
+    await admin.deliver({ type: 'admin.list' } satisfies ConsoleToServer);
+    await until(() => admin.received('admin.snapshot')[0], 'the admin snapshot');
+
+    await owner.deliver({ type: 'project.rename', projectId: hers.id, name: 'Renamed' } satisfies ConsoleToServer);
+    await until(() => {
+      const listed = admin.received('admin.snapshot').at(-1)!['projects'] as ProjectSummary[];
+      return listed.find((p) => p.id === hers.id)?.name === 'Renamed';
+    }, 'the table to show the new name');
+  });
+
+  test('a console that goes away stops being pushed to', async () => {
+    const { relay } = await withAdmin();
+    const ws = console_(relay, root);
+    await ws.deliver({ type: 'admin.list' } satisfies ConsoleToServer);
+    ws.close();
+    const other = console_(relay, root);
+    await other.deliver({ type: 'account.create', user: 'new', password: 'long enough', role: 'member' } satisfies ConsoleToServer);
+    await settle();
+    assert.equal(ws.received('admin.snapshot').length, 1, 'a closed console was written to');
   });
 });

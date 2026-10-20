@@ -3,10 +3,12 @@
  * dispatched straight into the zustand stores; outgoing requests get ids so
  * replies can be matched to the pending promise.
  */
-import type { ConsoleToServer, ServerToConsole, AgentReply, SerializedValue, PropertyPreview, ScreenEvent, ScreenInput, ScreenSegment, ElementStyles, SourceEntry, SourceText, ProbeArrival } from '@bxconsole/protocol';
+import type { ConsoleToServer, ServerToConsole, AgentReply, SerializedValue, PropertyPreview, ScreenEvent, ScreenInput, ScreenSegment, ElementStyles, SourceEntry, SourceText, ProbeArrival, AccountRole } from '@bxconsole/protocol';
 import { WS_PATH } from '@bxconsole/protocol';
 import { useSessionsStore } from '../state/sessions';
 import { useProjectsStore } from '../state/projects';
+import { useWhoamiStore } from '../state/whoami';
+import { useAdminStore } from '../state/admin';
 import { activeTabOf } from '../state/active-tab';
 import { dropDomModel } from '../state/dom-model';
 import { sessionData, dropSessionData } from '../state/session-data';
@@ -63,6 +65,10 @@ export function connect(): void {
   ws.addEventListener('close', () => {
     ws = null;
     useSessionsStore.getState().setConnection(false);
+    // The next socket says who it is again. Holding the old answer would
+    // keep an administrator's screen drawn for a console that may come back
+    // signed in as somebody else.
+    useWhoamiStore.getState().clear();
     const delay = Math.min(10000, 500 * 2 ** attempt++);
     setTimeout(connect, delay);
   });
@@ -138,6 +144,60 @@ export function trashSession(sessionId: string): void {
 
 export function restoreSession(sessionId: string): void {
   send({ type: 'session.restore', sessionId });
+}
+
+// ----------------------------------------------------------------- projects
+
+export function createProject(name: string): void {
+  send({ type: 'project.create', name });
+}
+
+export function renameProject(projectId: string, name: string): void {
+  send({ type: 'project.rename', projectId, name });
+}
+
+export function trashProject(projectId: string): void {
+  send({ type: 'project.trash', projectId });
+}
+
+export function restoreProject(projectId: string): void {
+  send({ type: 'project.restore', projectId });
+}
+
+/** Deletes the project and every recording in it. There is no undo. */
+export function forgetProject(projectId: string): void {
+  send({ type: 'project.forget', projectId });
+}
+
+/** Every payload carrying the old key stops arriving. */
+export function rotateProjectKey(projectId: string): void {
+  send({ type: 'project.rotateKey', projectId });
+}
+
+// ------------------------------------------------------------------- admin
+
+export function listAdmin(): void {
+  send({ type: 'admin.list' });
+}
+
+export function createAccount(user: string, password: string, role: AccountRole): void {
+  send({ type: 'account.create', user, password, role });
+}
+
+export function removeAccount(user: string): void {
+  send({ type: 'account.remove', user });
+}
+
+export function setAccountRole(user: string, role: AccountRole): void {
+  send({ type: 'account.setRole', user, role });
+}
+
+export function setAccountPassword(user: string, password: string): void {
+  send({ type: 'account.setPassword', user, password });
+}
+
+export function transferProject(projectId: string, toAccountId: string): void {
+  send({ type: 'project.transfer', projectId, toAccountId });
 }
 
 // Screen events bypass the stores: they are large and frequent, and only the
@@ -396,8 +456,17 @@ function dispatch(msg: ServerToConsole): void {
     case 'sessions.snapshot':
       sessions.setAll(msg.sessions);
       return;
+    case 'console.whoami':
+      useWhoamiStore.getState().set(msg.account);
+      return;
     case 'projects.snapshot':
       useProjectsStore.getState().setAll(msg.projects, msg.homeProjectId);
+      return;
+    case 'admin.snapshot':
+      useAdminStore.getState().set(msg.accounts, msg.projects);
+      return;
+    case 'admin.error':
+      useAdminStore.getState().fail(msg.message);
       return;
     case 'project.updated':
       useProjectsStore.getState().upsert(msg.project);

@@ -10,6 +10,7 @@ import path from 'node:path';
 import { createInterface, type Interface } from 'node:readline';
 import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { PASSWORD_MIN_LENGTH } from '@bxconsole/protocol';
 import { type Account, PasswordFile, hashPassword, newAccountId, writeAccounts } from './passwd';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
@@ -17,7 +18,6 @@ const repoRoot = path.resolve(here, '..', '..', '..');
 const file = process.env.PASSWD_FILE ?? path.join(repoRoot, '.passwd');
 
 /** The minimum that makes the scrypt cost worth anything. */
-const MIN_LENGTH = 8;
 
 /**
  * Reading the answers, as one paused line iterator.
@@ -151,7 +151,7 @@ async function main(): Promise<void> {
   const already = mine !== undefined;
 
   const password = await ask(`New password for "${user}": `);
-  if (password.length < MIN_LENGTH) fail(`Too short — use at least ${MIN_LENGTH} characters.`);
+  if (password.length < PASSWORD_MIN_LENGTH) fail(`Too short — use at least ${PASSWORD_MIN_LENGTH} characters.`);
   if (password !== (await ask('Again: '))) fail('They do not match.');
 
   const account: Account = {

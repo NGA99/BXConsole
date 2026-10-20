@@ -352,3 +352,133 @@ describe('accounts from .passwd', () => {
     for (const f of made) rmSync(path.dirname(f), { recursive: true, force: true });
   });
 });
+
+/**
+ * Changing the account list from the console.
+ *
+ * The same rules the CLI has, because they are the same file — and the one
+ * that matters most is the refusal to remove the last administrator, since
+ * doing it from the admin screen locks everybody out of the admin screen.
+ *
+ * All of it writes `.passwd` and lets the relay's own re-read pick it up, so
+ * nothing here restarts anything. That is not a nicety: a restart drops every
+ * agent socket, and the runs those pages are producing cannot be started
+ * again.
+ */
+describe('editing accounts', () => {
+  const made: string[] = [];
+  const keep = (f: string) => (made.push(f), f);
+
+  /** An auth over a file holding these accounts, loaded. */
+  async function withAccounts(rows: readonly (readonly [string, string, string, 'admin' | 'member'])[]) {
+    const file = keep(await passwdWithAll(rows));
+    const a = new ConsoleAuth({ file });
+    a.load();
+    return { auth: a, file };
+  }
+
+  const names = (a: ConsoleAuth) => a.summaries().map((s) => s.user);
+
+  test('an account is added and can sign in at once, with no restart', async () => {
+    const { auth: a } = await withAccounts([['ana', 'pw for ana', 'a1a1a1', 'admin']]);
+    assert.equal(await a.changeAccounts({ op: 'create', user: 'bo', password: 'pw for bo', role: 'member' }), null);
+    assert.deepEqual(names(a), ['ana', 'bo']);
+    assert.ok(await a.cookieFor('pw for bo', 'bo'), 'the new account cannot sign in');
+    assert.equal(a.summaries().find((s) => s.user === 'bo')?.role, 'member');
+  });
+
+  test('the list the console is shown is the one on disk, not the one from a second ago', async () => {
+    /*
+     * The file is re-read at most once a second, so the list straight after a
+     * write was the list from before it — the account was added, the file was
+     * right, and the screen showed no change. The write reloads past the
+     * throttle for exactly this.
+     */
+    const { auth: a } = await withAccounts([['ana', 'pw for ana', 'a1a1a1', 'admin']]);
+    await a.changeAccounts({ op: 'create', user: 'bo', password: 'pw for bo', role: 'member' });
+    assert.deepEqual(names(a), ['ana', 'bo'], 'the console would have been sent the old list');
+  });
+
+  test('a name that is taken, a name that is not usable, a password that is too short', async () => {
+    const { auth: a } = await withAccounts([['ana', 'pw for ana', 'a1a1a1', 'admin']]);
+    assert.match((await a.changeAccounts({ op: 'create', user: 'ana', password: 'another one', role: 'member' })) ?? '', /already an account/);
+    assert.match((await a.changeAccounts({ op: 'create', user: 'a b', password: 'long enough', role: 'member' })) ?? '', /not a usable account name/);
+    assert.match((await a.changeAccounts({ op: 'create', user: 'bo', password: 'short', role: 'member' })) ?? '', /at least 8/);
+    assert.deepEqual(names(a), ['ana'], 'a refusal must not have written anything');
+  });
+
+  test('removing the last administrator is refused, from here as from the CLI', async () => {
+    const { auth: a } = await withAccounts([
+      ['ana', 'pw for ana', 'a1a1a1', 'admin'],
+      ['bo', 'pw for bo', 'b2b2b2', 'member'],
+    ]);
+    assert.match((await a.changeAccounts({ op: 'remove', user: 'ana' })) ?? '', /last administrator/);
+    assert.deepEqual(names(a), ['ana', 'bo']);
+
+    // And the same for demoting one, which leaves none just as surely.
+    assert.match((await a.changeAccounts({ op: 'setRole', user: 'ana', role: 'member' })) ?? '', /last administrator/);
+    assert.equal(a.summaries().find((s) => s.user === 'ana')?.role, 'admin');
+  });
+
+  test('with another administrator both go through', async () => {
+    const { auth: a } = await withAccounts([
+      ['ana', 'pw for ana', 'a1a1a1', 'admin'],
+      ['bo', 'pw for bo', 'b2b2b2', 'member'],
+    ]);
+    assert.equal(await a.changeAccounts({ op: 'setRole', user: 'bo', role: 'admin' }), null);
+    assert.equal(await a.changeAccounts({ op: 'remove', user: 'ana' }), null);
+    assert.deepEqual(names(a), ['bo']);
+  });
+
+  test('removing an account leaves its id behind, which is what a transfer is for', async () => {
+    const { auth: a } = await withAccounts([
+      ['ana', 'pw for ana', 'a1a1a1', 'admin'],
+      ['bo', 'pw for bo', 'b2b2b2', 'member'],
+    ]);
+    await a.changeAccounts({ op: 'remove', user: 'bo' });
+    assert.ok(!a.accountIds().has('b2b2b2'), 'a project owned by bo now names an id with no account');
+  });
+
+  test('a password set from here keeps the id, so the projects stay owned', async () => {
+    const { auth: a } = await withAccounts([
+      ['ana', 'pw for ana', 'a1a1a1', 'admin'],
+      ['bo', 'pw for bo', 'b2b2b2', 'member'],
+    ]);
+    const before = await signedInWith(a, 'pw for bo', 'bo');
+    assert.equal(await a.changeAccounts({ op: 'setPassword', user: 'bo', password: 'reset by ana' }), null);
+
+    assert.equal(a.summaries().find((s) => s.user === 'bo')?.id, 'b2b2b2', 'the id moved and took the projects with it');
+    assert.equal(a.allows(before), false, 'the old cookie still worked');
+    assert.ok(await a.cookieFor('reset by ana', 'bo'));
+    assert.equal(await a.cookieFor('pw for ana', 'ana') !== null, true, 'ana was signed out too');
+  });
+
+  test('an account that is not there is said so, whichever thing was asked', async () => {
+    const { auth: a } = await withAccounts([['ana', 'pw for ana', 'a1a1a1', 'admin']]);
+    for (const change of [
+      { op: 'remove' as const, user: 'nobody' },
+      { op: 'setRole' as const, user: 'nobody', role: 'admin' as const },
+      { op: 'setPassword' as const, user: 'nobody', password: 'long enough' },
+    ]) {
+      assert.match((await a.changeAccounts(change)) ?? '', /no account called/, change.op);
+    }
+  });
+
+  test('a relay with no file says so rather than pretending to write one', async () => {
+    // CONSOLE_PASSWORD gives one synthetic account and nowhere to put a
+    // second; an admin screen whose every button failed would be worse.
+    const a = new ConsoleAuth({ password: 'from the environment' });
+    assert.equal(a.canEditAccounts, false);
+    assert.match((await a.changeAccounts({ op: 'create', user: 'bo', password: 'long enough', role: 'member' })) ?? '', /npm run passwd/);
+  });
+
+  test('what the console is shown never contains a credential', async () => {
+    const { auth: a } = await withAccounts([['ana', 'pw for ana', 'a1a1a1', 'admin']]);
+    assert.deepEqual(a.summaries(), [{ id: 'a1a1a1', user: 'ana', role: 'admin' }]);
+    assert.ok(!JSON.stringify(a.summaries()).includes('scrypt'));
+  });
+
+  after(() => {
+    for (const f of made) rmSync(path.dirname(f), { recursive: true, force: true });
+  });
+});

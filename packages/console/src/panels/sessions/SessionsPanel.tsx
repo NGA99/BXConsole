@@ -18,14 +18,31 @@ import { Toolbar, ToolbarButton, ToolbarDivider, ToolbarInput } from '../../devt
 import { TabBar } from '../../devtools-ui/TabBar';
 import { AgentPanel } from './AgentPanel';
 import { WebhookPanel } from './WebhookPanel';
+import { ProjectBar } from './ProjectBar';
+import { ProjectsPanel } from './ProjectsPanel';
+import { AdminPanel } from './AdminPanel';
+import { useProjectsStore } from '../../state/projects';
+import { useIsAdmin } from '../../state/whoami';
 import './SessionsPanel.css';
 
 export function SessionsPanel({ view }: { view: SessionView }) {
-  const all = useSessionList();
+  const everything = useSessionList();
+  const isAdmin = useIsAdmin();
+  const { selectedId, homeId, order } = useProjectsStore();
   const setView = navigateToView;
   const [query, setQuery] = useState('');
   const [connectedOnly, setConnectedOnly] = useState(false);
   const q = query.trim().toLowerCase();
+  /*
+   * One project at a time.
+   *
+   * A run with no project of its own is in the home one — that is how the
+   * relay reads it, and the list has to agree or those recordings would
+   * belong to no project here and show up nowhere. Where there is no project
+   * list at all the relay has sent no sessions either, so filtering to
+   * nothing is the same answer arrived at twice.
+   */
+  const all = order.length === 0 ? everything : everything.filter((s) => (s.projectId ?? homeId) === selectedId);
   const trashed = all.filter((s) => s.trashedAt !== undefined);
   const kept = all.filter((s) => s.trashedAt === undefined);
   const offline = kept.filter((s) => !s.connected);
@@ -40,12 +57,18 @@ export function SessionsPanel({ view }: { view: SessionView }) {
 
   return (
     <>
+      <ProjectBar />
       <TabBar
         tabs={[
           { id: 'sessions', label: live > 0 ? `Sessions (${live} live)` : 'Sessions' },
           { id: 'webhook', label: 'Webhook' },
           { id: 'trash', label: trashed.length > 0 ? `Trash (${trashed.length})` : 'Trash' },
           { id: 'agent', label: 'Agent' },
+          { id: 'projects', label: 'Projects' },
+          // Only for an administrator. The route exists either way and the
+          // relay refuses what it asks for, so typing the address shows an
+          // empty screen rather than somebody else's accounts.
+          ...(isAdmin ? ([{ id: 'admin' as const, label: 'Admin' }]) : []),
         ]}
         active={view}
         onSelect={setView}
@@ -56,6 +79,10 @@ export function SessionsPanel({ view }: { view: SessionView }) {
         <div className="sessions-list">
           <AgentPanel onDiagnose={() => setView('webhook')} />
         </div>
+      ) : view === 'projects' ? (
+        <ProjectsPanel />
+      ) : view === 'admin' ? (
+        <AdminPanel />
       ) : (
         <SessionList
           trash={view === 'trash'}

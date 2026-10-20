@@ -30,7 +30,27 @@
 import { createHmac, timingSafeEqual } from 'node:crypto';
 import type { IncomingMessage, ServerResponse } from 'node:http';
 import { PROBES } from '@bxconsole/protocol';
-import { type Account, PasswordFile, accountFromEnv, verifyPassword } from './passwd';
+import { type Account, PasswordFile, accountFromEnv, hashPassword, newAccountId, verifyPassword, writeAccounts } from './passwd';
+import { PASSWORD_MIN_LENGTH, type AccountRole, type AccountSummary } from '@bxconsole/protocol';
+
+/**
+ * What an administrator can do to the account list, as one shape.
+ *
+ * One type and one method rather than four, because every one of them ends
+ * in rewriting the same file and the checks they share — it exists, it is not
+ * the last administrator — are the ones worth having in a single place.
+ */
+export type AccountChange =
+  | { op: 'create'; user: string; password: string; role: AccountRole }
+  | { op: 'remove'; user: string }
+  | { op: 'setRole'; user: string; role: AccountRole }
+  | { op: 'setPassword'; user: string; password: string };
+
+const ACCOUNT_NAME_RE = /^[A-Za-z0-9._-]{1,64}$/;
+
+function passwordTooShort(password: string): string | null {
+  return password.length < PASSWORD_MIN_LENGTH ? `Too short — use at least ${PASSWORD_MIN_LENGTH} characters.` : null;
+}
 
 /**
  * The default is in the source of a public repository, so it is a lock on the
@@ -182,6 +202,90 @@ export class ConsoleAuth {
   accountIds(): Set<string> {
     if (this.file && !this.file.isMissing) return new Set(this.file.all().map((a) => a.id));
     return new Set([this.fallback.id]);
+  }
+
+  /** Every account, as the console is told about them: never the credential. */
+  summaries(): AccountSummary[] {
+    const all = this.file && !this.file.isMissing ? this.file.all() : [this.fallback];
+    return all.map((a) => ({ id: a.id, user: a.user, role: a.role }));
+  }
+
+  /**
+   * Whether accounts can be changed from the console at all.
+   *
+   * Only with a file. On CONSOLE_PASSWORD there is one synthetic account and
+   * nowhere to write a second, and the honest answer is to say so rather
+   * than offer an admin screen whose every button fails.
+   */
+  get canEditAccounts(): boolean {
+    return this.file !== null && !this.file.isMissing;
+  }
+
+  /**
+   * Add an account, change one's password, or change its role.
+   *
+   * Writing `.passwd`, which the relay re-reads on its own when the mtime
+   * moves — so none of this needs a restart, and that matters more here than
+   * anywhere: a restart drops every agent socket, and the runs those pages
+   * are producing cannot be started again.
+   *
+   * Returns null on success, or the reason, which the console shows. These
+   * say what went wrong, unlike the rest of the protocol's refusals: the
+   * asker is an administrator acting on a list they were shown, so "that
+   * name is taken" tells them nothing they did not already have.
+   */
+  async changeAccounts(change: AccountChange): Promise<string | null> {
+    const file = this.file;
+    if (!file || file.isMissing) {
+      return 'This relay has no .passwd, so there is one account and it comes from CONSOLE_PASSWORD. Run: npm run passwd -- <name>';
+    }
+    const existing = [...file.all()];
+    const found = existing.find((a) => a.user === change.user);
+
+    if (change.op === 'create') {
+      if (found) return `There is already an account called "${change.user}".`;
+      if (!ACCOUNT_NAME_RE.test(change.user)) return `"${change.user}" is not a usable account name (letters, digits, dot, dash, underscore).`;
+      const tooShort = passwordTooShort(change.password);
+      if (tooShort) return tooShort;
+      const made: Account = { user: change.user, record: await hashPassword(change.password), id: newAccountId(), role: change.role };
+      await writeAccounts(file.path, [...existing, made]);
+      file.reloadNow();
+      return null;
+    }
+
+    if (!found) return `There is no account called "${change.user}".`;
+
+    if (change.op === 'remove') {
+      const left = existing.filter((a) => a.user !== change.user);
+      // The same refusal the CLI makes. Locking everybody out of the admin
+      // screen from inside the admin screen is not a thing to do by accident.
+      if (!left.some((a) => a.role === 'admin')) return `"${change.user}" is the last administrator; make another one first.`;
+      await writeAccounts(file.path, left);
+      file.reloadNow();
+      return null;
+    }
+
+    if (change.op === 'setRole') {
+      if (found.role === change.role) return null;
+      const next = existing.map((a) => (a.user === change.user ? { ...a, role: change.role } : a));
+      if (!next.some((a) => a.role === 'admin')) return `"${change.user}" is the last administrator; make another one first.`;
+      await writeAccounts(file.path, next);
+      file.reloadNow();
+      return null;
+    }
+
+    const tooShort = passwordTooShort(change.password);
+    if (tooShort) return tooShort;
+    // The id is kept: it is what the projects they own are owned by.
+    const record = await hashPassword(change.password);
+    await writeAccounts(
+      file.path,
+      existing.map((a) => (a.user === change.user ? { ...a, record } : a)),
+    );
+    // Past the once-a-second throttle, because the next thing that happens is
+    // the admin screen being sent the list and it must not be the old one.
+    file.reloadNow();
+    return null;
   }
 
   private accountFor(user: string): Account | null {

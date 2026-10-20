@@ -1,0 +1,53 @@
+/*
+ * The project row, above the tabs.
+ *
+ * Quieter than the tab bar under it: this says where you are, the tabs say
+ * what you are looking at, and a row with equal weight would read as a second
+ * set of tabs.
+ */
+.projectbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  height: 26px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--sys-color-divider);
+  background: var(--sys-color-cdt-base-container);
+  font-size: 11px;
+  color: var(--sys-color-token-subtle);
+}
+.projectbar-pick {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.projectbar-pick select {
+  max-width: 320px;
+  font: inherit;
+  color: var(--sys-color-on-surface);
+  background: var(--sys-color-cdt-base-container);
+  border: 1px solid var(--sys-color-neutral-outline);
+  border-radius: 2px;
+  padding: 1px 2px;
+}
+.projectbar-spacer {
+  flex: 1;
+}
+.projectbar-who {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+/* A pill, so "admin" reads as a standing fact about the account rather than
+   as part of the name. */
+.projectbar-role {
+  border: 1px solid var(--sys-color-neutral-outline);
+  border-radius: 7px;
+  padding: 0 5px;
+  font-size: 10px;
+  line-height: 13px;
+  color: var(--sys-color-token-subtle);
+}

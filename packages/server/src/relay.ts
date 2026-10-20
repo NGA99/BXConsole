@@ -39,12 +39,15 @@ import {
   type SessionMeta,
   type SessionHello,
   type Project,
+  type AccountRole,
+  type AccountSummary,
   mayAdminister,
   mayRead,
 } from '@bxconsole/protocol';
 import { agentFor, type SessionEntry, type SessionRegistry } from './registry';
 import type { ProjectStore } from './projects';
 import type { Account } from './passwd';
+import type { AccountChange } from './auth';
 import type { PingBoard } from './ping';
 import type { BlobStore } from './blobs';
 import type { AssetCollector } from './collect';
@@ -110,6 +113,9 @@ export class Relay {
   private retentionDays = 0;
   private projects: ProjectStore | null = null;
   private knownAccountIds: () => Set<string> = () => new Set();
+  private accounts: AccountAdmin | null = null;
+  /** Consoles with the administrator's screen open, so changes reach it. */
+  private readonly adminWatchers = new Set<WebSocket>();
   /** ACCEPT_KEYLESS, as a project id, or null when keyless runs are refused. */
   private acceptKeyless: () => string | null = () => null;
   /** reason -> how many since it was last logged, and when that was */
@@ -396,6 +402,9 @@ export class Relay {
 
   attachConsole(ws: WebSocket, actor?: Account): void {
     this.consoles.set(ws, actor);
+    // Who they are, before what they can see: the console draws its screens
+    // from the account, so telling it second means drawing them twice.
+    if (actor) send(ws, { type: 'console.whoami', account: { id: actor.id, user: actor.user, role: actor.role } });
     this.sendProjects(ws, actor);
     send(ws, { type: 'sessions.snapshot', sessions: this.visibleTo(actor), retentionDays: this.retentionDays });
 
@@ -407,6 +416,7 @@ export class Relay {
 
     ws.on('close', () => {
       this.consoles.delete(ws);
+      this.adminWatchers.delete(ws);
       this.replaying.delete(ws);
       this.pingWatchers.delete(ws);
       for (const [key, target] of this.pendingReplies) if (target === ws) this.pendingReplies.delete(key);
@@ -453,6 +463,11 @@ export class Relay {
    */
   useAccountIds(ids: () => Set<string>): void {
     this.knownAccountIds = ids;
+  }
+
+  /** The account list, for the administrator's screen to read and change. */
+  useAccounts(accounts: AccountAdmin): void {
+    this.accounts = accounts;
   }
 
   /**
@@ -571,6 +586,7 @@ export class Relay {
          * left the other one a refresh behind.
          */
         this.tellAboutProject(made);
+        this.refreshAdmins();
         return;
       }
 
@@ -579,6 +595,7 @@ export class Relay {
         if (!project) return;
         const next = await this.projects!.update(msg.projectId, { name: msg.name });
         if (next) this.tellAboutProject(next);
+        this.refreshAdmins();
         return;
       }
 
@@ -587,6 +604,7 @@ export class Relay {
         if (!this.mayAdministerFrom(ws, msg.projectId)) return;
         const next = await this.projects!.setTrashed(msg.projectId, msg.type === 'project.trash');
         if (next) this.tellAboutProject(next);
+        this.refreshAdmins();
         return;
       }
 
@@ -626,6 +644,7 @@ export class Relay {
         }
         if (!(await this.projects!.remove(msg.projectId))) return;
         this.sendTo(audience, { type: 'project.removed', projectId: msg.projectId });
+        this.refreshAdmins();
         return;
       }
 
@@ -655,6 +674,40 @@ export class Relay {
         // it hear that it is gone, and whoever can see it now.
         this.sendTo(before, { type: 'project.removed', projectId: msg.projectId });
         this.tellAboutProject(next);
+        this.refreshAdmins();
+        return;
+      }
+
+      case 'admin.list': {
+        if (this.consoles.get(ws)?.role !== 'admin') return;
+        // Remembered, so that anything changing the account list or the
+        // projects pushes it again. Without that the screen showed the state
+        // it was opened with: a transfer landed on disk and the table went on
+        // naming the old owner, which is the one thing that screen is for.
+        this.adminWatchers.add(ws);
+        this.sendAdmin(ws);
+        return;
+      }
+
+      case 'account.create':
+      case 'account.remove':
+      case 'account.setRole':
+      case 'account.setPassword': {
+        /*
+         * Changing the account list, which is `.passwd` on disk.
+         *
+         * The relay re-reads that file when its mtime moves, so none of this
+         * needs a restart — and nowhere does that matter more: a restart
+         * drops every agent socket, and the runs those pages are producing
+         * cannot be started again.
+         */
+        const actor = this.consoles.get(ws);
+        if (actor?.role !== 'admin' || !this.accounts) return;
+        const reason = await this.accounts.change(changeFor(msg));
+        if (reason !== null) return send(ws, { type: 'admin.error', message: reason });
+        // To every administrator's screen, not only the one that asked: two
+        // of them open should not disagree about who exists.
+        this.refreshAdmins();
         return;
       }
 
@@ -1112,6 +1165,52 @@ export class Relay {
     return meta.projectId ?? this.projects?.homeId() ?? undefined;
   }
 
+  /**
+   * The account list and every project with its owner.
+   *
+   * Admin only, and checked by every caller. The projects are summaries
+   * without their agent keys: reassigning a project is an administrator's
+   * job and reading one is not, and a key writes into the engagement it
+   * belongs to.
+   */
+  /**
+   * Push the administrator's view again, to whoever has it open.
+   *
+   * Called from everything that changes what is on it — the account list, and
+   * every project's name, owner and existence. A project is renamed by its
+   * owner and transferred by an administrator, so the two screens change each
+   * other's contents and neither can be left to find out on its own.
+   */
+  private refreshAdmins(): void {
+    for (const ws of this.adminWatchers) {
+      if (this.consoles.get(ws)?.role === 'admin') this.sendAdmin(ws);
+      else this.adminWatchers.delete(ws);
+    }
+  }
+
+  private sendAdmin(ws: WebSocket): void {
+    if (!this.accounts || !this.projects) return;
+    const counts = new Map<string, number>();
+    const home = this.projects.homeId();
+    for (const meta of this.registry.all()) {
+      const id = meta.projectId ?? home;
+      if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
+    }
+    send(ws, {
+      type: 'admin.snapshot',
+      accounts: this.accounts.summaries(),
+      projects: this.projects.all().map((p) => ({
+        id: p.id,
+        name: p.name,
+        owner: p.owner,
+        sharedWith: p.sharedWith,
+        createdAt: p.createdAt,
+        ...(p.trashedAt !== undefined ? { trashedAt: p.trashedAt } : {}),
+        sessions: counts.get(p.id) ?? 0,
+      })),
+    });
+  }
+
   private sendProjects(ws: WebSocket, actor: Account | undefined): void {
     if (!this.projects) return;
     const mine = this.projects.visibleTo(actor?.id);
@@ -1187,6 +1286,38 @@ export class Relay {
 }
 
 // -------------------------------------------------------------------- helpers
+
+/**
+ * What the relay needs of the account list, and no more.
+ *
+ * An interface rather than ConsoleAuth itself: the relay has no business
+ * with cookies or password verification, and naming the two methods it does
+ * use keeps the tests from having to build an auth to exercise a socket.
+ */
+export interface AccountAdmin {
+  summaries(): AccountSummary[];
+  change(change: AccountChange): Promise<string | null>;
+}
+
+/** The console's message as the one shape `change` takes. */
+function changeFor(
+  msg:
+    | { type: 'account.create'; user: string; password: string; role: AccountRole }
+    | { type: 'account.remove'; user: string }
+    | { type: 'account.setRole'; user: string; role: AccountRole }
+    | { type: 'account.setPassword'; user: string; password: string },
+): AccountChange {
+  switch (msg.type) {
+    case 'account.create':
+      return { op: 'create', user: msg.user, password: msg.password, role: msg.role };
+    case 'account.remove':
+      return { op: 'remove', user: msg.user };
+    case 'account.setRole':
+      return { op: 'setRole', user: msg.user, role: msg.role };
+    case 'account.setPassword':
+      return { op: 'setPassword', user: msg.user, password: msg.password };
+  }
+}
 
 /** At most one line a minute per reason, however many runs it stood for. */
 const REFUSAL_LOG_MS = 60_000;

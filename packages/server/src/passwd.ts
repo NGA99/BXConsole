@@ -22,6 +22,7 @@
  */
 import { createHash, randomBytes, scrypt as scryptCb, timingSafeEqual } from 'node:crypto';
 import type { ScryptOptions } from 'node:crypto';
+import type { AccountRole } from '@bxconsole/protocol';
 import { promises as fs, readFileSync, statSync } from 'node:fs';
 
 /**
@@ -40,8 +41,14 @@ export const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 32, saltBytes: 16 } as con
 /** How long a loaded file is trusted before its mtime is checked again. */
 const RECHECK_MS = 1000;
 
-/** What an account may do. Two, because a third has never been needed. */
-export type Role = 'admin' | 'member';
+/**
+ * What an account may do. Two, because a third has never been needed.
+ *
+ * Defined in the protocol package, because the console decides what to show
+ * from it — an admin screen only an administrator sees — and two copies of a
+ * two-value union is exactly the pair that drifts.
+ */
+export type { AccountRole as Role };
 
 export interface Account {
   readonly user: string;
@@ -63,7 +70,7 @@ export interface Account {
    * and a line in the log saying how to pin it.
    */
   readonly id: string;
-  readonly role: Role;
+  readonly role: AccountRole;
 }
 
 /** An id for a line that predates them. Stable, so a restart agrees with itself. */
@@ -130,7 +137,8 @@ export class PasswordFile {
   private missing = true;
 
   constructor(
-    private readonly path: string,
+    /** Readable because the admin screen writes this file back through it. */
+    readonly path: string,
     private readonly warn: (msg: string) => void = () => undefined,
   ) {}
 
@@ -166,6 +174,19 @@ export class PasswordFile {
       return;
     }
     this.apply(parsed);
+  }
+
+  /**
+   * Re-read now, past the once-a-second throttle.
+   *
+   * For the one caller that knows the file changed because it wrote it: the
+   * admin screen. Without this the throttle made the screen lie — the account
+   * was added, the file was correct, and the list sent straight back was the
+   * one from before the write, so adding somebody looked like it had failed.
+   */
+  reloadNow(): void {
+    this.checkedAt = 0;
+    this.refreshIfStale();
   }
 
   private refreshIfStale(): void {
