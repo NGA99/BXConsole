@@ -34,7 +34,18 @@ function depths(tabs: SessionTab[]): Map<string, number> {
 }
 
 export function TabStrip({ sessionId }: { sessionId: string }) {
-  const tabs = useSessionsStore((s) => s.byId[sessionId]?.tabs) ?? [];
+  const recorded = useSessionsStore((s) => s.byId[sessionId]?.tabs) ?? [];
+  /*
+   * Live windows first, each group keeping the order the run made.
+   *
+   * A long run leaves closed windows behind, and they pile up to the left of
+   * the ones still open — which are the only ones a command can be sent to.
+   * The opener indentation still marks who opened whom; it just no longer
+   * reads as one contiguous tree once a parent has closed and its child has
+   * not. A window that can still be driven being easy to reach is worth more
+   * than the shape.
+   */
+  const tabs = useMemo(() => [...recorded.filter((t) => t.connected), ...recorded.filter((t) => !t.connected)], [recorded]);
   const active = useActiveTab(sessionId);
   const depth = useMemo(() => depths(tabs), [tabs]);
   // The host the run started on, so only the hops away from it are spelled out.
