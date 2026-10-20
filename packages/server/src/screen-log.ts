@@ -39,6 +39,8 @@ interface Keyframe {
   offset: number;
   /** op batches recorded before this keyframe, so a seek knows its absolute position */
   before: number;
+  /** the same count within this keyframe's own window */
+  beforeInTab: number;
   /**
    * The window this keyframe came from. Only one window of a run streams at a
    * time, so a keyframe naming a different window than the one before it is
@@ -56,6 +58,25 @@ interface Index {
   lastTs: number | null;
   /** op batches in the whole file */
   batches: number;
+  /**
+   * First and last time each window appears, so the scrubber can be given one
+   * window's recording rather than the whole run's. Only one window streams
+   * at a time, so these are the stretches the recording is theirs.
+   */
+  tabs: Map<string, { first: number; last: number }>;
+  /** op batches per window, so a per-window seek reports per-window numbers */
+  tabBatches: Map<string, number>;
+}
+
+/** Widen a window's known extent to take in another of its lines. */
+function noteTab(idx: Index, tab: string | undefined, ts: number): void {
+  if (!tab) return;
+  const seen = idx.tabs.get(tab);
+  if (!seen) idx.tabs.set(tab, { first: ts, last: ts });
+  else {
+    if (ts < seen.first) seen.first = ts;
+    if (ts > seen.last) seen.last = ts;
+  }
 }
 
 interface Buffered {
@@ -92,13 +113,25 @@ export class ScreenLog {
       // scan only after a restart — so leaving it out here meant the window
       // was known for recordings read from disk and unknown for the one being
       // made, which is the one being watched.
-      if (record.k === 1) idx.keyframes.push({ ts: record.ts, offset: idx.size, before: idx.batches, ...(record.tab ? { tab: record.tab } : {}) });
+      if (record.k === 1) {
+        idx.keyframes.push({
+          ts: record.ts,
+          offset: idx.size,
+          before: idx.batches,
+          beforeInTab: record.tab ? (idx.tabBatches.get(record.tab) ?? 0) : idx.batches,
+          ...(record.tab ? { tab: record.tab } : {}),
+        });
+      }
       // A cursor sample is neither: it annotates the recording without being a
       // change to it, so it must not move the batch counter the scrubber reads.
-      else if (record.k === 0) idx.batches++;
+      else if (record.k === 0) {
+        idx.batches++;
+        if (record.tab) idx.tabBatches.set(record.tab, (idx.tabBatches.get(record.tab) ?? 0) + 1);
+      }
       idx.size += bytes;
       idx.firstTs ??= record.ts;
       idx.lastTs = record.ts;
+      noteTab(idx, record.tab, record.ts);
 
       const buf = this.buffers.get(sessionId) ?? { lines: [], bytes: 0, timer: null };
       this.buffers.set(sessionId, buf);
@@ -113,34 +146,54 @@ export class ScreenLog {
   }
 
   /** What the recording covers, for the replay scrubber. */
-  async bounds(sessionId: string): Promise<{ start: number; end: number } | null> {
+  /**
+   * The extent of the recording, or of one window of it.
+   *
+   * Only one window of a run streams at a time, so a window's recording is
+   * the stretches where it was the one streaming. Asking for a window the
+   * recording never names — an old recording, or one that never streamed —
+   * gives the whole thing back, which is what there is to show.
+   */
+  async bounds(sessionId: string, tab?: string): Promise<{ start: number; end: number } | null> {
     const idx = await this.ensureIndex(sessionId);
-    if (idx.firstTs === null || idx.lastTs === null) return null;
-    return { start: idx.firstTs, end: Math.max(idx.lastTs, idx.firstTs + 1) };
+    const own = tab ? idx.tabs.get(tab) : undefined;
+    const first = own ? own.first : idx.firstTs;
+    const last = own ? own.last : idx.lastTs;
+    if (first === null || last === null || first === undefined || last === undefined) return null;
+    return { start: first, end: Math.max(last, first + 1) };
   }
 
   /**
    * `seek`: the keyframe at or before `ts` and the ops recorded after it.
    * `continue`: the ops after `ts` alone, for playback that is already running.
    */
-  async segment(sessionId: string, ts: number, mode: 'seek' | 'continue'): Promise<ScreenSegment> {
+  async segment(sessionId: string, ts: number, mode: 'seek' | 'continue', tab?: string): Promise<ScreenSegment> {
     await this.flushAndSettle(sessionId);
     const idx = await this.ensureIndex(sessionId);
-    const bounds = await this.bounds(sessionId);
-    if (!bounds || idx.keyframes.length === 0) return { bounds, batches: [], done: true, changes: idx.batches, from: 0 };
+    const bounds = await this.bounds(sessionId, tab);
+    // A window the recording never names is not a window to narrow to: an old
+    // recording has no windows at all, and narrowing to one would show nothing.
+    const only = tab && idx.tabs.has(tab) ? tab : undefined;
+    const frames = only ? idx.keyframes.filter((k) => k.tab === only) : idx.keyframes;
+    const changes = only ? (idx.tabBatches.get(only) ?? 0) : idx.batches;
+    if (!bounds || frames.length === 0) return { bounds, batches: [], done: true, changes, from: 0 };
 
-    const kf = keyframeAtOrBefore(idx.keyframes, mode === 'seek' ? ts : ts) ?? idx.keyframes[0]!;
+    const kf = keyframeAtOrBefore(frames, mode === 'seek' ? ts : ts) ?? frames[0]!;
     const until = (mode === 'seek' ? Math.max(ts, kf.ts) : ts) + SEGMENT_MS;
 
     // Which window this part of the recording belongs to, so the viewer can
     // say so rather than quietly showing a different one.
-    const out: ScreenSegment = { bounds, batches: [], done: false, changes: idx.batches, from: kf.before, ...(kf.tab ? { tab: kf.tab } : {}) };
+    const out: ScreenSegment = { bounds, batches: [], done: false, changes, from: only ? kf.beforeInTab : kf.before, ...(kf.tab ? { tab: kf.tab } : {}) };
     let bytes = 0;
     let reachedEnd = true;
     /** batches the caller does not already have; the window never cuts before the first one */
     let fresh = 0;
 
     for await (const { record, length } of this.readFrom(sessionId, kf.offset)) {
+      // Another window's line. One window streams at a time, so these are the
+      // stretches where this one was not the one recording; stepping over them
+      // is what makes the playhead follow a single window.
+      if (only && record.tab !== undefined && record.tab !== only) continue;
       if (record.k === 2) {
         // Carried along with whatever window the caller asked for; the viewer
         // sorts out which ones are at or before its playhead.
@@ -242,12 +295,21 @@ export class ScreenLog {
     await pipeline(createReadStream(file, { start: cut.offset }), createWriteStream(tmp));
     await fs.rename(tmp, file);
 
-    idx.size -= cut.offset;
-    idx.batches -= cut.before;
-    idx.keyframes = idx.keyframes
-      .filter((k) => k.offset >= cut.offset)
-      .map((k) => ({ ts: k.ts, offset: k.offset - cut.offset, before: k.before - cut.before }));
-    idx.firstTs = idx.keyframes[0]?.ts ?? idx.firstTs;
+    /*
+     * Drop the index rather than mend it.
+     *
+     * Compaction removes the front of the file, which moves every offset and
+     * invalidates the counts kept per window as well as the ones kept for the
+     * whole recording. Fixing those by hand means keeping four things in step
+     * through a rewrite, and getting one wrong puts the scrubber somewhere the
+     * file does not say. The next read rebuilds the lot from what survived —
+     * which is less work than it sounds, the file having just been made
+     * smaller, and is right by construction.
+     */
+    this.index.delete(sessionId);
+    // The scan promise is what `ensureIndex` hands back, so the cached index
+    // alone is not the cache.
+    this.indexing.delete(sessionId);
   }
 
   // ------------------------------------------------------------------ reading
@@ -293,7 +355,7 @@ export class ScreenLog {
    * whole document is never parsed just to be indexed.
    */
   private async scan(sessionId: string): Promise<Index> {
-    const idx: Index = { keyframes: [], size: 0, firstTs: null, lastTs: null, batches: 0 };
+    const idx: Index = { keyframes: [], size: 0, firstTs: null, lastTs: null, batches: 0, tabs: new Map(), tabBatches: new Map() };
     const file = this.fileFor(sessionId);
     try {
       idx.size = (await fs.stat(file)).size;
@@ -312,8 +374,19 @@ export class ScreenLog {
         if (head) {
           idx.firstTs ??= head.ts;
           idx.lastTs = head.ts;
-          if (head.keyframe) idx.keyframes.push({ ts: head.ts, offset: base + pos, before: idx.batches, ...(head.tab ? { tab: head.tab } : {}) });
-          else idx.batches++;
+          noteTab(idx, head.tab, head.ts);
+          if (head.keyframe) {
+            idx.keyframes.push({
+              ts: head.ts,
+              offset: base + pos,
+              before: idx.batches,
+              beforeInTab: head.tab ? (idx.tabBatches.get(head.tab) ?? 0) : idx.batches,
+              ...(head.tab ? { tab: head.tab } : {}),
+            });
+          } else {
+            idx.batches++;
+            if (head.tab) idx.tabBatches.set(head.tab, (idx.tabBatches.get(head.tab) ?? 0) + 1);
+          }
         }
         pos = nl + 1;
       }

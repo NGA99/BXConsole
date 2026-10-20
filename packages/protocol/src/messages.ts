@@ -323,7 +323,7 @@ export type ConsoleToServer =
    * keyframe at or before `ts` plus the ops after it; `continue` answers with
    * the ops after `ts` alone, so playback keeps running without a reload.
    */
-  | { type: 'screen.replay'; sessionId: string; requestId: string; ts: number; mode: 'seek' | 'continue' };
+  | { type: 'screen.replay'; sessionId: string; requestId: string; ts: number; mode: 'seek' | 'continue'; tabId?: string };
 
 // ---------------------------------------------------------------------------
 // Server -> Console

@@ -118,7 +118,8 @@ export class ScreenReplayer {
   private lastFrameAt = 0;
   private disposed = false;
 
-  private status: ReplayStatus = {
+  /** Where playback stands. Read by the panel when it has to re-seek. */
+  status: ReplayStatus = {
     bounds: null,
     ts: 0,
     playing: false,
@@ -170,12 +171,18 @@ export class ScreenReplayer {
   }
 
   /** Show the recording as it was at `ts` (the end of the recording when omitted). */
-  async seek(ts?: number): Promise<void> {
+  /**
+   * `refetch` forces the relay to be asked even when the keyframe in hand
+   * covers the moment. The frames held belong to one window of the run, so
+   * after the console is pointed at another one a local rebuild would replay
+   * the window it just left.
+   */
+  async seek(ts?: number, opts?: { refetch?: boolean }): Promise<void> {
     // Any seek supersedes the one before it, including a local rebuild: a
     // reply still in flight must not drop its older moment on top of this one.
     const token = ++this.request;
     // Rebuild locally when the keyframe in hand already covers the moment.
-    if (ts !== undefined && this.baseValid && this.snapshot && ts >= this.snapshot.ts && ts <= this.loadedUntil()) {
+    if (!opts?.refetch && ts !== undefined && this.baseValid && this.snapshot && ts >= this.snapshot.ts && ts <= this.loadedUntil()) {
       this.rebuildTo(ts);
       return;
     }

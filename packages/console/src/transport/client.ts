@@ -89,6 +89,8 @@ const TAB_SCOPED = new Set<string>([
   'screen.unsubscribe',
   'screen.refresh',
   'screen.input',
+  // Replay follows the window the strip points at, like every other panel.
+  'screen.replay',
 ]);
 
 export function send(msg: ConsoleToServer): void {

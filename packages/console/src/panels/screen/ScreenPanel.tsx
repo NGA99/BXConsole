@@ -338,6 +338,25 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
 
   useEffect(() => () => replayer.current?.dispose(), []);
 
+  /*
+   * Pointing the strip at another window while replaying moves the playhead
+   * to that window's recording. The relay answers a seek with the window the
+   * request names, so the running player has to ask again — otherwise the
+   * tab changes above a frame that stays where it was.
+   */
+  const replayingTab = useRef<string | null>(null);
+  useEffect(() => {
+    const player = replayer.current;
+    const was = replayingTab.current;
+    replayingTab.current = activeTab;
+    // Nothing to move on the first run, or when no player is up.
+    if (!player || was === null || was === activeTab) return;
+    // Read the playhead off the player rather than a captured render: this
+    // effect watches the window, and the time moves on its own while it plays.
+    // refetch: the frames in hand are the window we just left.
+    void player.seek(player.status.ts, { refetch: true });
+  }, [activeTab]);
+
   // "Show the screen at this moment", from the History timeline.
   const requestedNonce = useScreenReplay((st) => st.nonce);
   useEffect(() => {

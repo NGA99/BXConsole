@@ -223,12 +223,20 @@ export class Relay {
     }
   }
 
-  /** Replay the last recorded frame to a console looking at a session whose agent is gone. */
-  private async sendFrozenScreen(entry: SessionEntry, ws: WebSocket): Promise<void> {
+  /**
+   * The last recorded frame of a window whose agent is gone.
+   *
+   * Per window, not per session. A run holds several and they close at
+   * different times, so the last frame of the recording belongs to whichever
+   * one lasted longest — and selecting a window that closed earlier showed
+   * that other window's page under its name, silently. What a closed window
+   * last looked like is the only thing its tab has left to show.
+   */
+  private async sendFrozenScreen(entry: SessionEntry, ws: WebSocket, tabId?: string): Promise<void> {
     const id = entry.meta.sessionId;
-    const bounds = await this.store.screen.bounds(id);
+    const bounds = await this.store.screen.bounds(id, tabId);
     const frame = bounds
-      ? await this.store.screen.segment(id, bounds.end, 'seek')
+      ? await this.store.screen.segment(id, bounds.end, 'seek', tabId)
       : await this.store.readLegacyScreenFrame<{ snapshot: ScreenSnapshot; ops: ScreenMutations[] }>(id).then((f) =>
           f ? { snapshot: f.snapshot, batches: f.ops.map((o) => ({ ts: o.ts, ops: o.ops })) } : null,
         );
@@ -584,7 +592,7 @@ export class Relay {
         // hello path starts streaming only for windows someone is watching.
         entry.screenSubscribers.set(ws, msg.tabId);
         const agent = agentFor(entry, msg.tabId);
-        if (!agent) return void this.sendFrozenScreen(entry, ws);
+        if (!agent) return void this.sendFrozenScreen(entry, ws, msg.tabId);
         // Every (re)start yields a fresh snapshot, which is what a new subscriber
         // needs; windows nobody is left watching stop.
         send(agent, { type: 'screen.start' });
@@ -608,7 +616,7 @@ export class Relay {
 
       // DOM time travel. Served from disk, so an offline session replays like a live one.
       case 'screen.replay': {
-        const segment = await this.store.screen.segment(msg.sessionId, msg.ts, msg.mode);
+        const segment = await this.store.screen.segment(msg.sessionId, msg.ts, msg.mode, msg.tabId);
         send(ws, { type: 'screen.replaySegment', sessionId: msg.sessionId, requestId: msg.requestId, segment });
         return;
       }
