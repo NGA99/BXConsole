@@ -3,7 +3,7 @@
  * optional. With `storageKey` the divider position survives reloads.
  */
 import { useLayoutEffect, useRef, useState, type PointerEvent, type ReactNode } from 'react';
-import { clampSide } from './split-size';
+import { clampSide, sizeAfterDrag } from './split-size';
 import './SplitView.css';
 
 export function SplitView({
@@ -13,6 +13,7 @@ export function SplitView({
   initialSide = 420,
   minMain = 120,
   minSide = 200,
+  sideOn = 'end',
   storageKey,
 }: {
   main: ReactNode;
@@ -21,6 +22,16 @@ export function SplitView({
   initialSide?: number;
   minMain?: number;
   minSide?: number;
+  /**
+   * Which end the sized pane sits at.
+   *
+   * The sized one is whichever should keep its width when the window changes,
+   * and that is not always the right-hand one: Sources puts its file tree on
+   * the left and the tree is what should stay put while the code takes the
+   * room. Laid out with a reversed flex direction, so the DOM order is the
+   * same either way and only the drag has to know.
+   */
+  sideOn?: 'start' | 'end';
   storageKey?: string;
 }) {
   const fallback = initialSide > 0 ? initialSide : minSide;
@@ -75,7 +86,7 @@ export function SplitView({
     if (!d || !box) return;
     const total = horizontal ? box.width : box.height;
     const delta = (horizontal ? e.clientX : e.clientY) - d.start;
-    setSideSize(clampSide(d.size - delta, total, minMain, minSide));
+    setSideSize(clampSide(sizeAfterDrag(d.size, delta, sideOn), total, minMain, minSide));
   };
   const onUp = () => {
     drag.current = null;
@@ -88,7 +99,7 @@ export function SplitView({
   };
 
   return (
-    <div ref={container} className={`splitview ${direction}`}>
+    <div ref={container} className={`splitview ${direction}${sideOn === 'start' ? ' side-start' : ''}`}>
       <div className="splitview-main">{main}</div>
       {side !== null && side !== undefined && (
         <>

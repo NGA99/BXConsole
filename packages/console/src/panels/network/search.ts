@@ -16,6 +16,14 @@ import { textOf } from './stored-bodies';
 export interface SearchHit {
   requestId: string;
   where: 'url' | 'request header' | 'response header' | 'request body' | 'response body' | 'ws message';
+  /**
+   * What to put at the head of the line, which for a header is its name.
+   *
+   * `where` says which part of the request matched and is the same half-dozen
+   * words over and over; a reader scanning results wants to see `accept` or
+   * `set-cookie`, the way the request itself would show it.
+   */
+  label: string;
   snippet: string;
 }
 
@@ -24,6 +32,16 @@ export interface SearchResult {
   /** bodies held in the store and not loaded, so this search did not see them */
   unloaded: Array<{ sha: string; mime?: string }>;
 }
+
+/** What to call a match that is not a named header. */
+const DEFAULT_LABEL: Record<SearchHit['where'], string> = {
+  url: 'URL',
+  'request header': 'Request header',
+  'response header': 'Response header',
+  'request body': 'Request payload',
+  'response body': 'Response body',
+  'ws message': 'Message',
+};
 
 const MAX_HITS = 300;
 const SNIPPET = 80;
@@ -49,13 +67,29 @@ export function searchEntries(
   }
   const hits: SearchHit[] = [];
   const unloaded = new Map<string, { sha: string; mime?: string }>();
-  const test = (requestId: string, where: SearchHit['where'], text: string | null | undefined) => {
+  /**
+   * @param from  where in `text` the part worth showing begins.
+   *
+   * A header is searched as "name: value" so that a query can match either,
+   * and shown as the value alone — the name is already the label, and
+   * "x-trace: x-trace: trace-0" is what showing both looked like. A match
+   * inside the name leaves nothing to mark in the value; the label carries
+   * the highlight in that case.
+   */
+  const test = (requestId: string, where: SearchHit['where'], text: string | null | undefined, label?: string, from = 0) => {
     if (!text || hits.length >= MAX_HITS) return;
     rx.lastIndex = 0;
     const m = rx.exec(text);
     if (!m) return;
-    const start = Math.max(0, m.index - SNIPPET / 2);
-    hits.push({ requestId, where, snippet: (start ? '…' : '') + text.slice(start, start + SNIPPET).replace(/\s+/g, ' ') });
+    const shown = text.slice(from);
+    const at = Math.max(0, m.index - from);
+    const start = Math.max(0, at - SNIPPET / 2);
+    hits.push({
+      requestId,
+      where,
+      label: label ?? DEFAULT_LABEL[where],
+      snippet: (start ? '…' : '') + shown.slice(start, start + SNIPPET).replace(/\s+/g, ' '),
+    });
   };
 
   /**
@@ -73,8 +107,8 @@ export function searchEntries(
 
   for (const e of entries) {
     test(e.requestId, 'url', e.request.url);
-    for (const [k, v] of Object.entries(e.request.headers)) test(e.requestId, 'request header', `${k}: ${v}`);
-    for (const [k, v] of Object.entries(e.response?.headers ?? {})) test(e.requestId, 'response header', `${k}: ${v}`);
+    for (const [k, v] of Object.entries(e.request.headers)) test(e.requestId, 'request header', `${k}: ${v}`, k, k.length + 2);
+    for (const [k, v] of Object.entries(e.response?.headers ?? {})) test(e.requestId, 'response header', `${k}: ${v}`, k, k.length + 2);
 
     if (e.request.body != null) test(e.requestId, 'request body', e.request.body);
     else viaStore(e.requestId, 'request body', e.request.bodyRef, e.request.headers['content-type']);

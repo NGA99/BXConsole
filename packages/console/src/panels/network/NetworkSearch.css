@@ -1,0 +1,170 @@
+/* Searching inside the requests, as a pane beside them. See NetworkSearch.tsx. */
+.netsearch {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--sys-color-cdt-base-container);
+}
+
+/* Its own little title bar, because the pane is a place rather than a strip. */
+.netsearch-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 4px 0 10px;
+  border-bottom: 1px solid var(--sys-color-divider);
+  flex: 0 0 auto;
+}
+.netsearch-title {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--sys-color-on-surface);
+  flex: 1;
+}
+.netsearch-close {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--sys-color-token-subtle);
+  font: inherit;
+  font-size: 12px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  cursor: default;
+}
+.netsearch-close:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+  color: var(--sys-color-on-surface);
+}
+
+.netsearch-note {
+  padding: 4px 10px;
+  font-size: 11px;
+  color: var(--sys-color-token-subtle);
+  border-bottom: 1px solid var(--sys-color-divider);
+}
+
+.netsearch-results {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 2px 0 8px;
+}
+
+.netsearch-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--sys-color-token-subtle);
+  font-size: 11px;
+}
+.netsearch-empty strong {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--sys-color-on-surface);
+}
+
+.netsearch-group-head {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  cursor: default;
+  font-size: 11px;
+}
+.netsearch-group-head:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+.netsearch-caret {
+  display: inline-block;
+  width: 10px;
+  color: var(--sys-color-token-subtle);
+  transform: rotate(-90deg);
+  transition: transform 80ms;
+}
+.netsearch-caret.open {
+  transform: none;
+}
+.netsearch-file {
+  color: var(--sys-color-on-surface);
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 0 1 auto;
+}
+.netsearch-host {
+  color: var(--sys-color-token-subtle);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+/* How many matches are inside, so a group is worth opening or not. */
+.netsearch-count {
+  flex: 0 0 auto;
+  padding: 0 5px;
+  border-radius: 7px;
+  background: var(--sys-color-state-hover-on-subtle);
+  color: var(--sys-color-token-subtle);
+  font-size: 9px;
+  line-height: 14px;
+  font-variant-numeric: tabular-nums;
+}
+
+.netsearch-line {
+  display: flex;
+  gap: 6px;
+  padding: 1px 8px 1px 23px;
+  font-size: 11px;
+  cursor: default;
+  line-height: 16px;
+}
+.netsearch-line:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+.netsearch-label {
+  flex: 0 0 auto;
+  color: var(--sys-color-token-subtle);
+  max-width: 45%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.netsearch-value {
+  flex: 1 1 auto;
+  min-width: 0;
+  color: var(--sys-color-on-surface);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* The match itself. A background rather than a colour, so it still reads as
+   the surrounding text with one part picked out. */
+.netsearch-value mark,
+.netsearch-label mark {
+  background: var(--sys-color-search-hit);
+  color: inherit;
+  border-radius: 2px;
+}
+
+.netsearch-more {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--sys-color-primary);
+  font: inherit;
+  font-size: 11px;
+  padding: 2px 8px 4px 23px;
+  cursor: default;
+}
+.netsearch-more:hover {
+  text-decoration: underline;
+}

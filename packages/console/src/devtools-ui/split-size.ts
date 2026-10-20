@@ -30,3 +30,19 @@ export function clampSide(wanted: number, total: number, minMain: number, minSid
   const lower = Math.min(minSide, upper);
   return Math.min(upper, Math.max(lower, wanted));
 }
+
+/**
+ * How big the sized pane is partway through a drag.
+ *
+ * The sign depends on which end that pane sits at, and it is the sort of
+ * thing that is wrong in exactly one of the two cases and looks fine in
+ * testing because only one case was tried. Dragging away from the pane makes
+ * it bigger: to the right when it is on the left, to the left when it is on
+ * the right.
+ *
+ * `delta` is how far the pointer has moved along the axis since the drag
+ * began, positive meaning right or down.
+ */
+export function sizeAfterDrag(startSize: number, delta: number, sideOn: 'start' | 'end'): number {
+  return sideOn === 'start' ? startSize + delta : startSize - delta;
+}

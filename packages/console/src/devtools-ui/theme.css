@@ -17,6 +17,8 @@
   --sys-color-primary: #0b57d0;
   --sys-color-primary-bright: #1a73e8;
   --sys-color-tonal-container: #d3e3fd;
+  /* Where a search match is picked out of the line it sits in. */
+  --sys-color-search-hit: #fdf2a0;
   --sys-color-state-hover-on-subtle: rgba(31, 31, 31, 0.06);
   --sys-color-state-disabled: rgba(31, 31, 31, 0.38);
   --sys-color-green: #188038;
@@ -64,6 +66,7 @@
     --sys-color-primary: #a8c7fa;
     --sys-color-primary-bright: #8ab4f8;
     --sys-color-tonal-container: #004a77;
+    --sys-color-search-hit: #6c5a00;
     --sys-color-state-hover-on-subtle: rgba(255, 255, 255, 0.1);
     --sys-color-state-disabled: rgba(227, 227, 227, 0.38);
     --sys-color-green: #6dd58c;
@@ -102,6 +105,7 @@
     --sys-color-primary: #a8c7fa;
     --sys-color-primary-bright: #8ab4f8;
     --sys-color-tonal-container: #004a77;
+    --sys-color-search-hit: #6c5a00;
     --sys-color-state-hover-on-subtle: rgba(255, 255, 255, 0.1);
     --sys-color-state-disabled: rgba(227, 227, 227, 0.38);
     --sys-color-green: #6dd58c;

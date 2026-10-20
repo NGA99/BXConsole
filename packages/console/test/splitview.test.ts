@@ -9,7 +9,7 @@
  */
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { clampSide } from '../src/devtools-ui/split-size';
+import { clampSide, sizeAfterDrag } from '../src/devtools-ui/split-size';
 
 const MIN_MAIN = 120;
 const MIN_SIDE = 320;
@@ -70,5 +70,40 @@ describe('a vertical split uses the same arithmetic', () => {
     assert.equal(clampSide(50, 800, 100, 150), 150);
     assert.equal(clampSide(900, 800, 100, 150), 700);
     assert.equal(clampSide(150, 200, 100, 150), 100);
+  });
+});
+
+describe('which end the sized pane sits at', () => {
+  /*
+   * Sources puts its file tree on the left and the tree is what keeps its
+   * width, so the sized pane is not always the right-hand one. The arithmetic
+   * is the same; only the sign of the drag changes, and a sign that is right
+   * at one end and wrong at the other looks correct until someone drags the
+   * other one.
+   */
+  test('dragging away from the pane makes it bigger, at either end', () => {
+    // On the right: the pointer going left (negative) grows it.
+    assert.equal(sizeAfterDrag(300, -40, 'end'), 340);
+    assert.equal(sizeAfterDrag(300, 40, 'end'), 260);
+    // On the left: the other way round.
+    assert.equal(sizeAfterDrag(300, 40, 'start'), 340);
+    assert.equal(sizeAfterDrag(300, -40, 'start'), 260);
+  });
+
+  test('a drag that went nowhere changes nothing', () => {
+    assert.equal(sizeAfterDrag(230, 0, 'start'), 230);
+    assert.equal(sizeAfterDrag(230, 0, 'end'), 230);
+  });
+
+  test('the two ends are mirror images, which is the whole claim', () => {
+    for (const delta of [-500, -1, 0, 1, 37, 500]) {
+      assert.equal(sizeAfterDrag(400, delta, 'start') + sizeAfterDrag(400, delta, 'end'), 800, `delta ${delta}`);
+    }
+  });
+
+  test('the clamp still has the last word', () => {
+    // Dragging past the far edge cannot push the pane out of its bounds.
+    assert.equal(clamp(sizeAfterDrag(300, 5000, 'start'), 1000), 1000 - MIN_MAIN);
+    assert.equal(clamp(sizeAfterDrag(300, -5000, 'start'), 1000), MIN_SIDE);
   });
 });

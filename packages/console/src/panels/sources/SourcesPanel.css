@@ -1,18 +1,18 @@
-.sources {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-}
+/*
+ * The navigator fills whatever the split gives it.
+ *
+ * Its width used to be this file's business — a 230px basis allowed to shrink
+ * to 110, after a fixed 230 left the editor 37 pixels wide in a narrow dock.
+ * The same floors are still enforced, by the SplitView that now owns the
+ * line between the two; what changed is that the reader can move it. The
+ * border goes with it, because the divider is the border now and two of them
+ * read as a gap.
+ */
 .sources-nav {
-  /* Was a fixed 230px that would not shrink, which in a narrow dock left the
-     editor 37 pixels wide — a file tree beside a column too thin to read a
-     line of code in. It gives ground now, down to a width that still shows a
-     filename. */
-  flex: 0 1 230px;
-  min-width: 110px;
+  flex: 1;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  border-right: 1px solid var(--sys-color-divider);
   min-height: 0;
 }
 .sources-tree {

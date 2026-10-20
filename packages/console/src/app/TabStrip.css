@@ -45,14 +45,33 @@
   cursor: pointer;
 }
 
+/*
+ * The unselected ones step back rather than the selected one stepping
+ * forward by a shade.
+ *
+ * Both were a light grey one step apart and the strip read as a row of
+ * identical cards. A browser solves this by making the open tab the same
+ * surface as the page under it, so it reads as the thing you are looking at
+ * and the rest as somewhere else.
+ */
+.tabstrip-tab {
+  opacity: 0.68;
+}
+
 .tabstrip-tab:hover {
   background: var(--sys-color-state-hover-on-subtle);
+  opacity: 0.85;
 }
 
 .tabstrip-tab.active {
-  background: var(--sys-color-surface2);
+  background: var(--sys-color-surface);
   border-color: var(--sys-color-divider);
   color: var(--sys-color-on-surface);
+  opacity: 1;
+}
+
+.tabstrip-tab.active .tabstrip-label {
+  font-weight: 500;
 }
 
 .tabstrip-tab.gone .tabstrip-label {
@@ -106,15 +125,27 @@
  * it, not read as part of the title. `tabular-nums` so the digits line up
  * down the strip rather than dancing with the glyph widths.
  */
+/*
+ * How much this window did, as a number on the tab.
+ *
+ * In a pill, because a bare figure beside a title reads as part of the title
+ * — "NAVER 164" looks like a page called that. Enclosed it reads as a count
+ * of something, and the hover says what: events.
+ */
 .tabstrip-count {
   flex: 0 0 auto;
   margin-left: auto;
-  padding-left: 4px;
-  font-size: 10px;
+  padding: 0 5px;
+  height: 14px;
+  line-height: 14px;
+  border-radius: 7px;
+  background: var(--sys-color-state-hover-on-subtle);
+  color: var(--sys-color-token-subtle);
+  font-size: 9px;
   font-variant-numeric: tabular-nums;
-  opacity: 0.55;
 }
 
 .tabstrip-tab.active .tabstrip-count {
-  opacity: 0.75;
+  background: var(--sys-color-surface3);
+  color: var(--sys-color-on-surface);
 }

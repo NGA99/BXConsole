@@ -26,6 +26,7 @@ import { TypeIcon } from './icons';
 import { GearIcon } from '../../devtools-ui/icons';
 import { compileFilter, hostOf } from './filters';
 import { searchEntries } from './search';
+import { NetworkSearch } from './NetworkSearch';
 import { BODY_ORDER, LABEL, TITLE, bodyState, bodyTitle } from './body-state';
 import { loadAll } from './stored-bodies';
 import { asCurl, asFetch, copyText, replayExpression } from './copy';
@@ -130,6 +131,54 @@ export function NetworkPanel({ sessionId }: { sessionId: string }) {
   const [timeRange, setTimeRange] = useState<{ min: number; max: number } | null>(null);
   const [menu, setMenu] = useState<MenuState | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const searchInput = useRef<HTMLInputElement>(null);
+  /*
+   * ⌘F / Ctrl+F opens the search, the way it does in DevTools.
+   *
+   * It used to focus the filter box instead, which is a different tool for a
+   * different question: the filter decides which rows are listed, the search
+   * looks inside them — headers, payloads, response bodies, websocket
+   * messages. Someone pressing Find is asking the second question, and
+   * answering with the first one quietly hid every match that was in a body.
+   *
+   * Handled here rather than in the shell's own shortcut table because this
+   * panel is the one that knows it has a second place to look.
+   */
+  const focusWanted = useRef(false);
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'f' || !(e.metaKey || e.ctrlKey)) return;
+      /*
+       * Only when this panel is the one on screen.
+       *
+       * The panels stay mounted behind a `hidden` attribute so a tab switch
+       * keeps their state, which means a listener on the window hears every
+       * key whichever tab is showing — Find on the Console tab was opening
+       * the Network search behind it. `offsetParent` is null for anything
+       * hidden, which is the question being asked.
+       */
+      if (!rootRef.current?.offsetParent) return;
+      e.preventDefault();
+      focusWanted.current = true;
+      setSearchOpen(true);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  /*
+   * The caret goes in after the field exists, which is a render later.
+   *
+   * Doing it from the key handler — even inside requestAnimationFrame — put
+   * it there before React had committed the newly opened panel, so the search
+   * opened and the typing went nowhere.
+   */
+  useEffect(() => {
+    if (!searchOpen || !focusWanted.current) return;
+    focusWanted.current = false;
+    searchInput.current?.focus();
+    searchInput.current?.select();
+  }, [searchOpen]);
 
   // "Reveal in Network" from the Console: select that request.
   const reveal = useNetworkSelection();
@@ -411,6 +460,30 @@ export function NetworkPanel({ sessionId }: { sessionId: string }) {
   const closeMenu = useCallback(() => setMenu(null), []);
 
   return (
+    <SplitView
+      sideOn="start"
+      initialSide={320}
+      minSide={220}
+      minMain={320}
+      storageKey="bxconsole.network.search"
+      side={
+        searchOpen ? (
+          <NetworkSearch
+            query={search}
+            onQuery={setSearch}
+            opts={searchOpts}
+            onOpts={setSearchOpts}
+            result={{ hits, unloaded }}
+            entries={entries}
+            loadingBodies={loadingBodies}
+            onSearchStored={searchStoredBodies}
+            onPick={setSelected}
+            onClose={() => setSearchOpen(false)}
+            inputRef={searchInput}
+          />
+        ) : null
+      }
+      main={
     <div className="network-root" ref={rootRef}>
       <Toolbar>
         <ToolbarButton title={recording ? 'Stop recording network log' : 'Record network log'} onClick={() => store.getState().setNetworkRecording(!recording)}>
@@ -532,57 +605,6 @@ export function NetworkPanel({ sessionId }: { sessionId: string }) {
         </div>
       )}
 
-      {searchOpen && (
-        <div className="network-search">
-          <Toolbar>
-            <ToolbarInput placeholder="Search headers, payloads and responses" value={search} onChange={setSearch} />
-            <label className="toolbar-check">
-              <input type="checkbox" checked={searchOpts.caseSensitive} onChange={(e) => setSearchOpts({ ...searchOpts, caseSensitive: e.target.checked })} /> Aa
-            </label>
-            <label className="toolbar-check">
-              <input type="checkbox" checked={searchOpts.regex} onChange={(e) => setSearchOpts({ ...searchOpts, regex: e.target.checked })} /> .*
-            </label>
-            <span className="screen-meta">{search ? `${hits.length} hits` : ''}</span>
-          </Toolbar>
-          {/*
-            A recording keeps its larger bodies in the relay's store. Saying
-            so is the whole point: "No matches" that quietly skipped the only
-            place the answer was is worse than no search at all.
-          */}
-          {search && unloaded.length > 0 && (
-            <div className="network-search-note">
-              {loadingBodies ? (
-                <>Reading {unloaded.length} stored {unloaded.length === 1 ? 'body' : 'bodies'}…</>
-              ) : (
-                <>
-                  {unloaded.length} recorded {unloaded.length === 1 ? 'body is' : 'bodies are'} held by the relay and were not searched.{' '}
-                  <button className="detail-link" onClick={searchStoredBodies}>
-                    Search them too
-                  </button>
-                </>
-              )}
-            </div>
-          )}
-          {search && (
-            <div className="network-search-results mono">
-              {hits.map((h, i) => {
-                const e = entries.find((x) => x.requestId === h.requestId);
-                return (
-                  <div key={i} className="network-search-hit" onClick={() => setSelected(h.requestId)}>
-                    <span className="network-search-name">{e ? nameOf(e.request.url) : h.requestId}</span>
-                    <span className="network-search-where">{h.where}</span>
-                    <span className="network-search-snippet">{h.snippet}</span>
-                  </div>
-                );
-              })}
-              {hits.length === 0 && (
-                <div className="network-search-hit muted">{unloaded.length > 0 ? 'No matches in what was searched' : 'No matches'}</div>
-              )}
-            </div>
-          )}
-        </div>
-      )}
-
       {settings.overview && entries.length > 0 && (
         <Overview entries={entries} range={fullRange} timing={pageTiming} selection={timeRange} onSelect={setTimeRange} />
       )}
@@ -635,6 +657,8 @@ export function NetworkPanel({ sessionId }: { sessionId: string }) {
 
       <ContextMenu menu={menu} onClose={closeMenu} />
     </div>
+      }
+    />
   );
 }
 

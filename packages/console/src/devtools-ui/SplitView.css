@@ -47,3 +47,17 @@
 .splitview.vertical .splitview-divider::after {
   inset: -3px 0;
 }
+
+/*
+ * The sized pane at the start instead of the end.
+ *
+ * Reversing the flex direction rather than reordering the children: the DOM
+ * stays main-divider-side whichever end it is drawn at, so tab order and
+ * anything reading the tree do not change with a layout choice.
+ */
+.splitview.horizontal.side-start {
+  flex-direction: row-reverse;
+}
+.splitview.vertical.side-start {
+  flex-direction: column-reverse;
+}

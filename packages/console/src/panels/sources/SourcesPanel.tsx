@@ -12,6 +12,7 @@ import { useSessionsStore } from '../../state/sessions';
 import { Toolbar, ToolbarButton, ToolbarDivider, ToolbarInput } from '../../devtools-ui/Toolbar';
 import { CodeView, canFormat, detectLanguage, formatCode, type CodeLanguage } from '../../devtools-ui/CodeView';
 import { SourceTree } from './SourceTree';
+import { SplitView } from '../../devtools-ui/SplitView';
 import { hostOf } from '../network/filters';
 import './SourcesPanel.css';
 
@@ -133,25 +134,39 @@ export function SourcesPanel({ sessionId }: { sessionId: string }) {
   }, [entries, session]);
 
   return (
-    <div className="sources">
-      {navOpen && (
-        <div className="sources-nav">
+    /*
+     * The line between the file tree and the code is draggable, and the tree
+     * is the pane that keeps its width: a wider window should give the room
+     * to the code, which is the thing being read. `side` is therefore the
+     * tree even though it is drawn on the left.
+     */
+    <SplitView
+      sideOn="start"
+      initialSide={230}
+      minSide={110}
+      minMain={240}
+      storageKey="bxconsole.sources.nav"
+      side={
+        navOpen ? (
+          <div className="sources-nav">
           <Toolbar>
             <ToolbarInput placeholder="Filter files" value={filter} onChange={setFilter} />
             <ToolbarButton title={connected ? 'Reload the files from the page' : 'The page is gone; there is nothing to reload'} disabled={!connected} onClick={refreshList}>
               ⟳
             </ToolbarButton>
           </Toolbar>
-          {entries.length > 0 ? (
-            <SourceTree entries={entries} filter={filter} current={current} pageHost={pageHost} onOpen={(url) => open(url)} />
-          ) : (
-            <div className="dom-empty">
-              {connected ? 'No sources reported yet.' : 'Nothing was kept from this run: its files were never opened while it was live.'}
-            </div>
-          )}
-        </div>
-      )}
-      <div className="sources-editor">
+            {entries.length > 0 ? (
+              <SourceTree entries={entries} filter={filter} current={current} pageHost={pageHost} onOpen={(url) => open(url)} />
+            ) : (
+              <div className="dom-empty">
+                {connected ? 'No sources reported yet.' : 'Nothing was kept from this run: its files were never opened while it was live.'}
+              </div>
+            )}
+          </div>
+        ) : null
+      }
+      main={
+        <div className="sources-editor">
         <Toolbar wrap>
           <ToolbarButton title={navOpen ? 'Hide navigator' : 'Show navigator'} onClick={() => setNavOpen((o) => !o)}>
             {navOpen ? '◧' : '◨'}
@@ -200,9 +215,10 @@ export function SourcesPanel({ sessionId }: { sessionId: string }) {
           />
         )}
         {!loading && !source && <div className="dom-empty">Pick a file on the left, or click a location link in the Console or Network tab.</div>}
-        {source?.truncated && <div className="detail-note sources-truncated">truncated to 2 MB</div>}
-      </div>
-    </div>
+          {source?.truncated && <div className="detail-note sources-truncated">truncated to 2 MB</div>}
+        </div>
+      }
+    />
   );
 }
 

@@ -90,7 +90,8 @@ export function Shell({ route }: { route: Route }) {
     }
   };
 
-  // DevTools shortcuts: ⌘K / Ctrl+L clear the console, ⌘F / Ctrl+F focus the visible panel's filter.
+  // DevTools shortcuts: ⌘K / Ctrl+L clear the console, ⌘F / Ctrl+F focus the visible
+  // panel's filter — except on Network, which has a search of its own to open.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const mod = e.metaKey || e.ctrlKey;
@@ -101,6 +102,10 @@ export function Shell({ route }: { route: Route }) {
           sessionData(route.sessionId).getState().clearConsole();
         }
       } else if (e.key === 'f') {
+        // Network answers Find for itself: it has a search that looks inside
+        // the rows, which is a different question from the filter that
+        // decides which rows are listed. See NetworkPanel.
+        if (route.panel === 'network') return;
         const input =
           document.querySelector<HTMLInputElement>('.shell-panel:not([hidden]) [data-find]') ??
           document.querySelector<HTMLInputElement>('.shell-panel:not([hidden]) .toolbar-input, .shell-panel:not([hidden]) .network-filter-input');
