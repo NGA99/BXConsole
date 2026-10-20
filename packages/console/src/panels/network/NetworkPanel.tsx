@@ -32,6 +32,7 @@ import { asCurl, asFetch, copyText, replayExpression } from './copy';
 import { toHar, downloadJson } from './har';
 import { parseStack, shortLocation } from '../console/stack';
 import { SourceLink } from '../../devtools-ui/SourceLink';
+import { isLinkableUrl } from '../../devtools-ui/safe-url';
 import { openSource } from '../../state/sources-target';
 import { useNetworkSelection } from '../../state/network-selection';
 import {
@@ -347,7 +348,14 @@ export function NetworkPanel({ sessionId }: { sessionId: string }) {
       y: e.clientY,
       items: [
         { label: 'Open in Sources', disabled: entry.request.kind === 'websocket', onClick: () => openSource(sessionId, entry.request.url) },
-        { label: 'Open in new tab', onClick: () => window.open(entry.request.url, '_blank') },
+        // Greyed out rather than guarded at click time: `window.open` on a
+        // `javascript:` URL runs it in a window that inherits this origin, and
+        // the URL is whatever the page reported for the request.
+        {
+          label: 'Open in new tab',
+          disabled: !isLinkableUrl(entry.request.url),
+          onClick: () => window.open(entry.request.url, '_blank'),
+        },
         { separator: true },
         { label: 'Copy URL', onClick: () => void copyText(entry.request.url) },
         { label: 'Copy as cURL', onClick: () => void copyText(asCurl(entry)) },

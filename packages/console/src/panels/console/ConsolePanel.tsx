@@ -14,6 +14,7 @@ import { ContextMenu, type MenuState } from '../../devtools-ui/ContextMenu';
 import { clockTime as formatTime, fullTimestamp } from '../../devtools-ui/time';
 import { navigate } from '../../app/router';
 import { SourceLink } from '../../devtools-ui/SourceLink';
+import { safeHref } from '../../devtools-ui/safe-url';
 import { revealRequest } from '../../state/network-selection';
 import { useConsoleSelection } from '../../state/console-selection';
 import { useActiveTab } from '../../state/active-tab';
@@ -405,7 +406,7 @@ function ConsoleRow({ row, sessionId, settings }: { row: Row; sessionId: string;
     case 'page.navigated':
       return (
         <Line severity="info" entry={entry} settings={settings} className="console-navigated">
-          Navigated to <a href={entry.url} target="_blank" rel="noreferrer">{entry.url}</a>
+          Navigated to <a href={safeHref(entry.url)} target="_blank" rel="noreferrer">{entry.url}</a>
         </Line>
       );
 
@@ -416,7 +417,12 @@ function ConsoleRow({ row, sessionId, settings }: { row: Row; sessionId: string;
           <span className="console-network-error">
             {entry.method}{' '}
             <a
-              href={entry.url}
+              // The href is only there so the row reads and behaves like a
+              // link; the click handler keeps the operator in the Network
+              // panel. preventDefault is not the guard, though: a middle
+              // click fires `auxclick`, not `click`, so it never runs and the
+              // browser follows the href the page chose.
+              href={safeHref(entry.url)}
               onClick={(e) => {
                 e.preventDefault();
                 revealRequest(sid, entry.requestId);

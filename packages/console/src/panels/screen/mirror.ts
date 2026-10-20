@@ -3,6 +3,7 @@
  * streamed ops by node id. Pure DOM, no React: this runs per mutation batch.
  */
 import { assetPath, isProxyableUrl, rewriteCssUrls, rewriteSrcset, type ScreenOp, type SnapshotNode } from '@bxconsole/protocol';
+import { isScriptUrl } from '../../devtools-ui/safe-url';
 
 // Nodes live in the iframe's realm, so `instanceof Element` from this window is
 // always false. Use nodeType / tagName checks everywhere below.
@@ -302,7 +303,9 @@ export class DomMirror {
     }
     const lower = name.toLowerCase();
     if (lower.startsWith('on')) return;
-    if ((lower === 'href' || lower === 'src' || lower === 'action') && /^\s*javascript:/i.test(value)) return;
+    // Scheme read by the shared helper, which knows the spellings a plain
+    // `/^\s*javascript:/` misses — a leading NUL, or a tab inside the word.
+    if ((lower === 'href' || lower === 'src' || lower === 'action') && isScriptUrl(value)) return;
     if (tagOf(el) === 'IFRAME' && (lower === 'src' || lower === 'srcdoc')) return;
     try {
       el.setAttribute(name, value);
