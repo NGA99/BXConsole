@@ -23,14 +23,12 @@ import { ProjectBar } from './ProjectBar';
 import { ProjectsPanel } from './ProjectsPanel';
 import { AdminPanel } from './AdminPanel';
 import { useProjectsStore } from '../../state/projects';
-import { useIsAdmin } from '../../state/whoami';
 import './SessionsPanel.css';
 
 export function SessionsPanel({ view }: { view: SessionView }) {
   const everything = useSessionList();
   const purgeDays = useSessionsStore((s) => s.trashPurgeDays);
-  const isAdmin = useIsAdmin();
-  const { selectedId, homeId, order } = useProjectsStore();
+  const { selectedId, homeId, order, loaded: projectsLoaded } = useProjectsStore();
   const setView = navigateToView;
   const [query, setQuery] = useState('');
   const [connectedOnly, setConnectedOnly] = useState(false);
@@ -57,25 +55,45 @@ export function SessionsPanel({ view }: { view: SessionView }) {
   // Live runs first: those are the ones you can still act on.
   const ordered = [...sessions].sort((a, b) => Number(b.connected) - Number(a.connected) || b.lastSeenAt - a.lastSeenAt);
 
+  /*
+   * Projects are a level up, not a tab beside the others.
+   *
+   * Sessions, Webhook, Trash and Agent are all about one project: its runs,
+   * what reaches it, what it has thrown away, and the snippet carrying its
+   * key. Projects is where you choose which — and having it sit among them
+   * made it read as a fifth thing to look at, with two ways to change
+   * project and no sense of being inside one. Admin is a level up too: it is
+   * the relay's accounts, not this project's.
+   */
+  const inside = view !== 'projects' && view !== 'admin';
+  /*
+   * With no project there is nothing for these four tabs to be about: no
+   * runs to list, nothing in a trash, and a snippet with no key in it. So
+   * the list is what is shown, which is also the one thing there is to do.
+   * Only once the relay has said — before that an empty list means "not
+   * yet", and showing "you have no projects" for a moment on every
+   * connection would be worse than waiting.
+   */
+  const nothingToBeIn = inside && projectsLoaded && order.length === 0;
+
   return (
     <>
-      <ProjectBar />
-      <TabBar
-        tabs={[
-          { id: 'sessions', label: live > 0 ? `Sessions (${live} live)` : 'Sessions' },
-          { id: 'webhook', label: 'Webhook' },
-          { id: 'trash', label: trashed.length > 0 ? `Trash (${trashed.length})` : 'Trash' },
-          { id: 'agent', label: 'Agent' },
-          { id: 'projects', label: 'Projects' },
-          // Only for an administrator. The route exists either way and the
-          // relay refuses what it asks for, so typing the address shows an
-          // empty screen rather than somebody else's accounts.
-          ...(isAdmin ? ([{ id: 'admin' as const, label: 'Admin' }]) : []),
-        ]}
-        active={view}
-        onSelect={setView}
-      />
-      {view === 'webhook' ? (
+      <ProjectBar showing={nothingToBeIn || view === 'projects' ? 'projects' : view === 'admin' ? 'admin' : 'inside'} />
+      {inside && !nothingToBeIn && (
+        <TabBar
+          tabs={[
+            { id: 'sessions', label: live > 0 ? `Sessions (${live} live)` : 'Sessions' },
+            { id: 'webhook', label: 'Webhook' },
+            { id: 'trash', label: trashed.length > 0 ? `Trash (${trashed.length})` : 'Trash' },
+            { id: 'agent', label: 'Agent' },
+          ]}
+          active={view}
+          onSelect={setView}
+        />
+      )}
+      {nothingToBeIn ? (
+        <ProjectsPanel />
+      ) : view === 'webhook' ? (
         <WebhookPanel />
       ) : view === 'agent' ? (
         <div className="sessions-list">

@@ -46,6 +46,14 @@ function writeSelected(projectId: string): void {
 interface ProjectsState {
   byId: Record<string, Project>;
   order: string[];
+  /**
+   * Whether the relay has said what this account can read.
+   *
+   * Before it has, an empty list means "not yet" and not "none" — and the
+   * two want opposite screens, so a console that could not tell them apart
+   * would show "you have no projects" for a moment on every connection.
+   */
+  loaded: boolean;
   /** Where a new run lands, or '' when none of this account's projects is it. */
   homeId: string;
   /**
@@ -74,6 +82,7 @@ function settleSelection(order: string[], wanted: string, homeId: string): strin
 export const useProjectsStore = create<ProjectsState>((set) => ({
   byId: {},
   order: [],
+  loaded: false,
   homeId: '',
   selectedId: '',
   setAll: (list, homeId) =>
@@ -85,7 +94,7 @@ export const useProjectsStore = create<ProjectsState>((set) => ({
       const wanted = s.selectedId || readSelected();
       const selectedId = settleSelection(order, wanted, homeId);
       writeSelected(selectedId);
-      return { byId: Object.fromEntries(list.map((p) => [p.id, p])), order, homeId, selectedId };
+      return { byId: Object.fromEntries(list.map((p) => [p.id, p])), order, homeId, selectedId, loaded: true };
     }),
   upsert: (project) =>
     set((s) => {

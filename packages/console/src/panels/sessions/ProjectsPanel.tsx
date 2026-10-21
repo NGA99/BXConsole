@@ -13,7 +13,7 @@
  * relay checks all of this again; hiding the buttons is so that what is shown
  * is what works.
  */
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Project } from '@bxconsole/protocol';
 import { useProjectsStore, selectProject } from '../../state/projects';
 import { useSessionList, useSessionsStore } from '../../state/sessions';
@@ -44,12 +44,29 @@ export function ProjectsPanel() {
     if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
   }
 
+  const [entering, setEntering] = useState<string | null>(null);
+
+  /*
+   * Making a project is how you say what you are about to work on, so it
+   * takes you in rather than leaving you on the list to click again. The
+   * relay names it back with its id, which is what `entering` waits for.
+   */
   const make = () => {
     const name = making.trim();
     if (!name) return;
     createProject(name);
+    setEntering(name);
     setMaking('');
   };
+
+  useEffect(() => {
+    if (!entering) return;
+    const made = order.map((id) => byId[id]).find((p) => p?.name === entering.replace(/\s+/g, ' ').trim());
+    if (!made) return;
+    setEntering(null);
+    selectProject(made.id);
+    navigateToView('sessions');
+  }, [entering, order, byId]);
 
   return (
     <div className="projects">
@@ -76,7 +93,8 @@ export function ProjectsPanel() {
 
       {order.length === 0 ? (
         <div className="projects-empty">
-          You have no projects. Make one, and the snippets in the Agent tab will carry its key.
+          You have no projects yet. Make one above: a run is recorded into the project whose key its
+          payload carries, so there has to be one before there can be a snippet to paste.
         </div>
       ) : (
         order.map((id) => {
@@ -171,11 +189,11 @@ function ProjectRow({
         <span className="project-count">
           {sessions} {sessions === 1 ? 'recording' : 'recordings'}
         </span>
-        {!selected && (
-          <button className="detail-link" onClick={() => (selectProject(project.id), navigateToView('sessions'))}>
-            open
-          </button>
-        )}
+        {/* Always, not only when it is not the one selected: the point of
+            this button is to go in, and on the list you are not in anything. */}
+        <button className="detail-link" onClick={() => (selectProject(project.id), navigateToView('sessions'))}>
+          open
+        </button>
       </div>
 
       <div className="project-key">

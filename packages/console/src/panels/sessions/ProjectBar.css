@@ -1,5 +1,5 @@
 /*
- * The project row, above the tabs.
+ * The path row, above the tabs.
  *
  * Quieter than the tab bar under it: this says where you are, the tabs say
  * what you are looking at, and a row with equal weight would read as a second
@@ -8,7 +8,7 @@
 .projectbar {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   padding: 0 8px;
   height: 26px;
   flex-shrink: 0;
@@ -17,37 +17,59 @@
   font-size: 11px;
   color: var(--sys-color-token-subtle);
 }
-.projectbar-pick {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  min-width: 0;
+
+/* The roots of the two things above a project: the list, and the relay's
+   own accounts. Links rather than tabs, because a tab would put them back
+   among the four that are about one project. */
+.projectbar-root {
+  font: inherit;
+  font-size: 11px;
+  color: var(--sys-color-primary);
+  background: none;
+  border: none;
+  border-radius: 2px;
+  padding: 1px 4px;
+  cursor: pointer;
 }
-.projectbar-pick select {
+.projectbar-root:hover {
+  background: var(--sys-color-surface2);
+}
+/* Where you already are: still a way back, no longer an invitation. */
+.projectbar-root.here {
+  color: var(--sys-color-on-surface);
+  font-weight: 500;
+}
+
+.projectbar-sep {
+  color: var(--sys-color-token-subtle);
+}
+.projectbar-none {
+  font-style: italic;
+}
+
+/* The shortcut past the list. Flat until hovered, so the path reads as a
+   path rather than as a form control sitting in a toolbar. */
+.projectbar-pick {
   max-width: 320px;
   font: inherit;
+  font-size: 11px;
+  font-weight: 500;
   color: var(--sys-color-on-surface);
-  background: var(--sys-color-cdt-base-container);
-  border: 1px solid var(--sys-color-neutral-outline);
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 2px;
   padding: 1px 2px;
 }
+.projectbar-pick:hover,
+.projectbar-pick:focus {
+  border-color: var(--sys-color-neutral-outline);
+  background: var(--sys-color-cdt-base-container);
+}
+
 .projectbar-spacer {
   flex: 1;
 }
 .projectbar-who {
-  display: flex;
-  align-items: center;
-  gap: 5px;
   white-space: nowrap;
-}
-/* A pill, so "admin" reads as a standing fact about the account rather than
-   as part of the name. */
-.projectbar-role {
-  border: 1px solid var(--sys-color-neutral-outline);
-  border-radius: 7px;
-  padding: 0 5px;
-  font-size: 10px;
-  line-height: 13px;
-  color: var(--sys-color-token-subtle);
+  padding-right: 2px;
 }
