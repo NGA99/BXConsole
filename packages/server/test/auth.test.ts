@@ -254,6 +254,35 @@ describe('accounts from .passwd', () => {
     assert.equal(a.allows(await signedInWith(a, 'unchanged')), true);
   });
 
+  test('a .passwd that goes missing locks the console rather than opening it', async () => {
+    /*
+     * The whole point of the change behind this. The fallback is named
+     * `admin` with the id that owns the home project on most relays, and its
+     * password is the repository's default unless CONSOLE_PASSWORD says
+     * otherwise — so the old behaviour turned a lost file into a relay
+     * anyone who had read the README could sign into and read everything on.
+     */
+    const file = keep(await passwdFile('admin', 'the real one'));
+    const a = new ConsoleAuth({ file, password: 'asdf1234!@#' });
+    a.load();
+    const before = await signedInWith(a, 'the real one');
+    rmSync(file);
+    await new Promise((r) => setTimeout(r, 1100));
+
+    assert.equal(await a.cookieFor('asdf1234!@#', 'admin'), null, 'the environment password got in');
+    assert.equal(await a.cookieFor('the real one', 'admin'), null);
+    assert.equal(a.allows(before), false, 'a cookie issued before it went still worked');
+    assert.equal(a.actorFor(before), null);
+  });
+
+  test('a relay that never had a file still runs on CONSOLE_PASSWORD', async () => {
+    // Which is a supported way to run, and the one the banner describes.
+    const a = new ConsoleAuth({ password: 'from the environment' });
+    a.load();
+    assert.equal(a.source, 'env');
+    assert.ok(await a.cookieFor('from the environment'));
+  });
+
   test('a file others can read stops the relay rather than being used anyway', async () => {
     const file = keep(await passwdFile('admin', 'pw'));
     chmodSync(file, 0o644);
@@ -476,6 +505,81 @@ describe('editing accounts', () => {
     const { auth: a } = await withAccounts([['ana', 'pw for ana', 'a1a1a1', 'admin']]);
     assert.deepEqual(a.summaries(), [{ id: 'a1a1a1', user: 'ana', role: 'admin' }]);
     assert.ok(!JSON.stringify(a.summaries()).includes('scrypt'));
+  });
+
+  after(() => {
+    for (const f of made) rmSync(path.dirname(f), { recursive: true, force: true });
+  });
+});
+
+/**
+ * Two changes at the same moment.
+ *
+ * Each one reads the whole account file, hashes a password, and writes the
+ * file back. scrypt takes about a tenth of a second, so two of them in flight
+ * is not a narrow window — it is every double-click, and every pair of
+ * administrators working at once.
+ */
+describe('editing accounts at the same time', () => {
+  const made: string[] = [];
+  const keep = (f: string) => (made.push(f), f);
+
+  async function oneAdmin() {
+    const file = keep(await passwdWithAll([['ana', 'pw for ana', 'a1a1a1', 'admin']]));
+    const a = new ConsoleAuth({ file });
+    a.load();
+    return a;
+  }
+
+  test('two accounts added at once both survive', async () => {
+    /*
+     * They did not. Both read the list before either wrote, so the second
+     * write did not have the first account in it and one of the two vanished
+     * — with nothing failing, so the screen reported success for both.
+     */
+    const a = await oneAdmin();
+    const [one, two] = await Promise.all([
+      a.changeAccounts({ op: 'create', user: 'bo', password: 'pw for bo', role: 'member' }),
+      a.changeAccounts({ op: 'create', user: 'cy', password: 'pw for cy', role: 'member' }),
+    ]);
+    assert.equal(one, null);
+    assert.equal(two, null);
+    assert.deepEqual(a.summaries().map((s) => s.user).sort(), ['ana', 'bo', 'cy']);
+    assert.ok(await a.cookieFor('pw for bo', 'bo'));
+    assert.ok(await a.cookieFor('pw for cy', 'cy'));
+  });
+
+  test('a batch of them all land', async () => {
+    const a = await oneAdmin();
+    const names = ['one', 'two', 'three', 'four', 'five'];
+    const results = await Promise.all(
+      names.map((user) => a.changeAccounts({ op: 'create', user, password: `pw for ${user}`, role: 'member' })),
+    );
+    assert.deepEqual(results, names.map(() => null));
+    assert.deepEqual(a.summaries().map((s) => s.user).sort(), ['ana', ...names].sort());
+  });
+
+  test('the second of two conflicting changes sees the first', async () => {
+    // Adding the same name twice has to be refused the second time, which it
+    // can only be if the second read happens after the first write.
+    const a = await oneAdmin();
+    const [one, two] = await Promise.all([
+      a.changeAccounts({ op: 'create', user: 'bo', password: 'first one', role: 'member' }),
+      a.changeAccounts({ op: 'create', user: 'bo', password: 'second one', role: 'member' }),
+    ]);
+    assert.equal([one, two].filter((r) => r === null).length, 1, 'exactly one should go through');
+    assert.match([one, two].find((r) => r !== null) ?? '', /already an account/);
+    assert.deepEqual(a.summaries().map((s) => s.user).sort(), ['ana', 'bo']);
+  });
+
+  test('a removal and an addition do not cross', async () => {
+    const a = await oneAdmin();
+    await a.changeAccounts({ op: 'create', user: 'bo', password: 'pw for bo', role: 'member' });
+    await Promise.all([
+      a.changeAccounts({ op: 'remove', user: 'bo' }),
+      a.changeAccounts({ op: 'create', user: 'cy', password: 'pw for cy', role: 'member' }),
+    ]);
+    assert.deepEqual(a.summaries().map((s) => s.user).sort(), ['ana', 'cy']);
   });
 
   after(() => {

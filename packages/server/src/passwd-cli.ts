@@ -11,7 +11,7 @@ import { createInterface, type Interface } from 'node:readline';
 import { promises as fs } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { PASSWORD_MIN_LENGTH } from '@bxconsole/protocol';
-import { type Account, PasswordFile, hashPassword, newAccountId, writeAccounts } from './passwd';
+import { type Account, FIRST_ACCOUNT_ID, PasswordFile, hashPassword, newAccountId, writeAccounts } from './passwd';
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(here, '..', '..', '..');
@@ -157,8 +157,13 @@ async function main(): Promise<void> {
   const account: Account = {
     user,
     record: await hashPassword(password),
-    // A password change keeps the id: the projects it owns are the same ones.
-    id: mine?.id ?? newAccountId(),
+    /*
+     * A password change keeps the id: the projects it owns are the same ones.
+     * The very first account of a relay keeps the id the environment-password
+     * account had, so that the projects made before `.passwd` existed are
+     * still this person's — see FIRST_ACCOUNT_ID.
+     */
+    id: mine?.id ?? (existing.length === 0 ? FIRST_ACCOUNT_ID : newAccountId()),
     // The first account has to be able to add the others.
     role: (wanted as Account['role'] | undefined) ?? mine?.role ?? (existing.length === 0 ? 'admin' : 'member'),
   };

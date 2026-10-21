@@ -93,6 +93,7 @@ export function SessionsPanel({ view }: { view: SessionView }) {
           offline={offline}
           live={live}
           purgeDays={purgeDays}
+          elsewhere={everything.length - all.length}
           query={query}
           setQuery={setQuery}
           connectedOnly={connectedOnly}
@@ -115,6 +116,7 @@ function SessionList({
   setQuery,
   connectedOnly,
   setConnectedOnly,
+  elsewhere,
   onInstall,
 }: {
   trash: boolean;
@@ -124,6 +126,8 @@ function SessionList({
   live: number;
   /** days something stays in the trash before it is deleted; 0 means never */
   purgeDays: number;
+  /** recordings this account has in its other projects, for the empty state */
+  elsewhere: number;
   query: string;
   setQuery: (v: string) => void;
   connectedOnly: boolean;
@@ -169,12 +173,24 @@ function SessionList({
           <div className="sessions-empty">
             {trash ? (
               'The trash is empty.'
-            ) : all.length === 0 ? (
+            ) : all.length > 0 ? (
+              'No session matches the filter.'
+            ) : elsewhere > 0 ? (
+              /*
+                Empty because of the project, not because the relay has
+                nothing. "No sessions yet" was shown either way, which on a
+                console holding three projects and two recordings reads as a
+                relay that has lost them.
+              */
+              <>
+                Nothing recorded in this project yet — your other projects hold {elsewhere}{' '}
+                {elsewhere === 1 ? 'recording' : 'recordings'}.{' '}
+                <button className="sessions-link" onClick={onInstall}>Install the agent</button> to start one here.
+              </>
+            ) : (
               <>
                 No sessions yet. <button className="sessions-link" onClick={onInstall}>Install the agent</button> in a page to start one.
               </>
-            ) : (
-              'No session matches the filter.'
             )}
           </div>
         )}

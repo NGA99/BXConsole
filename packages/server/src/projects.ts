@@ -131,7 +131,28 @@ export class ProjectStore {
     }
   }
 
+  /**
+   * One write at a time.
+   *
+   * Two consoles making a project at the same moment both got as far as the
+   * rename, and the second failed with ENOENT: they shared a temporary name,
+   * so the first rename took it away from under the second. The handler that
+   * threw stopped before telling anybody, so a project existed that the
+   * console was never told about — and with a different interleaving the
+   * renames could have crossed the other way and lost a write outright.
+   */
+  private writing: Promise<void> = Promise.resolve();
+
   private async save(): Promise<void> {
+    const next = this.writing.then(() => this.writeNow(), () => this.writeNow());
+    this.writing = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
+  }
+
+  private async writeNow(): Promise<void> {
     // Never over a file we could not read.
     if (this.broken) throw new Error(`refusing to write ${PROJECTS_FILE}: it did not parse at startup`);
     const body = JSON.stringify({ home: this.home, projects: this.projects }, null, 2);

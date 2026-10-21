@@ -78,6 +78,25 @@ export function derivedId(user: string): string {
   return createHash('sha256').update(`bxconsole:account:${user}`).digest('hex').slice(0, 12);
 }
 
+/**
+ * The id the first account on a relay gets, whether it came from the
+ * environment or from the file.
+ *
+ * A relay with no `.passwd` runs on CONSOLE_PASSWORD as one synthetic
+ * account, and anything made under it — the home project, and so every
+ * recording — is owned by that account's id. The startup banner then tells
+ * the operator to run `npm run passwd`, and the account that writes is the
+ * same person on the same relay. Drawing it a fresh id there would hand them
+ * a working sign-in and an empty console: their own projects owned by an id
+ * no account has any more, readable by nobody, with nothing anywhere saying
+ * why.
+ *
+ * So the two agree by construction. Only the first account of a file that
+ * did not exist gets this; everybody added afterwards is drawn one of their
+ * own.
+ */
+export const FIRST_ACCOUNT_ID = derivedId('admin');
+
 export function newAccountId(): string {
   return randomBytes(6).toString('hex');
 }
@@ -135,12 +154,24 @@ export class PasswordFile {
   private checkedAt = 0;
   /** Set when the file is absent, so a caller can fall back and say so. */
   private missing = true;
+  /** It loaded once and the file has since gone: see the warning in refreshIfStale. */
+  private vanished = false;
 
   constructor(
     /** Readable because the admin screen writes this file back through it. */
     readonly path: string,
     private readonly warn: (msg: string) => void = () => undefined,
   ) {}
+
+  /**
+   * Whether this file was read and has since disappeared, as opposed to
+   * never having been there. The relay with no file at all is a supported
+   * way to run; a file that goes missing under a running relay is not.
+   */
+  get hasVanished(): boolean {
+    this.refreshIfStale();
+    return this.vanished;
+  }
 
   get isMissing(): boolean {
     this.refreshIfStale();
@@ -203,15 +234,39 @@ export class PasswordFile {
       return;
     }
     if (parsed === null) {
-      if (!this.missing) this.warn('.passwd has gone; falling back to CONSOLE_PASSWORD');
+      /*
+       * The file was there and is not any more.
+       *
+       * This used to fall back to CONSOLE_PASSWORD, which was reasonable
+       * when the fallback meant "one operator, one password" and is not now.
+       * The fallback account is named `admin` with an id derived from that
+       * name — the id that owns the home project on most relays — and when
+       * CONSOLE_PASSWORD is unset its password is the one printed in the
+       * repository. So a `.passwd` lost to a bad deploy or a stray cleanup
+       * handed every recording on the relay to anyone who had read the
+       * README.
+       *
+       * It fails closed instead: nobody signs in until the file is back,
+       * and every cookie stops working at once, which is loud in the one way
+       * that gets noticed. The agents are untouched and keep recording —
+       * that is the part that cannot be restarted. An operator who really
+       * does mean to go back to the environment password restarts the relay,
+       * which is the deliberate act that says so.
+       */
+      if (!this.missing) {
+        this.vanished = true;
+        this.warn('.passwd has gone. Nobody can sign in until it is back; restart to use CONSOLE_PASSWORD instead.');
+      }
       this.missing = true;
       this.accounts = [];
       this.loadedMtime = -1;
       return;
     }
     if (parsed === UNCHANGED) return;
+    const wasGone = this.vanished;
+    this.vanished = false;
     this.apply(parsed);
-    this.warn('.passwd reloaded');
+    this.warn(wasGone ? '.passwd is back; signing in works again' : '.passwd reloaded');
   }
 
   private apply(parsed: Parsed): void {

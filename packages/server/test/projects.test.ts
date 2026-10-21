@@ -8,7 +8,7 @@
  */
 import { describe, test, afterEach } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { PROJECTS_FILE, mayAdminister, mayRead, type SessionMeta } from '@bxconsole/protocol';
@@ -97,6 +97,48 @@ describe('making and reading the list', () => {
     const text = readFileSync(path.join(dir, PROJECTS_FILE), 'utf8');
     assert.deepEqual(Object.keys(JSON.parse(text)).sort(), ['home', 'projects']);
     assert.doesNotThrow(() => JSON.parse(text), 'the file on disk is always whole');
+  });
+});
+
+describe('writing it from two places at once', () => {
+  /*
+   * Two consoles making a project at the same moment both got as far as the
+   * rename, and the second failed: they shared a temporary filename, so the
+   * first rename took it out from under the second. The handler that threw
+   * stopped before telling anybody, so a project existed that its own maker
+   * was never told about.
+   */
+  test('every create lands, and none of them throws', async () => {
+    const { store: s, dir } = store();
+    await s.load();
+    const results = await Promise.allSettled(
+      ['one', 'two', 'three', 'four', 'five'].map((n) => s.create(n, ANA)),
+    );
+    assert.deepEqual(results.map((r) => r.status), results.map(() => 'fulfilled'));
+
+    const reopened = new ProjectStore(dir);
+    await reopened.load();
+    assert.deepEqual(reopened.all().map((p) => p.name).sort(), ['five', 'four', 'one', 'three', 'two']);
+  });
+
+  test('a rename racing a create leaves both, and the file reads back', async () => {
+    const { store: s, dir } = store();
+    await s.load();
+    const first = await s.create('First', ANA);
+    await Promise.all([s.update(first.id, { name: 'Renamed' }), s.create('Second', ANA)]);
+
+    const reopened = new ProjectStore(dir);
+    await reopened.load();
+    assert.equal(reopened.isBroken, false, 'the file was left unreadable');
+    assert.equal(reopened.get(first.id)?.name, 'Renamed');
+    assert.ok(reopened.all().some((p) => p.name === 'Second'));
+  });
+
+  test('the file is never left as a temporary name beside itself', async () => {
+    const { store: s, dir } = store();
+    await s.load();
+    await Promise.all([s.create('a', ANA), s.create('b', ANA), s.create('c', ANA)]);
+    assert.deepEqual(readdirSync(dir).sort(), [PROJECTS_FILE]);
   });
 });
 

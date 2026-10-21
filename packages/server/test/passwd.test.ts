@@ -18,7 +18,7 @@ import {
   accountFromEnv,
   hashPassword,
   verifyPassword,
-  writeAccounts, derivedId } from '../src/passwd';
+  writeAccounts, derivedId, FIRST_ACCOUNT_ID } from '../src/passwd';
 
 const dirs: string[] = [];
 function tmp(): string {
@@ -236,7 +236,15 @@ describe('reloading', () => {
     assert.match(warnings.join('\n'), /not reloaded/);
   });
 
-  test('a file that disappears falls back and says so', async () => {
+  test('a file that disappears is a relay to fix, not one to fall back on', async () => {
+    /*
+     * It used to fall back to CONSOLE_PASSWORD, which was reasonable when
+     * that meant "one operator, one password". The fallback account is named
+     * `admin` with an id derived from that name — the id that owns the home
+     * project on most relays — and with CONSOLE_PASSWORD unset its password
+     * is the one printed in the repository. So a `.passwd` lost to a bad
+     * deploy handed every recording to anyone who had read the README.
+     */
     const file = passwd(`admin:${await hashPassword('pw')}\n`);
     age(file);
     const warnings: string[] = [];
@@ -245,7 +253,36 @@ describe('reloading', () => {
     rmSync(file);
     await new Promise((r) => setTimeout(r, 1100));
     assert.equal(f.isMissing, true);
-    assert.match(warnings.join('\n'), /CONSOLE_PASSWORD/);
+    assert.equal(f.hasVanished, true);
+    assert.match(warnings.join('\n'), /Nobody can sign in/);
+  });
+
+  test('a file that was never there has not vanished', async () => {
+    // Running on CONSOLE_PASSWORD with no file is a supported way to run.
+    const f = new PasswordFile(path.join(tmp(), 'never'));
+    f.loadOrThrow();
+    assert.equal(f.isMissing, true);
+    assert.equal(f.hasVanished, false);
+  });
+
+  test('putting it back makes signing in work again, without a restart', async () => {
+    const record = await hashPassword('pw');
+    const file = passwd(`admin:${record}\n`);
+    age(file);
+    const warnings: string[] = [];
+    const f = new PasswordFile(file, (m) => warnings.push(m));
+    f.loadOrThrow();
+
+    rmSync(file);
+    await new Promise((r) => setTimeout(r, 1100));
+    assert.equal(f.hasVanished, true);
+
+    writeFileSync(file, `admin:${record}\n`);
+    chmodSync(file, 0o600);
+    await new Promise((r) => setTimeout(r, 1100));
+    assert.equal(f.hasVanished, false);
+    assert.equal(f.find('admin')?.record, record);
+    assert.match(warnings.join('\n'), /is back/);
   });
 });
 
@@ -263,6 +300,25 @@ describe('writing the file', () => {
     const file = passwd('# old\n', 0o644);
     await writeAccounts(file, [{ user: 'admin', record: await hashPassword('pw'), id: 'aaaaaa', role: 'admin' as const }]);
     assert.doesNotThrow(() => new PasswordFile(file).loadOrThrow());
+  });
+});
+
+describe('the first account on a relay', () => {
+  /*
+   * The hole this closes. A relay with no `.passwd` runs on CONSOLE_PASSWORD
+   * as one synthetic account, and the home project — so every recording — is
+   * owned by its id. The startup banner then tells the operator to run
+   * `npm run passwd`. Drawing that account a fresh id gave them a working
+   * sign-in and an empty console: their own projects owned by an id no
+   * account had any more, readable by nobody, with nothing saying why.
+   */
+  test('it keeps the id the environment-password account had', () => {
+    assert.equal(FIRST_ACCOUNT_ID, accountFromEnv('admin', 'whatever').id);
+    assert.equal(FIRST_ACCOUNT_ID, derivedId('admin'));
+  });
+
+  test('it does not change with the password, since only the record does', () => {
+    assert.equal(accountFromEnv('admin', 'one').id, accountFromEnv('admin', 'two').id);
   });
 });
 

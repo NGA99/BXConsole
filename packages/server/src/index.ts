@@ -716,6 +716,25 @@ keylessLanding = ((): string | null => {
   return project.id;
 })();
 relay.useProjects(projects);
+/*
+ * A project nobody owns is readable by nobody.
+ *
+ * It happens when an account is removed and its projects are left behind, and
+ * it used to happen on the ordinary path from CONSOLE_PASSWORD to `.passwd`.
+ * Nothing is reassigned here — handing a project over is a deliberate act and
+ * is written down — but it is said out loud, because the symptom on its own
+ * is a console that signs in and lists nothing.
+ */
+{
+  const ids = auth.accountIds();
+  const orphans = projects.all().filter((p) => !ids.has(p.owner));
+  if (orphans.length) {
+    console.warn(`[bxconsole] ${orphans.length} project(s) are owned by an account that no longer exists, so nobody can read them:`);
+    for (const p of orphans) console.warn(`[bxconsole]   "${p.name}" (${p.id}), owned by ${p.owner}`);
+    console.warn('[bxconsole] An administrator can hand them to somebody on the Admin screen.');
+  }
+}
+
 relay.useAccountIds(() => auth.accountIds());
 relay.useAccounts({
   summaries: () => auth.summaries(),

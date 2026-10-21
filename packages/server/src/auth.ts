@@ -59,6 +59,7 @@ function passwordTooShort(password: string): string | null {
 const DEFAULT_PASSWORD = 'asdf1234!@#';
 
 /** The account name used when there is no file to name one. */
+/** Also spelled in passwd.ts's FIRST_ACCOUNT_ID, which has to be this name. */
 export const DEFAULT_USER = 'admin';
 
 export const COOKIE_NAME = '__wvs';
@@ -235,6 +236,30 @@ export class ConsoleAuth {
    * name is taken" tells them nothing they did not already have.
    */
   async changeAccounts(change: AccountChange): Promise<string | null> {
+    /*
+     * One at a time, because each of these is a read of the whole file, a
+     * slow hash, and a write of the whole file back.
+     *
+     * Two accounts added at the same moment both read the list before either
+     * wrote, so the second write did not have the first account in it and
+     * one of the two vanished — with the screen reporting success for both,
+     * since nothing failed. scrypt takes about a tenth of a second, so the
+     * window is not narrow: it is every double-click.
+     */
+    const run = this.changing.then(
+      () => this.changeNow(change),
+      () => this.changeNow(change),
+    );
+    this.changing = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    return run;
+  }
+
+  private changing: Promise<void> = Promise.resolve();
+
+  private async changeNow(change: AccountChange): Promise<string | null> {
     const file = this.file;
     if (!file || file.isMissing) {
       return 'This relay has no .passwd, so there is one account and it comes from CONSOLE_PASSWORD. Run: npm run passwd -- <name>';
@@ -289,6 +314,9 @@ export class ConsoleAuth {
   }
 
   private accountFor(user: string): Account | null {
+    // A file that was there and has gone is a relay to fix, not one to let
+    // the environment password back into — see PasswordFile.hasVanished.
+    if (this.file?.hasVanished) return null;
     if (this.file && !this.file.isMissing) return this.file.find(user);
     return user === this.fallback.user ? this.fallback : null;
   }
