@@ -65,6 +65,41 @@ function useIssueCounts(sessionId: string | null): { errors: number; warnings: n
   return store(useShallow((s) => s.issues));
 }
 
+/**
+ * The window's title bar: the one row that should look the same wherever you
+ * are.
+ *
+ * It used to be written out twice, once for the session list and once for an
+ * open session, and the two drifted apart. The list kept the relay status
+ * tucked beside the wordmark while the session pushed it to the far right,
+ * and the session dropped the wordmark altogether — so moving between the two
+ * views rearranged the bar under you. One component holds the shape now, and
+ * a view supplies only the navigation that is its own.
+ */
+function TopBar({
+  relayUp,
+  theme,
+  onCycleTheme,
+  children,
+}: {
+  relayUp: boolean;
+  theme: Theme;
+  onCycleTheme: () => void;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div className="topbar">
+      <span className="topbar-title">BXConsole</span>
+      {children}
+      <div className="topbar-spacer" />
+      <span className={`relay-status ${relayUp ? 'on' : 'off'}`}>{relayUp ? 'relay connected' : 'relay disconnected'}</span>
+      <button className="topbar-theme" title={`Theme: ${theme} (click to change)`} onClick={onCycleTheme}>
+        {theme === 'system' ? '◐' : theme === 'light' ? '☀' : '☾'}
+      </button>
+    </div>
+  );
+}
+
 export function Shell({ route }: { route: Route }) {
   const relayUp = useSessionsStore((s) => s.relayConnected);
   const globalMenu = useMenuStore((s) => s.menu);
@@ -172,14 +207,7 @@ export function Shell({ route }: { route: Route }) {
   if (!route.sessionId) {
     return (
       <div className="shell">
-        <div className="topbar">
-          <span className="topbar-title">BXConsole</span>
-          <span className={`relay-status ${relayUp ? 'on' : 'off'}`}>{relayUp ? 'relay connected' : 'relay disconnected'}</span>
-          <div style={{ flex: 1 }} />
-          <button className="topbar-theme" title={`Theme: ${theme} (click to change)`} onClick={cycleTheme}>
-            {theme === 'system' ? '◐' : theme === 'light' ? '☀' : '☾'}
-          </button>
-        </div>
+        <TopBar relayUp={relayUp} theme={theme} onCycleTheme={cycleTheme} />
         <div className="shell-body">
           <div className="shell-panel">
             {/* Its own boundary, outside the top bar: this list is the way in
@@ -298,17 +326,12 @@ export function Shell({ route }: { route: Route }) {
     <div className="shell">
       {/* The session's windows sit above everything, where a browser keeps its tabs. */}
       <TabStrip sessionId={sessionId} />
-      <div className="topbar">
+      <TopBar relayUp={relayUp} theme={theme} onCycleTheme={cycleTheme}>
         <button className="topbar-back" title="All sessions" onClick={() => navigate({ panel: 'sessions', sessionId: null })}>
           ‹ Sessions
         </button>
         <SessionPicker sessionId={sessionId} panel={route.panel} />
-        <div style={{ flex: 1 }} />
-        <span className={`relay-status ${relayUp ? 'on' : 'off'}`}>{relayUp ? 'relay connected' : 'relay disconnected'}</span>
-        <button className="topbar-theme" title={`Theme: ${theme} (click to change)`} onClick={cycleTheme}>
-          {theme === 'system' ? '◐' : theme === 'light' ? '☀' : '☾'}
-        </button>
-      </div>
+      </TopBar>
       {screenCollapsed ? (
         <div className="dock">
           <div className="dock-strip">

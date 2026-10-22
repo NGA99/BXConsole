@@ -35,6 +35,10 @@
 .topbar-title {
   font-weight: 600;
 }
+/* Pushes the status and the theme button to the right edge in every view. */
+.topbar-spacer {
+  flex: 1;
+}
 .topbar-back {
   appearance: none;
   border: 0;
