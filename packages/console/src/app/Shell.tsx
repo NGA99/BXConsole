@@ -32,6 +32,7 @@ import { useSessionsStore } from '../state/sessions';
 import { subscribeSession } from '../transport/client';
 import { SessionPicker } from './SessionPicker';
 import { ContextMenu } from '../devtools-ui/ContextMenu';
+import { ErrorBoundary } from '../devtools-ui/ErrorBoundary';
 import { useInspectMode } from '../state/inspect-mode';
 import { useScreenReplay } from '../state/screen-replay';
 import { useMenuStore } from '../devtools-ui/menu-store';
@@ -181,7 +182,12 @@ export function Shell({ route }: { route: Route }) {
         </div>
         <div className="shell-body">
           <div className="shell-panel">
-            <SessionsPanel view={route.view} />
+            {/* Its own boundary, outside the top bar: this list is the way in
+                to everything, so when a recording it cannot render takes it
+                down the operator must still have a frame to act in. */}
+            <ErrorBoundary label="The session list">
+              <SessionsPanel view={route.view} />
+            </ErrorBoundary>
           </div>
         </div>
         <ContextMenu menu={globalMenu} onClose={closeGlobalMenu} />
@@ -190,6 +196,7 @@ export function Shell({ route }: { route: Route }) {
   }
 
   const sessionId = route.sessionId;
+  const toSessions = { label: 'All sessions', go: () => navigate({ panel: 'sessions', sessionId: null }) };
   const badges = (counts.errors > 0 || counts.warnings > 0) && (
     <span className="issue-badges" title="Errors and warnings in this session's console" onClick={() => navigate({ panel: 'console', sessionId })}>
       {counts.errors > 0 && (
@@ -252,25 +259,35 @@ export function Shell({ route }: { route: Route }) {
         {/* Elements streams the DOM while open, so it is mounted only when shown. */}
         {route.panel === 'elements' && (
           <div className="shell-panel">
-            <ElementsPanel key={`${sessionId}:${activeTab ?? ''}`} sessionId={sessionId} />
+            <ErrorBoundary label="Elements" onLeave={toSessions}>
+              <ElementsPanel key={`${sessionId}:${activeTab ?? ''}`} sessionId={sessionId} />
+            </ErrorBoundary>
           </div>
         )}
         {/* Keyed by session: filters, level, live expressions and the sidebar
             selection are per session, and without this they follow you into
             the next one and live expressions run against the wrong page. */}
         <div hidden={route.panel !== 'console'} className="shell-panel">
-          <ConsolePanel key={sessionId} sessionId={sessionId} />
+          <ErrorBoundary label="Console" onLeave={toSessions}>
+            <ConsolePanel key={sessionId} sessionId={sessionId} />
+          </ErrorBoundary>
         </div>
         {sourcesVisited && (
           <div hidden={route.panel !== 'sources'} className="shell-panel">
-            <SourcesPanel key={`${sessionId}:${activeTab ?? ''}`} sessionId={sessionId} />
+            <ErrorBoundary label="Sources" onLeave={toSessions}>
+              <SourcesPanel key={`${sessionId}:${activeTab ?? ''}`} sessionId={sessionId} />
+            </ErrorBoundary>
           </div>
         )}
         <div hidden={route.panel !== 'network'} className="shell-panel">
-          <NetworkPanel key={sessionId} sessionId={sessionId} />
+          <ErrorBoundary label="Network" onLeave={toSessions}>
+            <NetworkPanel key={sessionId} sessionId={sessionId} />
+          </ErrorBoundary>
         </div>
         <div hidden={route.panel !== 'history'} className="shell-panel">
-          <HistoryPanel key={sessionId} sessionId={sessionId} active={route.panel === 'history'} />
+          <ErrorBoundary label="History" onLeave={toSessions}>
+            <HistoryPanel key={sessionId} sessionId={sessionId} active={route.panel === 'history'} />
+          </ErrorBoundary>
         </div>
       </div>
     </div>
@@ -304,7 +321,9 @@ export function Shell({ route }: { route: Route }) {
       ) : devtoolsCollapsed ? (
         <div className="dock">
           <div className="dock-left">
-            <ScreenPanel key={sessionId} sessionId={sessionId} />
+            <ErrorBoundary label="Screen" onLeave={toSessions}>
+              <ScreenPanel key={sessionId} sessionId={sessionId} />
+            </ErrorBoundary>
           </div>
           <div className="dock-strip right">
             <button className="dock-strip-button" title="Show the panels" onClick={() => setDevtools(false)}>
@@ -317,7 +336,9 @@ export function Shell({ route }: { route: Route }) {
           <SplitView
             main={
               <div className="dock-left">
-                <ScreenPanel key={sessionId} sessionId={sessionId} onCollapse={() => setCollapsed(true)} />
+                <ErrorBoundary label="Screen" onLeave={toSessions}>
+                  <ScreenPanel key={sessionId} sessionId={sessionId} onCollapse={() => setCollapsed(true)} />
+                </ErrorBoundary>
               </div>
             }
             side={rightPane(() => setDevtools(true))}
