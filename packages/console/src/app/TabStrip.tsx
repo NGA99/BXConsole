@@ -15,6 +15,7 @@ import { useSessionsStore } from '../state/sessions';
 import { sessionData } from '../state/session-data';
 import { useActiveTab, setActiveTab } from '../state/active-tab';
 import { compact, describe as describeTab } from './tab-label';
+import { useSelectedInView } from '../devtools-ui/selected-in-view';
 import './TabStrip.css';
 
 /** Depth of each tab in the opener tree, capped so a long chain stays readable. */
@@ -78,11 +79,13 @@ export function TabStrip({ sessionId }: { sessionId: string }) {
     setActiveTab(sessionId, pick.tabId);
   }, [tabs, known, sessionId]);
 
+  const strip = useSelectedInView(active);
+
   // One window is the ordinary case; a strip would just take up room.
   if (tabs.length < 2) return null;
 
   return (
-    <div className="tabstrip" role="tablist">
+    <div className="tabstrip" role="tablist" ref={strip}>
       {tabs.map((t) => (
         <button
           key={t.tabId}

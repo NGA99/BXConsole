@@ -1,5 +1,6 @@
 /** The DevTools top tab strip. */
 import type { ReactNode } from 'react';
+import { useSelectedInView } from './selected-in-view';
 import './TabBar.css';
 
 export interface Tab<T extends string> {
@@ -21,8 +22,9 @@ export function TabBar<T extends string>({
   trailing?: ReactNode;
   leading?: ReactNode;
 }) {
+  const bar = useSelectedInView(active);
   return (
-    <div className="tabbar" role="tablist">
+    <div className="tabbar" role="tablist" ref={bar}>
       {leading}
       {tabs.map((t) => (
         <button
