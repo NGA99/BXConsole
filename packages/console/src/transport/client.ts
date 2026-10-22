@@ -11,6 +11,7 @@ import { useWhoamiStore } from '../state/whoami';
 import { useAdminStore } from '../state/admin';
 import { activeTabOf } from '../state/active-tab';
 import { dropDomModel } from '../state/dom-model';
+import { forgetSessionStorage } from '../state/session-storage';
 import { sessionData, dropSessionData } from '../state/session-data';
 import { useElementsSelection } from '../state/elements-selection';
 import { listOfStrings, usableProperties, usableSourceText, usableSources, usableStyles } from './reply-guard';
@@ -497,6 +498,8 @@ function dispatch(msg: ServerToConsole): void {
       // Its buffers and DOM would otherwise be held for the life of the tab.
       dropSessionData(msg.sessionId);
       dropDomModel(msg.sessionId);
+      // And what this browser wrote down about it, which outlives the tab.
+      forgetSessionStorage(msg.sessionId);
       for (const key of [...completionCache.keys()]) if (key.startsWith(`${msg.sessionId}\n`)) completionCache.delete(key);
       return;
     case 'session.event':
