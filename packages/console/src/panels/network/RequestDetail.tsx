@@ -17,7 +17,7 @@ import { toSerialized, tryParseJson } from './json-to-serialized';
 import { PHASE_COLORS } from './Waterfall';
 import { StackTrace } from '../console/StackTrace';
 import { CodeView, canFormat, detectLanguage, formatCode } from '../../devtools-ui/CodeView';
-import { fullTimestamp } from '../../devtools-ui/time';
+import { clockTime, fullTimestamp } from '../../devtools-ui/time';
 
 type TabId = 'headers' | 'payload' | 'preview' | 'response' | 'initiator' | 'timing' | 'messages';
 
@@ -246,9 +246,19 @@ function HeadersTab({ entry }: { entry: NetworkEntry }) {
           }
         >
           {headerCount(entry.response.headers) === 0 ? (
+            /* Two ways to have none, and the reason is the useful part. The
+               first version of this said "no-cors" for both, which told an
+               operator looking at a WebSocket about a kind of fetch they had
+               not made. */
             <div className="detail-note">
-              None the page could read. A response fetched with <code>mode: &quot;no-cors&quot;</code> is opaque: its headers never reach the script this
-              console records from, so there is nothing here to have missed.
+              {streamsFrames(entry) ? (
+                <>None. A WebSocket&apos;s upgrade is carried out by the browser, and its headers never reach the page — the messages are on the Messages tab.</>
+              ) : (
+                <>
+                  None the page could read. A response fetched with <code>mode: &quot;no-cors&quot;</code> is opaque: its headers never reach the script this
+                  console records from, so there is nothing here to have missed.
+                </>
+              )}
             </div>
           ) : rawResponse ? (
             <pre className="detail-pre">{`HTTP/1.1 ${entry.response.status} ${entry.response.statusText}\n${raw(entry.response.headers)}`}</pre>
@@ -493,7 +503,7 @@ function MessagesTab({ entry }: { entry: NetworkEntry }) {
                 <span className="ws-arrow">{f.direction === 'sent' ? '↑' : '↓'}</span> {f.data.slice(0, 200)}
               </td>
               <td className="num">{f.length}</td>
-              <td className="num">{new Date(f.ts).toLocaleTimeString(undefined, { hour12: false })}.{String(f.ts % 1000).padStart(3, '0')}</td>
+              <td className="num">{clockTime(f.ts)}</td>
             </tr>
           ))}
         </tbody>

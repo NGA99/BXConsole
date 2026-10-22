@@ -48,6 +48,7 @@ import { DomMirror } from './mirror';
 import { ScreenReplayer, SPEEDS, type ReplayStatus, type Speed } from './replay';
 import { useScreenReplay } from '../../state/screen-replay';
 import './ScreenPanel.css';
+import { clockTime, fullTimestamp } from '../../devtools-ui/time';
 
 interface Status {
   state: 'connecting' | 'live' | 'stopped' | 'replay';
@@ -531,10 +532,10 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
           <RefreshIcon />
         </ToolbarButton>
         <ToolbarDivider />
-        <span className={`screen-status ${status.state}`} title={status.snapshotAt ? `frame ${new Date(status.snapshotAt).toLocaleTimeString()}` : undefined}>
+        <span className={`screen-status ${status.state}`} title={status.snapshotAt ? `frame ${clockTime(status.snapshotAt)}` : undefined}>
           <span className="dot" />
           {replay
-            ? `replay · ${new Date(replay.ts).toLocaleTimeString()}${replayWindow ? ` · ${replayWindow}` : ''}`
+            ? `replay · ${clockTime(replay.ts)}${replayWindow ? ` · ${replayWindow}` : ''}`
             : !connected
               ? status.snapshotAt
                 ? 'offline · last frame'
@@ -865,7 +866,7 @@ function ReplayBar({
       <span
         className="screen-meta mono clock"
         style={{ minWidth: `${formatClock(span).length * 2 + 3}ch` }}
-        title={new Date(replay.ts).toLocaleString()}
+        title={fullTimestamp(replay.ts)}
       >
         {formatClock(offset)} / {formatClock(span)}
       </span>

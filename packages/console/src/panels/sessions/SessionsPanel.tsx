@@ -429,5 +429,7 @@ function relative(ts: number): string {
   if (d < 60_000) return 'just now';
   if (d < 3_600_000) return `${Math.floor(d / 60_000)}m ago`;
   if (d < 86_400_000) return `${Math.floor(d / 3_600_000)}h ago`;
-  return new Date(ts).toLocaleString();
+  // absoluteTimestamp, not the locale: a column is read against a server
+  // log, and this one sits under rows that say "3m ago" in English.
+  return absoluteTimestamp(ts);
 }

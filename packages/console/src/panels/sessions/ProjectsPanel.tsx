@@ -30,6 +30,7 @@ import {
 import { navigateToView } from '../../app/router';
 import { copyText } from '../network/copy';
 import './ProjectsPanel.css';
+import { fullTimestamp } from '../../devtools-ui/time';
 
 export function ProjectsPanel() {
   const { order, byId, homeId, selectedId } = useProjectsStore();
@@ -215,7 +216,7 @@ function ProjectRow({
           </span>
         )}
         {trashed && (
-          <span className="project-tag bad" title={`Moved to the trash on ${new Date(project.trashedAt!).toLocaleString()}`}>
+          <span className="project-tag bad" title={`Moved to the trash on ${fullTimestamp(project.trashedAt!)}`}>
             {purgeNote(project.trashedAt, purgeDays) ?? 'in the trash'}
           </span>
         )}
