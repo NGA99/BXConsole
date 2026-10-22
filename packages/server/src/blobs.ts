@@ -21,7 +21,7 @@
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { createHash } from 'node:crypto';
-import { BLOB_DIR, BLOB_MAX_BYTES, SESSION_BODIES_INDEX, SESSION_FILES_INDEX, sessionDirName } from '@bxconsole/protocol';
+import { BLOB_DIR, BLOB_MAX_BYTES, SESSION_BODIES_INDEX, SESSION_FILES_INDEX, sessionDirName, type KeptFile } from '@bxconsole/protocol';
 
 /**
  * How recently a blob may have been written and still be swept.
@@ -215,8 +215,19 @@ export class BlobStore {
     const dir = path.join(this.rootDir, sessionDirName(sessionId));
     await fs.mkdir(dir, { recursive: true });
     await fs.appendFile(path.join(dir, SESSION_FILES_INDEX), `${JSON.stringify(record)}\n`);
+    // Told after the index line, so anybody who acts on it finds the file.
+    this.onKept?.(sessionId, { url, bytes: body.length, mime });
     return record;
   }
+
+  /**
+   * Called as each file joins a session's index.
+   *
+   * The console asks for the manifest once, when it subscribes, and the
+   * collector goes on storing files for as long as the page loads them —
+   * so a console that opened early had a list that only ever got staler.
+   */
+  onKept: ((sessionId: string, file: KeptFile) => void) | null = null;
 
   /**
    * Delete every blob no session refers to any more.

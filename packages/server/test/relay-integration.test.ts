@@ -1218,3 +1218,79 @@ describe('emptying the trash on a timer', () => {
     assert.equal(ws.received('sessions.snapshot')[0]!['trashPurgeDays'], 7);
   });
 });
+
+describe('what the console is told it can still read', () => {
+  /*
+   * The Network tab labels every row with where its body can be read from,
+   * and it learns that from a manifest it asks for once, when it subscribes.
+   * The collector goes on storing files for as long as the page loads them,
+   * so everything kept after that moment was labelled as not kept: "Live
+   * only" while the run was up, and "Lost" after it ended — the tab telling
+   * a reader the bytes are gone while the relay is holding them.
+   */
+  test('a file kept after a console subscribed is pushed to it', async () => {
+    const { relay, blobs } = build();
+    await join(relay);
+    const ws = new FakeSocket();
+    relay.attachConsole(ws as unknown as WebSocket);
+    await ws.deliver({ type: 'session.subscribe', sessionId: 'sess01', replay: false } satisfies ConsoleToServer);
+    await ws.deliver({ type: 'files.list', sessionId: 'sess01' } satisfies ConsoleToServer);
+    await until(() => ws.received('files.list')[0], 'the manifest');
+    assert.deepEqual(ws.received('files.list')[0]!['files'], [], 'nothing kept yet');
+
+    await blobs.put('sess01', 'http://app.test/late.js', Buffer.from('console.log(1)'), 'text/javascript');
+    await until(() => ws.received('files.kept')[0], 'the push');
+    assert.deepEqual(ws.received('files.kept')[0]!['file'], {
+      url: 'http://app.test/late.js',
+      bytes: 14,
+      mime: 'text/javascript',
+    });
+    assert.equal(ws.received('files.kept')[0]!['sessionId'], 'sess01');
+  });
+
+  test('it goes only to the consoles watching that run', async () => {
+    const { relay, blobs } = build();
+    await join(relay);
+    const watching = new FakeSocket();
+    const idle = new FakeSocket();
+    relay.attachConsole(watching as unknown as WebSocket);
+    relay.attachConsole(idle as unknown as WebSocket);
+    await watching.deliver({ type: 'session.subscribe', sessionId: 'sess01', replay: false } satisfies ConsoleToServer);
+
+    await blobs.put('sess01', 'http://app.test/x.css', Buffer.from('body{}'), 'text/css');
+    await until(() => watching.received('files.kept')[0], 'the subscriber to be told');
+    assert.equal(idle.received('files.kept').length, 0, 'a console not watching this run was written to');
+  });
+
+  test('a file the store refuses is not announced as kept', async () => {
+    // Over the per-run budget, so nothing was written and nothing can be read
+    // back; saying otherwise would be the same lie the other way round.
+    const { relay, blobs } = build(10);
+    await join(relay);
+    const ws = new FakeSocket();
+    relay.attachConsole(ws as unknown as WebSocket);
+    await ws.deliver({ type: 'session.subscribe', sessionId: 'sess01', replay: false } satisfies ConsoleToServer);
+
+    const kept = await blobs.put('sess01', 'http://app.test/big.js', Buffer.from('x'.repeat(500)), 'text/javascript');
+    await settle();
+    assert.equal(kept, null, 'the store should have refused it');
+    assert.equal(ws.received('files.kept').length, 0);
+  });
+
+  test('the manifest and the pushes agree about the same run', async () => {
+    const { relay, blobs } = build();
+    await join(relay);
+    await blobs.put('sess01', 'http://app.test/early.js', Buffer.from('early'), 'text/javascript');
+    const ws = new FakeSocket();
+    relay.attachConsole(ws as unknown as WebSocket);
+    await ws.deliver({ type: 'session.subscribe', sessionId: 'sess01', replay: false } satisfies ConsoleToServer);
+    await ws.deliver({ type: 'files.list', sessionId: 'sess01' } satisfies ConsoleToServer);
+    await until(() => ws.received('files.list')[0], 'the manifest');
+    await blobs.put('sess01', 'http://app.test/late.js', Buffer.from('late'), 'text/javascript');
+    await until(() => ws.received('files.kept')[0], 'the push');
+
+    const fromList = (ws.received('files.list')[0]!['files'] as Array<{ url: string }>).map((f) => f.url);
+    const pushed = ws.received('files.kept').map((m) => (m['file'] as { url: string }).url);
+    assert.deepEqual([...fromList, ...pushed].sort(), ['http://app.test/early.js', 'http://app.test/late.js']);
+  });
+});

@@ -446,6 +446,19 @@ export class Relay {
   /** Use this store to answer and to remember what the pages hand over. */
   useBlobs(blobs: BlobStore): void {
     this.blobs = blobs;
+    /*
+     * Keep each console's manifest current.
+     *
+     * Only to the consoles subscribed to that run, and only the one file, so
+     * a page pulling in two hundred resources costs two hundred small
+     * messages to whoever is actually watching rather than a full manifest
+     * each time.
+     */
+    blobs.onKept = (sessionId, file) => {
+      const entry = this.registry.get(sessionId);
+      if (!entry) return;
+      for (const sub of entry.subscribers) send(sub, { type: 'files.kept', sessionId, file });
+    };
   }
 
   /**

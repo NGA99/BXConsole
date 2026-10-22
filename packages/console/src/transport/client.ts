@@ -517,6 +517,9 @@ function dispatch(msg: ServerToConsole): void {
       screenListeners.get(msg.sessionId)?.forEach((l) => l(msg.event));
       return;
     }
+    case 'files.kept':
+      sessionData(msg.sessionId).getState().addKeptFile(msg.file);
+      return;
     case 'files.list':
       sessionData(msg.sessionId).getState().setKeptFiles(msg.files);
       return;

@@ -98,6 +98,7 @@ interface SessionDataState {
    * which reads as "not kept" — the honest answer before we have been told.
    */
   keptFiles: Set<string>;
+  addKeptFile(file: KeptFile): void;
   networkIndex: Record<string, number>;
   history: HistoryEntry[];
   /** Load milestones of the window the UI points at; each window has its own. */
@@ -225,6 +226,8 @@ function createSessionDataStore(sessionId: string) {
       set({ historyLoaded: false, console: [], network: [], networkIndex: {}, history: [], pageTiming: {}, pageTimingByTab: {}, eventsByTab: {}, issues: { errors: 0, warnings: 0 }, pendingResourceFailures: [] }),
     clearConsole: () => set({ console: [], issues: { errors: 0, warnings: 0 } }),
     setKeptFiles: (files: KeptFile[]) => set({ keptFiles: new Set(files.map((f) => f.url)) }),
+    addKeptFile: (file: KeptFile) =>
+      set((s) => (s.keptFiles.has(file.url) ? s : { keptFiles: new Set(s.keptFiles).add(file.url) })),
     clearNetwork: () => set({ network: [], networkIndex: {}, pendingResourceFailures: [] }),
     clearHistory: () => set({ history: [] }),
     setPreserveLog: (on) => {

@@ -485,6 +485,17 @@ export type ServerToConsole =
   | { type: 'screen.replaySegment'; sessionId: string; requestId: string; segment: ScreenSegment }
   /** answer to files.list: every file the relay is holding for this session */
   | { type: 'files.list'; sessionId: string; files: KeptFile[] }
+  /**
+   * One more file the relay is now holding for this run.
+   *
+   * `files.list` is a snapshot, asked for once when a console subscribes, and
+   * the collector goes on storing files as the page loads them — so without
+   * this every file kept after that moment was labelled as not kept. While
+   * the run was live that read "Live only", and once it ended, "Lost": the
+   * Network tab telling a reader the bytes are gone while the relay has them,
+   * which is the one way round that stops somebody looking.
+   */
+  | { type: 'files.kept'; sessionId: string; file: KeptFile }
   | { type: 'error'; message: string };
 
 // Reserved for later: `dom.*` (Elements tab). Keep new namespaces to `<area>.<verb>`.
