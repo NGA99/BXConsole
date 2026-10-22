@@ -220,3 +220,19 @@ describe('rewriting a srcset', () => {
     assert.equal(rewriteSrcset('a.png 1x, b.png 2x', (u) => (u === 'a.png' ? '/p/a.png' : null)), '/p/a.png 1x, b.png 2x');
   });
 });
+
+describe('urlScheme with something that is not a url', () => {
+  test('a value that is not a string is no scheme, rather than a TypeError', () => {
+    // Shared by the console and the relay, and everything it reads began as
+    // markup in a debugged page, where the type says nothing.
+    for (const v of [null, undefined, 12, {}, [], true] as unknown[]) {
+      assert.equal(urlScheme(v as string), null, `${String(v)} should read as no scheme`);
+    }
+  });
+
+  test('a string still reads exactly as it did', () => {
+    assert.equal(urlScheme('https://a/'), 'https:');
+    assert.equal(urlScheme('java\tscript:alert(1)'), 'javascript:');
+    assert.equal(urlScheme('/relative'), null);
+  });
+});

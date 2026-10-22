@@ -64,6 +64,17 @@ export function decodeAssetUrl(encoded: string): string | null {
  * entered the code.
  */
 export function urlScheme(raw: string): string | null {
+  /*
+   * The type is not a check, and this function is shared.
+   *
+   * Everything it reads began as a url in a debugged page's markup, and
+   * `AgentEvent` is erased before any of it arrives — so a caller that has
+   * not looked first hands this a number or a null and gets a TypeError out
+   * of a helper two packages away from wherever that went wrong. Both of
+   * today's callers do look. That is the kind of safety that holds until
+   * somebody adds a third.
+   */
+  if (typeof raw !== 'string') return null;
   const normalized = raw.replace(/[\t\n\r]/g, '').replace(/^[\x00-\x20]+/, '');
   const m = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(normalized);
   return m ? `${m[1]!.toLowerCase()}:` : null;
