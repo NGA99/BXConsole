@@ -12,7 +12,7 @@ import { TabBar } from '../../devtools-ui/TabBar';
 import { ObjectTree } from '../console/ObjectTree';
 import { nameOf, formatMs, formatBytes, streamsFrames } from './classify';
 import { headerCount, headerOf, headerPairs } from './field-guard';
-import { timelineOf } from './timing';
+import { timelineOf, shownTiming } from './timing';
 import { toSerialized, tryParseJson } from './json-to-serialized';
 import { PHASE_COLORS } from './Waterfall';
 import { StackTrace } from '../console/StackTrace';
@@ -495,16 +495,20 @@ function prettyIfJson(text: string): string {
 function TimingTab({ entry }: { entry: NetworkEntry }) {
   const t = timelineOf(entry);
   if (t.end === null) return <Empty>Request is still pending.</Empty>;
-  const total = t.end - t.start;
-  const pct = (ms: number) => `${(ms / total) * 100}%`;
+  const shown = shownTiming({ ...t, end: t.end });
+  // The bars are positions rather than printed figures, so they are drawn
+  // from the unrounded span; `|| 1` keeps a request that took no measurable
+  // time from dividing by zero.
+  const span = t.end - t.start || 1;
+  const pct = (ms: number) => `${(ms / span) * 100}%`;
 
   return (
     <div className="detail-sections">
       <Section title="Started">
-        <KV name="Start Time" value={fullTimestamp(entry.request.ts)} />
-        {t.end !== null && <KV name="End Time" value={fullTimestamp(t.end)} />}
+        <KV name="Start Time" value={fullTimestamp(shown.start)} />
+        <KV name="End Time" value={fullTimestamp(shown.end)} />
       </Section>
-      <Section title={`Duration: ${formatMs(total)}`}>
+      <Section title={`Duration: ${formatMs(shown.total)}`}>
         <table className="timing-table">
           <tbody>
             {t.phases.map((p, i) => (

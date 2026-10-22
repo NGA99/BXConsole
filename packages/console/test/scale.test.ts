@@ -6,7 +6,7 @@
  */
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { niceStep, niceTimeStep } from '../src/devtools-ui/scale';
+import { niceStep, niceTimeStep, axisTime } from '../src/devtools-ui/scale';
 
 describe('niceStep', () => {
   test('lands on 1, 2 or 5 times a power of ten', () => {
@@ -49,5 +49,49 @@ describe('niceTimeStep', () => {
 
   test('never returns zero', () => {
     for (const raw of [0, -5]) assert.ok(niceTimeStep(raw) > 0);
+  });
+});
+
+describe('axisTime', () => {
+  /** What one axis of ticks reads as, start to finish. */
+  const axis = (span: number, step: number) => {
+    const out: string[] = [];
+    for (let t = step; t < span; t += step) out.push(axisTime(t, step, span));
+    return out;
+  };
+
+  test('the unit does not change halfway along the axis', () => {
+    // The run that prompted this: 20.00 s · 40.00 s · 1.0 min · 1.3 min.
+    const labels = axis(95_000, 15_000);
+    assert.deepEqual(labels, ['15 s', '30 s', '45 s', '60 s', '75 s', '90 s']);
+  });
+
+  test('as many decimals as the step can tell apart, and no more', () => {
+    assert.deepEqual(axis(3000, 500), ['0.5 s', '1.0 s', '1.5 s', '2.0 s', '2.5 s']);
+    assert.deepEqual(axis(900, 200), ['200 ms', '400 ms', '600 ms', '800 ms']);
+  });
+
+  test('milliseconds only while the whole axis is under a second', () => {
+    // Past that, 1500 ms is a worse way of writing 1.5 s.
+    assert.equal(axisTime(500, 100, 800), '500 ms');
+    assert.equal(axisTime(500, 100, 4000), '0.5 s');
+  });
+
+  test('minutes once the step itself is a minute', () => {
+    assert.deepEqual(axis(1_200_000, 300_000), ['5 min', '10 min', '15 min']);
+    // Two and a half minutes in half-minute steps still reads in seconds:
+    // 0.5 min is a worse way of writing 30 s.
+    assert.deepEqual(axis(150_000, 30_000), ['30 s', '60 s', '90 s', '120 s']);
+  });
+
+  test('every label on one axis has the same unit and the same precision', () => {
+    // The digits differ from tick to tick; the unit and the number of places
+    // after the point are what must not.
+    for (const span of [700, 5_000, 95_000, 600_000, 4_000_000, 60_000_000]) {
+      const step = niceTimeStep(span / 6);
+      const labels = axis(span, step);
+      const shapes = new Set(labels.map((l) => `${l.split(' ')[1]}/${(l.split(' ')[0]!.split('.')[1] ?? '').length}`));
+      assert.equal(shapes.size, 1, `${span}ms gave ${labels.join(' · ')}`);
+    }
   });
 });

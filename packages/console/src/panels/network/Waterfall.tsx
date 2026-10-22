@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { NetworkEntry } from '../../state/session-data';
 import { formatMs } from './classify';
 import { timelineOf, type Phase } from './timing';
-import { niceStep } from '../../devtools-ui/scale';
+import { axisTime, niceTimeStep } from '../../devtools-ui/scale';
 
 export function WaterfallCell({ entry, range }: { entry: NetworkEntry; range: { min: number; max: number } }) {
   const t = timelineOf(entry);
@@ -49,14 +49,14 @@ export function WaterfallHeader({ range }: { range: { min: number; max: number }
   const span = range.max - range.min;
   // one label per ~70px, none when the column is too narrow for even one
   const count = Math.max(0, Math.floor(width / 70));
-  const step = count ? niceStep(span / (count + 1)) : Infinity;
+  const step = count ? niceTimeStep(span / (count + 1)) : Infinity;
   const ticks: number[] = [];
   for (let t = step; t < span * 0.92; t += step) ticks.push(t);
   return (
     <div className="waterfall-header" ref={ref}>
       {ticks.map((t) => (
         <span key={t} className="waterfall-tick" style={{ left: `${(t / span) * 100}%` }}>
-          {formatMs(t)}
+          {axisTime(t, step, span)}
         </span>
       ))}
     </div>

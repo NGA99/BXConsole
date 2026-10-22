@@ -5,9 +5,8 @@
  */
 import { useRef, useState, type PointerEvent } from 'react';
 import type { NetworkEntry, PageTiming } from '../../state/session-data';
-import { formatMs } from './classify';
 import { timelineOf } from './timing';
-import { niceStep } from '../../devtools-ui/scale';
+import { axisTime, niceTimeStep } from '../../devtools-ui/scale';
 
 const LANES = 6;
 
@@ -50,7 +49,9 @@ export function Overview({
   };
 
   const sel = drag ? { min: Math.min(drag.start, drag.end), max: Math.max(drag.start, drag.end) } : selection;
-  const step = niceStep(span / 6);
+  // A time axis, so the steps are durations people name — 30 s and a minute,
+  // not 20 and 50 — and every label reads in the one unit.
+  const step = niceTimeStep(span / 6);
   const ticks: number[] = [];
   for (let t = step; t < span; t += step) ticks.push(t);
 
@@ -58,7 +59,7 @@ export function Overview({
     <div className="overview" ref={ref} onPointerDown={onDown} onPointerMove={onMove} onPointerUp={onUp} title="Drag to filter by time">
       {ticks.map((t) => (
         <span key={t} className="overview-tick" style={{ left: `${(t / span) * 100}%` }}>
-          {formatMs(t)}
+          {axisTime(t, step, span)}
         </span>
       ))}
       {entries.map((e, i) => {

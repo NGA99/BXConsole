@@ -79,3 +79,25 @@ export function rangeOf(entries: NetworkEntry[], origin?: number, now = Date.now
   }
   return { min, max: Math.max(max, min + 1) };
 }
+
+/**
+ * Start, End and Duration as the Timing tab prints them — one set of numbers
+ * that agree with each other.
+ *
+ * They are three readings of one pair, and each was rounded on its own: a
+ * request that ran from …42.0 to …66.9 showed a start of "…42.000", an end
+ * of "…66.000" and, above them, "Duration: 25 ms". Twenty-four milliseconds
+ * apart under a heading saying twenty-five. Both roundings were right; the
+ * panel was still wrong, because a reader checking one number against
+ * another has no way to know they were not taken from the same place.
+ *
+ * The clock on screen shows whole milliseconds, so that is the precision the
+ * whole tab speaks in: the two ends are rounded first and the duration is the
+ * difference between the two the reader can see. It costs at most half a
+ * millisecond of accuracy on a figure already printed to the millisecond.
+ */
+export function shownTiming(t: Timeline & { end: number }): { start: number; end: number; total: number } {
+  const start = Math.round(t.start);
+  const end = Math.round(t.end);
+  return { start, end, total: end - start };
+}
