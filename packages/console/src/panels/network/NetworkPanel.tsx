@@ -13,7 +13,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { sessionData, type NetworkEntry } from '../../state/session-data';
 import { useSessionsStore } from '../../state/sessions';
 import { usePromptInbox } from '../../state/prompt-inbox';
-import { evaluate, sendNetworkConfigure } from '../../transport/client';
+import { evaluate, sendNetworkConfigure, sourceText } from '../../transport/client';
+import { bodySource } from './body-source';
 import { navigate } from '../../app/router';
 import { Toolbar, ToolbarButton, ToolbarDivider, ToolbarInput } from '../../devtools-ui/Toolbar';
 import { DataGrid, type Column, type SortState } from '../../devtools-ui/DataGrid';
@@ -31,6 +32,7 @@ import { BODY_ORDER, LABEL, TITLE, bodyState, bodyTitle } from './body-state';
 import { loadAll } from './stored-bodies';
 import { asCurl, asFetch, copyText, replayExpression } from './copy';
 import { toHar, downloadJson } from './har';
+import { stampedName } from '../../devtools-ui/download';
 import { parseStack, shortLocation } from '../console/stack';
 import { SourceLink } from '../../devtools-ui/SourceLink';
 import { isLinkableUrl } from '../../devtools-ui/safe-url';
@@ -429,7 +431,11 @@ export function NetworkPanel({ sessionId }: { sessionId: string }) {
         { label: 'Copy as fetch', onClick: () => void copyText(asFetch(entry)) },
         {
           label: 'Copy response',
-          disabled: entry.response?.body == null && entry.response?.bodyRef == null,
+          // The same question the Response tab answers, asked the same way.
+          // Gating on body/bodyRef alone left this greyed out for every body
+          // the relay kept during the run and holds by url — which the tab
+          // beside it was showing in full at the time.
+          disabled: bodySource(entry).from === 'nowhere',
           onClick: () => void copyResponseBody(sessionId, entry),
         },
         { separator: true },
@@ -448,7 +454,14 @@ export function NetworkPanel({ sessionId }: { sessionId: string }) {
           : { label: 'Block request URL', onClick: () => setBlocked([...blocked, pattern]) },
         { separator: true },
         { label: 'Copy all as HAR', onClick: () => void har().then((h) => copyText(JSON.stringify(h, null, 2))) },
-        { label: 'Save all as HAR', onClick: () => void har().then((h) => downloadJson(h, `${sessionHost || 'session'}.har`)) },
+        {
+          label: 'Save all as HAR',
+          // Stamped, like the other thing this console saves. Without it every
+          // HAR from a host is `localhost.har` and the browser numbers them
+          // (1), (2) — which is the collision `stampedName` was written for,
+          // and the file found weeks later says nothing about which run it is.
+          onClick: () => void har().then((h) => downloadJson(h, stampedName(sessionHost || 'session', 'har'))),
+        },
       ],
     });
   };
@@ -708,14 +721,28 @@ function pathOf(url: string): string {
   }
 }
 
-/** The body, from the line or from the store, whichever holds it. */
+/** The body, from wherever the Response tab would read it. */
 async function copyResponseBody(sessionId: string, entry: NetworkEntry): Promise<void> {
-  const res = entry.response;
-  if (res?.body != null) return copyText(res.body);
-  if (!res?.bodyRef) return;
+  const source = bodySource(entry);
   try {
-    const got = await fetch(`/body/${sessionId}/${res.bodyRef}`);
-    if (got.ok) await copyText(await got.text());
+    switch (source.from) {
+      case 'event':
+        return await copyText(entry.response!.body!);
+      case 'store': {
+        const got = await fetch(`/body/${sessionId}/${source.sha}`);
+        if (got.ok) await copyText(await got.text());
+        return;
+      }
+      case 'ask': {
+        // The relay answers from what it kept during the run when it has it,
+        // and asks the page when it does not — the same call the drawer makes.
+        const got = await sourceText(sessionId, entry.request.url);
+        if (got?.text != null) await copyText(got.text);
+        return;
+      }
+      case 'nowhere':
+        return;
+    }
   } catch {
     /* the sweep took it, or the relay is gone: nothing to copy */
   }

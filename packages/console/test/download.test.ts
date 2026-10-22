@@ -95,3 +95,28 @@ describe('the filename', () => {
     assert.notEqual(a, b, 'the clock alone gave both the same name');
   });
 });
+
+describe('a stem that came from the page', () => {
+  test('a host with a port does not put a colon in a filename', async () => {
+    // Illegal on Windows, and the Finder shows it as a slash.
+    const { stampedName } = await load();
+    assert.match(stampedName('localhost:7331', 'har'), /^localhost-7331-\d{8}-\d{6}\.har$/);
+  });
+
+  test('an IPv6 host comes out as something nameable', async () => {
+    const { stampedName } = await load();
+    const name = stampedName('[2001:db8::1]:8443', 'har');
+    assert.ok(!/[^A-Za-z0-9._-]/.test(name.replace(/\.har$/, '')), name);
+    assert.ok(!name.startsWith('-'), name);
+  });
+
+  test('an ordinary host is left looking like itself', async () => {
+    const { stampedName } = await load();
+    assert.match(stampedName('intranet.corp.example', 'har'), /^intranet\.corp\.example-\d{8}-\d{6}\.har$/);
+  });
+
+  test('a stem with nothing nameable in it still makes a file', async () => {
+    const { stampedName } = await load();
+    assert.match(stampedName('://', 'har'), /^download-\d{8}-\d{6}\.har$/);
+  });
+});

@@ -30,5 +30,22 @@ export function stampedName(stem: string, ext: string, size?: number): string {
   const d = new Date();
   const p = (n: number) => String(n).padStart(2, '0');
   const when = `${d.getFullYear()}${p(d.getMonth() + 1)}${p(d.getDate())}-${p(d.getHours())}${p(d.getMinutes())}${p(d.getSeconds())}`;
-  return size === undefined ? `${stem}-${when}.${ext}` : `${stem}-${size}chars-${when}.${ext}`;
+  const safe = filename(stem);
+  return size === undefined ? `${safe}-${when}.${ext}` : `${safe}-${size}chars-${when}.${ext}`;
+}
+
+/**
+ * A stem that every filesystem will take.
+ *
+ * The stems are not all literals: a HAR is named after the host the run was
+ * on, and a host carries its port, so `localhost:7331` went out as a filename
+ * with a colon in it — illegal on Windows, and shown as a slash by the
+ * Finder. A page's host can also be an IPv6 address in brackets.
+ *
+ * Everything outside the set a filename can safely hold becomes a dash, and
+ * runs of dashes collapse so a host does not come out looking padded.
+ */
+function filename(stem: string): string {
+  const safe = stem.replace(/[^A-Za-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '');
+  return safe || 'download';
 }
