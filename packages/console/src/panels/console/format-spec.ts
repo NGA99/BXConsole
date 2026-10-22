@@ -4,7 +4,7 @@
  */
 import type { SerializedValue } from '@bxconsole/protocol';
 import type { CSSProperties } from 'react';
-import { formatValue } from './format';
+import { formatValue, listOf } from './format';
 
 export type Segment =
   | { kind: 'text'; text: string; style?: CSSProperties }
@@ -12,9 +12,12 @@ export type Segment =
 
 const SPEC = /%([sdifoOc%])/g;
 
-export function applyFormat(args: SerializedValue[]): Segment[] {
+export function applyFormat(rawArgs: SerializedValue[]): Segment[] {
+  // Typed as an array, delivered by the page: destructuring a null here threw
+  // out of the render of the row.
+  const args = listOf<SerializedValue>(rawArgs);
   const [first, ...rest] = args;
-  if (!first || first.t !== 'string' || !SPEC.test(first.v)) {
+  if (!first || first.t !== 'string' || typeof first.v !== 'string' || !SPEC.test(first.v)) {
     return args.map((value) => ({ kind: 'value', value }));
   }
   SPEC.lastIndex = 0;
@@ -62,7 +65,9 @@ export function applyFormat(args: SerializedValue[]): Segment[] {
         break;
       case 'c':
         flush();
-        style = arg.t === 'string' ? parseCss(arg.v) : undefined;
+        // `%c` takes its CSS from the next argument, which the page may send
+        // as a `string` value with no `v` at all.
+        style = arg.t === 'string' && typeof arg.v === 'string' ? parseCss(arg.v) : undefined;
         break;
     }
   }

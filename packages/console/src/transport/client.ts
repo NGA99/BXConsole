@@ -13,6 +13,7 @@ import { activeTabOf } from '../state/active-tab';
 import { dropDomModel } from '../state/dom-model';
 import { sessionData, dropSessionData } from '../state/session-data';
 import { useElementsSelection } from '../state/elements-selection';
+import { listOfStrings, usableProperties, usableSourceText, usableSources, usableStyles } from './reply-guard';
 
 let ws: WebSocket | null = null;
 let attempt = 0;
@@ -296,7 +297,7 @@ export function getProperties(sessionId: string, objectId: string): Promise<Prop
     }, REPLY_TIMEOUT_MS);
     pending.set(requestId, (reply) => {
       clearTimeout(timer);
-      if (reply.type === 'object.properties') resolve(reply.properties);
+      if (reply.type === 'object.properties') resolve(usableProperties(reply.properties));
     });
     send({ type: 'object.getProperties', sessionId, requestId, objectId });
   });
@@ -363,11 +364,11 @@ export function domScrollIntoView(sessionId: string, id: number): void {
 // ---- Sources tab
 export async function sourcesList(sessionId: string): Promise<SourceEntry[]> {
   const r = await request(sessionId, { type: 'sources.list' }, 'sources.list');
-  return r?.sources ?? [];
+  return usableSources(r?.sources);
 }
 export async function sourceText(sessionId: string, url: string): Promise<SourceText | null> {
   const r = await request(sessionId, { type: 'sources.get', url }, 'sources.text', 15000);
-  return r?.source ?? null;
+  return usableSourceText(r?.source);
 }
 
 export async function domStoreGlobal(sessionId: string, id: number): Promise<string | null> {
@@ -377,7 +378,7 @@ export async function domStoreGlobal(sessionId: string, id: number): Promise<str
 
 export async function domGetStyles(sessionId: string, id: number): Promise<ElementStyles | null> {
   const r = await request(sessionId, { type: 'dom.getStyles', id }, 'dom.styles');
-  return r?.styles ?? null;
+  return usableStyles(r?.styles);
 }
 
 const completionCache = new Map<string, { at: number; names: string[] }>();
@@ -397,8 +398,9 @@ export function completions(sessionId: string, expression: string): Promise<stri
     pending.set(requestId, (reply) => {
       clearTimeout(timer);
       if (reply.type !== 'completions.result') return resolve([]);
-      completionCache.set(key, { at: Date.now(), names: reply.names });
-      resolve(reply.names);
+      const names = listOfStrings(reply.names);
+      completionCache.set(key, { at: Date.now(), names });
+      resolve(names);
     });
     send({ type: 'completions.request', sessionId, requestId, expression });
   });

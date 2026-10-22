@@ -23,7 +23,12 @@ export function formatValue(v: SerializedValue, mode: FormatMode = 'top'): strin
     case 'bigint':
       return `${v.v}n`;
     case 'string': {
-      const text = v.truncated ? `${v.v}…` : v.v;
+      // `v` is a string by type and arrives from the page: `{ t: 'string' }`
+      // with no value at all reaches quote() below, which replaces on it. Read
+      // through unknown because the declared type leaves no else branch.
+      const reported: unknown = v.v;
+      const raw = typeof reported === 'string' ? reported : reported === null || reported === undefined ? '' : String(reported);
+      const text = v.truncated ? `${raw}…` : raw;
       return mode === 'top' ? text : quote(text);
     }
     case 'symbol':
@@ -39,7 +44,8 @@ export function formatValue(v: SerializedValue, mode: FormatMode = 'top'): strin
       if (mode !== 'nested' || v.nodeType !== 1) return v.preview;
       const id = v.attrs?.id ? `#${v.attrs.id}` : '';
       const cls = v.attrs?.class ? v.attrs.class.trim().split(/\s+/).filter(Boolean).map((c) => `.${c}`).join('') : '';
-      return `${v.nodeName.toLowerCase()}${id}${cls}`;
+      // nodeName is reported by the page; null here used to throw.
+      return `${String(v.nodeName ?? '').toLowerCase()}${id}${cls}`;
     }
     case 'promise':
       return 'Promise';
@@ -49,31 +55,52 @@ export function formatValue(v: SerializedValue, mode: FormatMode = 'top'): strin
       return '(...)';
     case 'unserializable':
       return v.description;
-    case 'array':
+    case 'array': {
       if (mode === 'nested') return `Array(${v.length})`;
-      return `(${v.length}) [${v.preview.map((x) => formatValue(x, 'nested')).join(', ')}${
-        v.truncated && v.preview.length < v.length ? ', …' : ''
+      const items = listOf<SerializedValue>(v.preview);
+      return `(${v.length}) [${items.map((x) => formatValue(x, 'nested')).join(', ')}${
+        v.truncated && items.length < v.length ? ', …' : ''
       }]`;
-    case 'object':
+    }
+    case 'object': {
       if (mode === 'nested') return v.className === 'Object' ? '{…}' : v.className;
-      return `${v.className === 'Object' ? '' : v.className + ' '}{${v.preview
+      const props = listOf<{ name: string; value: SerializedValue }>(v.preview);
+      return `${v.className === 'Object' ? '' : v.className + ' '}{${props
         .map((p) => `${p.name}: ${formatValue(p.value, 'nested')}`)
-        .join(', ')}${v.truncated ? (v.preview.length ? ', …' : '…') : ''}}`;
-    case 'map':
+        .join(', ')}${v.truncated ? (props.length ? ', …' : '…') : ''}}`;
+    }
+    case 'map': {
       if (mode === 'nested') return `Map(${v.size})`;
-      return `Map(${v.size}) {${v.preview
+      const entries = listOf<[SerializedValue, SerializedValue]>(v.preview);
+      return `Map(${v.size}) {${entries
         .map(([k, val]) => `${formatValue(k, 'nested')} => ${formatValue(val, 'nested')}`)
-        .join(', ')}${v.preview.length < v.size ? ', …' : ''}}`;
-    case 'set':
+        .join(', ')}${entries.length < v.size ? ', …' : ''}}`;
+    }
+    case 'set': {
       if (mode === 'nested') return `Set(${v.size})`;
-      return `Set(${v.size}) {${v.preview.map((x) => formatValue(x, 'nested')).join(', ')}${
-        v.preview.length < v.size ? ', …' : ''
+      const members = listOf<SerializedValue>(v.preview);
+      return `Set(${v.size}) {${members.map((x) => formatValue(x, 'nested')).join(', ')}${
+        members.length < v.size ? ', …' : ''
       }}`;
+    }
   }
 }
 
 export function plainText(args: SerializedValue[]): string {
-  return args.map((a) => formatValue(a, 'top')).join(' ');
+  return listOf<SerializedValue>(args)
+    .map((a) => formatValue(a, 'top'))
+    .join(' ');
+}
+
+/**
+ * The array a serialized value claims to carry, when it is one.
+ *
+ * `preview` and `args` are typed as arrays and arrive off the socket, so a
+ * page can send null or a string instead. Reading `.map` or `.length` off that
+ * threw during render and unmounted the panel.
+ */
+export function listOf<T>(v: unknown): T[] {
+  return Array.isArray(v) ? (v as T[]) : [];
 }
 
 export function isCompound(v: SerializedValue): boolean {

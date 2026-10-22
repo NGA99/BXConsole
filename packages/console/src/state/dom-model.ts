@@ -6,6 +6,7 @@
  */
 import { create } from 'zustand';
 import type { ScreenEvent, ScreenOp, SnapshotNode } from '@bxconsole/protocol';
+import { usableOps, usableSnapshot } from '../panels/screen/op-guard';
 import { useElementsSelection } from './elements-selection';
 
 export interface DomNode {
@@ -25,7 +26,10 @@ export class DomModel {
   /** incremented on every snapshot: ids are not comparable across snapshots */
   generation = 0;
 
-  load(snapshot: SnapshotNode[]): void {
+  load(rawSnapshot: SnapshotNode[]): void {
+    // The same filter the mirror uses, so both views of the stream agree on
+    // which nodes exist and keep their ids comparable.
+    const snapshot = usableSnapshot(rawSnapshot);
     this.nodes.clear();
     this.roots = snapshot.map((n) => this.build(n, null));
     this.loaded = true;
@@ -70,9 +74,9 @@ export class DomModel {
     return Array.from(out).sort((a, b) => (order.get(a) ?? 0) - (order.get(b) ?? 0));
   }
 
-  apply(ops: ScreenOp[]): boolean {
+  apply(rawOps: ScreenOp[]): boolean {
     let changed = false;
-    for (const op of ops) {
+    for (const op of usableOps(rawOps)) {
       switch (op.op) {
         case 'add': {
           const parent = this.nodes.get(op.parentId);

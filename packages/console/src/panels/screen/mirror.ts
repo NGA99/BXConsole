@@ -4,6 +4,7 @@
  */
 import { assetPath, isProxyableUrl, rewriteCssUrls, rewriteSrcset, type ScreenOp, type SnapshotNode } from '@bxconsole/protocol';
 import { isScriptUrl } from '../../devtools-ui/safe-url';
+import { usableOps, usableSnapshot } from './op-guard';
 
 // Nodes live in the iframe's realm, so `instanceof Element` from this window is
 // always false. Use nodeType / tagName checks everywhere below.
@@ -36,6 +37,22 @@ const URL_ATTRS: Record<string, readonly string[]> = {
 /** `<link>` is only a subresource for some values of rel. */
 const FETCHING_REL = /\b(stylesheet|icon|apple-touch-icon|mask-icon)\b/i;
 
+/**
+ * Attributes the browser may navigate to, so a `javascript:` value in one of
+ * them has to go.
+ *
+ * `xlink:href` is the SVG spelling of `href` and `formaction` is the submit
+ * button's override of its form's `action`; both were missed by an earlier
+ * check that named only `href`, `src` and `action`, and both were observed
+ * landing in the mirrored tree. Nothing runs there today — the frame is
+ * sandboxed without `allow-scripts` — so this is the layer under that one.
+ */
+const NAVIGABLE_ATTRS = /^(href|src|action|formaction|xlink:href)$/;
+
+export function isNavigableAttr(name: string): boolean {
+  return NAVIGABLE_ATTRS.test(name.toLowerCase());
+}
+
 export class DomMirror {
   private readonly nodes = new Map<number, Node>();
   private readonly idsOf = new Map<Node, number>();
@@ -56,8 +73,10 @@ export class DomMirror {
   }
 
   /** Replace the whole document with a snapshot. */
-  load(snapshot: SnapshotNode[], baseUrl: string): void {
-    this.baseUrl = baseUrl || location.href;
+  load(rawSnapshot: SnapshotNode[], baseUrl: string): void {
+    // Dropped here rather than defended against all the way down: see op-guard.
+    const snapshot = usableSnapshot(rawSnapshot);
+    this.baseUrl = typeof baseUrl === 'string' && baseUrl ? baseUrl : location.href;
     this.nodes.clear();
     this.idsOf.clear();
     const doc = this.doc;
@@ -96,6 +115,21 @@ export class DomMirror {
     doc.close();
   }
 
+  /**
+   * Whether the mirrored document has anything to show.
+   *
+   * A page recorded from boot has its opening keyframe taken while the agent's
+   * own script tag is running, which is before the parser has reached `<body>`
+   * — so the first frame of such a recording is a head and nothing else. That
+   * is faithful, and it looks exactly like a mirror that failed to load, so
+   * the panel asks this and says which it is.
+   */
+  isBlank(): boolean {
+    const body = this.doc.body;
+    if (!body) return true;
+    return body.children.length === 0 && !(body.textContent ?? '').trim();
+  }
+
   /** Draw a focus ring on the remote document's active element. */
   setFocus(id: number | null): void {
     this.doc.querySelectorAll('[data-bsc-focus]').forEach((el) => el.removeAttribute('data-bsc-focus'));
@@ -122,9 +156,9 @@ export class DomMirror {
     return { id: null, tag: tagOf(el).toLowerCase(), label: selectorLabel(el), rect: el.getBoundingClientRect() };
   }
 
-  apply(ops: ScreenOp[]): { unknownIds: number } {
+  apply(rawOps: ScreenOp[]): { unknownIds: number } {
     let unknown = 0;
-    for (const op of ops) {
+    for (const op of usableOps(rawOps)) {
       switch (op.op) {
         case 'add': {
           const parent = this.nodes.get(op.parentId);
@@ -218,7 +252,25 @@ export class DomMirror {
           this.idsOf.set(stub, node.id);
           return stub;
         }
-        const el = node.ns ? doc.createElementNS(node.ns, node.tag) : doc.createElement(node.tag);
+        /*
+         * The one place a tag name has to be one the DOM will take.
+         *
+         * Caught here rather than predicted upstream: createElement's idea of
+         * a valid name is not a rule worth guessing at (it takes a bare space
+         * and refuses things that read as fine), and every guess that was too
+         * strict dropped real elements out of the mirror. A name it refuses
+         * leaves a comment saying so, which keeps the node's id mapped so the
+         * ops that address it later are harmless.
+         */
+        let el: Element;
+        try {
+          el = node.ns ? doc.createElementNS(node.ns, node.tag) : doc.createElement(node.tag);
+        } catch {
+          const refused = doc.createComment(` bxconsole: <${node.tag}> is not a name this DOM accepts `);
+          this.nodes.set(node.id, refused);
+          this.idsOf.set(refused, node.id);
+          return refused;
+        }
         for (const [k, v] of Object.entries(node.attrs)) this.setAttr(el, k, v);
         // After the whole set, not per attribute: whether a <link> fetches
         // anything depends on its rel, which may arrive after its href.
@@ -305,7 +357,8 @@ export class DomMirror {
     if (lower.startsWith('on')) return;
     // Scheme read by the shared helper, which knows the spellings a plain
     // `/^\s*javascript:/` misses — a leading NUL, or a tab inside the word.
-    if ((lower === 'href' || lower === 'src' || lower === 'action') && isScriptUrl(value)) return;
+    // The attribute list is its own thing: see isNavigableAttr.
+    if (isNavigableAttr(lower) && isScriptUrl(value)) return;
     if (tagOf(el) === 'IFRAME' && (lower === 'src' || lower === 'srcdoc')) return;
     try {
       el.setAttribute(name, value);

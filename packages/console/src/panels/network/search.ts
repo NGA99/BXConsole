@@ -12,6 +12,7 @@
 import { isTextualMime } from '@bxconsole/protocol';
 import type { NetworkEntry } from '../../state/session-data';
 import { textOf } from './stored-bodies';
+import { headerOf, headerPairs } from './field-guard';
 
 export interface SearchHit {
   requestId: string;
@@ -76,7 +77,10 @@ export function searchEntries(
    * inside the name leaves nothing to mark in the value; the label carries
    * the highlight in that case.
    */
-  const test = (requestId: string, where: SearchHit['where'], text: string | null | undefined, label?: string, from = 0) => {
+  const test = (requestId: string, where: SearchHit['where'], raw: string | null | undefined, label?: string, from = 0) => {
+    // Bodies and header values come from the page, so `raw` is a string only
+    // by type; a number would reach .slice below.
+    const text = typeof raw === 'string' ? raw : raw === null || raw === undefined ? '' : String(raw);
     if (!text || hits.length >= MAX_HITS) return;
     rx.lastIndex = 0;
     const m = rx.exec(text);
@@ -107,11 +111,13 @@ export function searchEntries(
 
   for (const e of entries) {
     test(e.requestId, 'url', e.request.url);
-    for (const [k, v] of Object.entries(e.request.headers)) test(e.requestId, 'request header', `${k}: ${v}`, k, k.length + 2);
-    for (const [k, v] of Object.entries(e.response?.headers ?? {})) test(e.requestId, 'response header', `${k}: ${v}`, k, k.length + 2);
+    // headerPairs, not Object.entries: the page reported these maps, and
+    // Object.entries throws on the null one it is free to send.
+    for (const [k, v] of headerPairs(e.request.headers)) test(e.requestId, 'request header', `${k}: ${v}`, k, k.length + 2);
+    for (const [k, v] of headerPairs(e.response?.headers)) test(e.requestId, 'response header', `${k}: ${v}`, k, k.length + 2);
 
     if (e.request.body != null) test(e.requestId, 'request body', e.request.body);
-    else viaStore(e.requestId, 'request body', e.request.bodyRef, e.request.headers['content-type']);
+    else viaStore(e.requestId, 'request body', e.request.bodyRef, headerOf(e.request.headers, 'content-type'));
 
     if (e.response?.body != null) {
       if (e.response.bodyEncoding !== 'base64') test(e.requestId, 'response body', e.response.body);

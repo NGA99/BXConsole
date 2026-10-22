@@ -56,9 +56,19 @@ const LINKABLE = new Set(['http:', 'https:', 'ws:', 'wss:', 'file:']);
 /** Schemes that run code in whatever document they are navigated in. */
 const SCRIPTING = new Set(['javascript:', 'vbscript:']);
 
+/*
+ * `urlScheme` reads the string it is given and trusts the type, which holds
+ * for the relay — it validates before storing — and not here: these values
+ * come straight off the event stream, where a `page.navigated` with
+ * `url: null` is as easy to send as one with a `javascript:` URL, and
+ * `null.replace` threw out of the Console panel's render. So each of the three
+ * entry points below answers for a non-string rather than passing it on.
+ */
+const schemeOf = (raw: string): string | null => (typeof raw === 'string' ? urlScheme(raw) : null);
+
 /** Whether a page-supplied URL may be an `href`, a `window.open` target, or the like. */
 export function isLinkableUrl(raw: string): boolean {
-  const scheme = urlScheme(raw);
+  const scheme = schemeOf(raw);
   return scheme !== null && LINKABLE.has(scheme);
 }
 
@@ -81,6 +91,6 @@ export function safeHref(raw: string): string | undefined {
  * that run code have to go.
  */
 export function isScriptUrl(raw: string): boolean {
-  const scheme = urlScheme(raw);
+  const scheme = schemeOf(raw);
   return scheme !== null && SCRIPTING.has(scheme);
 }

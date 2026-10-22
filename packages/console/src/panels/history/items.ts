@@ -104,7 +104,23 @@ export function buildItems({ history, console: consoleEntries, network, pageTimi
   }
 
   items.sort((a, b) => a.ts - b.ts);
-  return items;
+  // Labels, details and badges are built out of page-supplied fields, and the
+  // panel renders them as React children: an object there is React error #31
+  // and takes the whole panel down. Coerced once, here, rather than at each of
+  // the twenty places an item is made.
+  return items.map(asText);
+}
+
+/** The strings of one item, actually as strings. */
+function asText(item: HistItem): HistItem {
+  const str = (v: unknown): string => (typeof v === 'string' ? v : v === null || v === undefined ? '' : String(v));
+  return {
+    ...item,
+    kind: str(item.kind),
+    label: str(item.label),
+    ...(item.detail === undefined ? {} : { detail: str(item.detail) }),
+    ts: typeof item.ts === 'number' && Number.isFinite(item.ts) ? item.ts : 0,
+  };
 }
 
 function historyItem(e: HistoryEntry): HistItem {
@@ -185,8 +201,11 @@ function paintLabel(name: string): string {
 
 /** Last step of a selector, which is the part that identifies the element. */
 export function shortSelector(sel: string): string {
-  const parts = sel.split(' > ');
-  return parts[parts.length - 1] ?? sel;
+  // The page chose this, so it is a string only by type. A number here used to
+  // throw out of the History render and take the panel down with it.
+  const text = typeof sel === 'string' ? sel : sel === null || sel === undefined ? '' : String(sel);
+  const parts = text.split(' > ');
+  return parts[parts.length - 1] ?? text;
 }
 
 export function summarize(items: HistItem[]): Record<LaneId, number> {

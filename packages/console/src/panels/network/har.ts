@@ -9,6 +9,7 @@
 import type { NetworkEntry } from '../../state/session-data';
 import { timelineOf } from './timing';
 import { downloadText } from '../../devtools-ui/download';
+import { headerOf, headerPairs } from './field-guard';
 
 /**
  * A HAR of these entries, bodies and all.
@@ -75,7 +76,7 @@ function toHarEntry(e: NetworkEntry, stored: Map<string, string>) {
       cookies: [],
       headers: toHeaders(e.request.headers),
       queryString: Array.from(url.searchParams.entries()).map(([name, value]) => ({ name, value })),
-      ...(e.request.body ? { postData: { mimeType: e.request.headers['content-type'] ?? '', text: e.request.body } } : {}),
+      ...(e.request.body ? { postData: { mimeType: headerOf(e.request.headers, 'content-type'), text: e.request.body } } : {}),
       headersSize: -1,
       bodySize: byteLength(e.request.body),
     },
@@ -124,7 +125,7 @@ function byteLength(text: string | null | undefined, encoding?: 'base64' | 'text
 }
 
 function toHeaders(h: Record<string, string>) {
-  return Object.entries(h).map(([name, value]) => ({ name, value }));
+  return headerPairs(h).map(([name, value]) => ({ name, value }));
 }
 
 export function downloadJson(data: unknown, filename: string): void {

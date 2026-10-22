@@ -11,6 +11,7 @@
  */
 import { useEffect, useState, type MouseEvent, type ReactNode } from 'react';
 import type { PropertyPreview, SerializedValue } from '@bxconsole/protocol';
+import { listOf } from './format';
 import { getProperties, invokeGetter, storeAsGlobal, objectJson, locateNode, scrollNodeIntoView } from '../../transport/client';
 import { openContextMenu } from '../../devtools-ui/menu-store';
 import { useScreenHighlight } from '../../state/screen-highlight';
@@ -42,7 +43,7 @@ export function ObjectTree({
     return (
       <span className="otree-leaf">
         {name !== undefined && <PropName name={name} />}
-        {value.t === 'string' && value.v.length > LONG_STRING ? (
+        {value.t === 'string' && textOfValue(value).length > LONG_STRING ? (
           <LongString value={value} mode={topLevel ? 'top' : 'nested'} />
         ) : (
           <Inline value={value} mode={topLevel ? 'top' : 'nested'} />
@@ -178,7 +179,7 @@ function CompoundNode({
 
 async function highlightNode(sessionId: string, objectId: string, value: Extract<SerializedValue, { t: 'node' }>): Promise<void> {
   const screenId = await locateNode(sessionId, objectId);
-  const label = `${value.nodeName.toLowerCase()}${value.attrs?.id ? `#${value.attrs.id}` : ''}`;
+  const label = `${tagNameOf(value.nodeName)}${value.attrs?.id ? `#${value.attrs.id}` : ''}`;
   useScreenHighlight.getState().set(screenId, label);
 }
 
@@ -187,26 +188,44 @@ function childrenOf(value: SerializedValue, fetched: PropertyPreview[] | null | 
   return previewChildren(value);
 }
 
+/**
+ * The text of a serialized string value.
+ *
+ * `v` is typed as a string and comes off the event stream, so a page can send
+ * `{ t: 'string' }` with no `v` at all — and reading `.length` off that threw
+ * out of the Console panel's render.
+ */
+function textOfValue(value: Extract<SerializedValue, { t: 'string' }>): string {
+  return typeof value.v === 'string' ? value.v : value.v === null || value.v === undefined ? '' : String(value.v);
+}
+
+/** A reported nodeName, lowercased — null and non-strings used to throw here. */
+function tagNameOf(name: unknown): string {
+  return typeof name === 'string' ? name.toLowerCase() : name === null || name === undefined ? '' : String(name).toLowerCase();
+}
+
 function previewChildren(value: SerializedValue): PropertyPreview[] {
+  // Every `preview` below is typed as an array and arrives from the page, so
+  // each one is read through listOf rather than mapped directly.
   switch (value.t) {
     case 'object':
-      return value.preview;
+      return listOf<PropertyPreview>(value.preview);
     case 'array':
       return [
-        ...value.preview.map((v, i) => ({ name: String(i), value: v })),
+        ...listOf<SerializedValue>(value.preview).map((v, i) => ({ name: String(i), value: v })),
         { name: 'length', value: { t: 'number' as const, v: value.length }, enumerable: false },
       ];
     case 'map':
-      return value.preview.map(([k, v], i) => ({
+      return listOf<[SerializedValue, SerializedValue]>(value.preview).map(([k, v], i) => ({
         name: `${i}`,
         value: { t: 'object' as const, className: 'Entry', preview: [{ name: 'key', value: k }, { name: 'value', value: v }] },
       }));
     case 'set':
-      return value.preview.map((v, i) => ({ name: String(i), value: v }));
+      return listOf<SerializedValue>(value.preview).map((v, i) => ({ name: String(i), value: v }));
     case 'error':
       return [
-        { name: 'message', value: { t: 'string', v: value.message } },
-        ...(value.stack ? [{ name: 'stack', value: { t: 'string' as const, v: value.stack } }] : []),
+        { name: 'message', value: { t: 'string', v: String(value.message ?? '') } },
+        ...(value.stack ? [{ name: 'stack', value: { t: 'string' as const, v: String(value.stack) } }] : []),
       ];
     default:
       return [];
@@ -253,7 +272,7 @@ const DOWNLOADABLE = 4 * 1024;
  * came through it is the one quoted, with how much of it is actually here.
  */
 function moreLabel(value: Extract<SerializedValue, { t: 'string' }>): string {
-  const here = value.v.length;
+  const here = textOfValue(value).length;
   if (!value.truncated) return `Show more (${here.toLocaleString()} chars)`;
   if (typeof value.length === 'number' && value.length > here) {
     return `Show more (${here.toLocaleString()} of ${value.length.toLocaleString()} chars — the rest never left the page)`;
@@ -293,13 +312,13 @@ function LongString({ value, mode }: { value: Extract<SerializedValue, { t: 'str
           the relay is not asked for anything. A string the agent had to cut
           saves what there is of it — which the name says, so a half string
           does not get filed away as the whole one. */}
-      {value.v.length >= DOWNLOADABLE && (
+      {textOfValue(value).length >= DOWNLOADABLE && (
         <button
           className="otree-more"
           title={value.truncated ? 'Save the part that reached the console' : 'Save the whole string as a file'}
           onClick={(e) => {
             e.stopPropagation();
-            downloadText(value.v, stampedName(value.truncated ? 'console-value-partial' : 'console-value', 'txt', value.v.length));
+            downloadText(textOfValue(value), stampedName(value.truncated ? 'console-value-partial' : 'console-value', 'txt', textOfValue(value).length));
           }}
         >
           {value.truncated ? 'Download what arrived' : 'Download'}
@@ -355,8 +374,8 @@ export function Inline({ value, mode }: { value: SerializedValue; mode: 'top' | 
         <span className="tok">
           <span className="tok-meta">({value.length}) </span>[
           {joinNodes(
-            value.preview.map((v, i) => <Inline key={i} value={v} mode="nested" />),
-            Boolean(value.truncated && value.preview.length < value.length),
+            listOf<SerializedValue>(value.preview).map((v, i) => <Inline key={i} value={v} mode="nested" />),
+            Boolean(value.truncated && listOf(value.preview).length < value.length),
           )}
           ]
         </span>
@@ -368,8 +387,8 @@ export function Inline({ value, mode }: { value: SerializedValue; mode: 'top' | 
           {value.className !== 'Object' && <span className="tok-meta">{value.className} </span>}
           {'{'}
           {joinNodes(
-            value.preview.map((p) => (
-              <span key={p.name}>
+            listOf<PropertyPreview>(value.preview).map((p, i) => (
+              <span key={`${i}:${p.name}`}>
                 <span className="tok-property">{p.name}</span>: <Inline value={p.value} mode="nested" />
               </span>
             )),
@@ -385,12 +404,12 @@ export function Inline({ value, mode }: { value: SerializedValue; mode: 'top' | 
           <span className="tok-meta">Map({value.size}) </span>
           {'{'}
           {joinNodes(
-            value.preview.map(([k, v], i) => (
+            listOf<[SerializedValue, SerializedValue]>(value.preview).map(([k, v], i) => (
               <span key={i}>
                 <Inline value={k} mode="nested" /> {'=>'} <Inline value={v} mode="nested" />
               </span>
             )),
-            value.preview.length < value.size,
+            listOf(value.preview).length < value.size,
           )}
           {'}'}
         </span>
@@ -402,8 +421,8 @@ export function Inline({ value, mode }: { value: SerializedValue; mode: 'top' | 
           <span className="tok-meta">Set({value.size}) </span>
           {'{'}
           {joinNodes(
-            value.preview.map((v, i) => <Inline key={i} value={v} mode="nested" />),
-            value.preview.length < value.size,
+            listOf<SerializedValue>(value.preview).map((v, i) => <Inline key={i} value={v} mode="nested" />),
+            listOf(value.preview).length < value.size,
           )}
           {'}'}
         </span>
@@ -412,8 +431,8 @@ export function Inline({ value, mode }: { value: SerializedValue; mode: 'top' | 
 }
 
 function NodeInline({ value, mode }: { value: Extract<SerializedValue, { t: 'node' }>; mode: 'top' | 'preview' | 'nested' }) {
-  if (value.nodeType !== 1) return <span className="tok tok-string">{mode === 'nested' ? `#${value.nodeName.toLowerCase().replace('#', '')}` : value.preview}</span>;
-  const tag = value.nodeName.toLowerCase();
+  if (value.nodeType !== 1) return <span className="tok tok-string">{mode === 'nested' ? `#${tagNameOf(value.nodeName).replace('#', '')}` : value.preview}</span>;
+  const tag = tagNameOf(value.nodeName);
   // Inside a collection DevTools shows the CSS-selector form: button#save.primary
   if (mode === 'nested') return <span className="tok tok-tag">{selectorForm(tag, value.attrs)}</span>;
   return (

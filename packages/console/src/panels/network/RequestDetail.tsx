@@ -11,6 +11,7 @@ import { bodySource } from './body-source';
 import { TabBar } from '../../devtools-ui/TabBar';
 import { ObjectTree } from '../console/ObjectTree';
 import { nameOf, formatMs, formatBytes, streamsFrames } from './classify';
+import { headerCount, headerOf, headerPairs } from './field-guard';
 import { timelineOf } from './timing';
 import { toSerialized, tryParseJson } from './json-to-serialized';
 import { PHASE_COLORS } from './Waterfall';
@@ -210,7 +211,7 @@ function HeadersTab({ entry }: { entry: NetworkEntry }) {
   const status = entry.failed ? undefined : entry.response?.status ?? entry.resource?.responseStatus;
   const [rawResponse, setRawResponse] = useState(false);
   const [rawRequest, setRawRequest] = useState(false);
-  const raw = (h: Record<string, string>) => Object.entries(h).map(([k, v]) => `${k}: ${v}`).join('\n');
+  const raw = (h: Record<string, string>) => headerPairs(h).map(([k, v]) => `${k}: ${v}`).join('\n');
   return (
     <div className="detail-sections">
       <Section title="General">
@@ -234,7 +235,7 @@ function HeadersTab({ entry }: { entry: NetworkEntry }) {
       </Section>
       {entry.response && (
         <Section
-          title={`Response Headers (${Object.keys(entry.response.headers).length})`}
+          title={`Response Headers (${headerCount(entry.response.headers)})`}
           action={<button className="detail-link" onClick={() => setRawResponse((r) => !r)}>{rawResponse ? 'view parsed' : 'view source'}</button>}
         >
           {rawResponse ? (
@@ -246,7 +247,7 @@ function HeadersTab({ entry }: { entry: NetworkEntry }) {
       )}
       {!entry.resource && (
         <Section
-          title={`Request Headers (${Object.keys(entry.request.headers).length})`}
+          title={`Request Headers (${headerCount(entry.request.headers)})`}
           note="Provisional headers are shown. Browser-added headers (cookie, user-agent…) are not visible from page scripts."
           action={<button className="detail-link" onClick={() => setRawRequest((r) => !r)}>{rawRequest ? 'view parsed' : 'view source'}</button>}
         >
@@ -286,7 +287,7 @@ function PayloadTab({ entry, sessionId }: { entry: NetworkEntry; sessionId: stri
           return [i < 0 ? kv : kv.slice(0, i), i < 0 ? '' : kv.slice(i + 1)] as [string, string];
         });
   const body = entry.request.body;
-  const ctype = entry.request.headers['content-type'] ?? '';
+  const ctype = headerOf(entry.request.headers, 'content-type');
   const json = ctype.includes('json') || !ctype ? tryParseJson(body) : undefined;
   const form = ctype.includes('x-www-form-urlencoded') && body ? Array.from(new URLSearchParams(body).entries()) : null;
 
@@ -564,7 +565,7 @@ function Empty({ children }: { children: ReactNode }) {
 }
 
 function sortedEntries(h: Record<string, string>): Array<[string, string]> {
-  return Object.entries(h).sort(([a], [b]) => a.localeCompare(b));
+  return headerPairs(h).sort(([a], [b]) => a.localeCompare(b));
 }
 
 export { nameOf };

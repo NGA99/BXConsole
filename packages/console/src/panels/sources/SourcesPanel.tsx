@@ -78,7 +78,7 @@ export function SourcesPanel({ sessionId }: { sessionId: string }) {
     // Another session's request: this panel remounts per session, so without
     // the check it would open that session's file as soon as it appears.
     if (!target || target.sessionId !== sessionId) return;
-    const url = target.url.split('#')[0]!;
+    const url = String(target.url ?? '').split('#')[0]!;
     if (!entries.some((e) => e.url === url)) setEntries((list) => [...list, { url, kind: guessKind(url), inline: false, label: nameOf(url) }]);
     open(url, target.line);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -231,7 +231,7 @@ function nameOf(url: string): string {
   }
 }
 function guessKind(url: string): SourceEntry['kind'] {
-  const ext = (url.split('?')[0]!.split('.').pop() ?? '').toLowerCase();
+  const ext = (String(url ?? '').split('?')[0]!.split('.').pop() ?? '').toLowerCase();
   if (['js', 'mjs', 'cjs', 'ts'].includes(ext)) return 'script';
   if (ext === 'css') return 'stylesheet';
   return 'document';

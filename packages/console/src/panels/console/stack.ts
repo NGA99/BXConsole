@@ -13,7 +13,9 @@ const V8 = /^\s*at\s+(?:async\s+)?(?:(.*?)\s+\()?(.+?):(\d+):(\d+)\)?\s*$/;
 const SM = /^(.*?)@(.+?):(\d+):(\d+)\s*$/;
 
 export function parseStack(stack: string | undefined): Frame[] {
-  if (!stack) return [];
+  // A stack is whatever the page put in the field. Anything but a string used
+  // to throw here, out of the render of every row that shows a stack.
+  if (!stack || typeof stack !== 'string') return [];
   const frames: Frame[] = [];
   for (const raw of stack.split('\n')) {
     if (!raw.trim() || /^\w*Error\b/.test(raw.trim()) && !raw.includes('@') && !/^\s*at\s/.test(raw)) continue;

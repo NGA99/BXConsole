@@ -15,6 +15,7 @@ import { clockTime as formatTime, fullTimestamp } from '../../devtools-ui/time';
 import { navigate } from '../../app/router';
 import { SourceLink } from '../../devtools-ui/SourceLink';
 import { safeHref } from '../../devtools-ui/safe-url';
+import { listOf } from './format';
 import { revealRequest } from '../../state/network-selection';
 import { useConsoleSelection } from '../../state/console-selection';
 import { useActiveTab } from '../../state/active-tab';
@@ -466,7 +467,8 @@ function ConsoleRow({ row, sessionId, settings }: { row: Row; sessionId: string;
           locationLine={entry.line}
         >
           <span className="console-uncaught">Uncaught </span>
-          <span>{entry.message.replace(/^Uncaught\s+/, '')}</span>
+          {/* The page's own message field: a string by type only. */}
+          <span>{String(entry.message ?? '').replace(/^Uncaught\s+/, '')}</span>
           {entry.stack && <StackTrace stack={stripFirstLine(entry.stack)} />}
           {entry.cause && (
             <div className="console-cause">
@@ -569,7 +571,7 @@ function GroupRow({ row, sessionId, settings }: { row: Row; sessionId: string; s
       <Line severity="info" entry={entry} settings={settings} className="console-group-header" onClick={() => setOpen((o) => !o)}>
         <span className={`otree-arrow${open ? ' open' : ''}`} />
         <span className="console-group-title">
-          {entry.args.map((a, i) => (
+          {listOf<SerializedValue>(entry.args).map((a, i) => (
             <span key={i}>
               {i > 0 && ' '}
               <Inline value={a} mode="top" />
@@ -717,6 +719,9 @@ function countLeaves(rows: Row[]): number {
 }
 
 function stripFirstLine(stack: string): string {
+  // The page's own `stack` field: typed as a string, and an array here used to
+  // throw out of the error row's render.
+  if (typeof stack !== 'string') return '';
   const lines = stack.split('\n');
   return /^\s*at\s|@/.test(lines[0] ?? '') ? stack : lines.slice(1).join('\n');
 }

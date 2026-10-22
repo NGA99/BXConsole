@@ -34,6 +34,7 @@ import { toHar, downloadJson } from './har';
 import { parseStack, shortLocation } from '../console/stack';
 import { SourceLink } from '../../devtools-ui/SourceLink';
 import { isLinkableUrl } from '../../devtools-ui/safe-url';
+import { textOf } from './field-guard';
 import { openSource } from '../../state/sources-target';
 import { useNetworkSelection } from '../../state/network-selection';
 import {
@@ -387,7 +388,9 @@ export function NetworkPanel({ sessionId }: { sessionId: string }) {
 
   const openRowMenu = (entry: NetworkEntry, e: React.MouseEvent) => {
     const replayable = entry.request.kind === 'fetch' || entry.request.kind === 'xhr';
-    const pattern = entry.request.url.split('?')[0]!;
+    // Not entry.request.url.split: the page reported it, so it is a string
+    // only by type, and this one feeds the blocked-pattern list.
+    const pattern = textOf(entry.request.url).split('?')[0]!;
     const isBlocked = blocked.includes(pattern);
     const setBlocked = (list: string[]) => {
       store.getState().setBlockedPatterns(list);

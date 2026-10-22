@@ -31,7 +31,10 @@ export function buildTree(entries: ConsoleEntry[], groupSimilar: boolean): Row[]
   const stack: Row[][] = [root];
 
   for (const entry of entries) {
-    const depth = entry.type === 'console.message' ? entry.groupDepth : stack.length - 1;
+    // groupDepth comes from the page: a string here used to leave the stack
+    // where it was, so later rows nested under a group that never opened.
+    const reported = entry.type === 'console.message' ? entry.groupDepth : undefined;
+    const depth = typeof reported === 'number' && Number.isFinite(reported) ? Math.max(0, Math.trunc(reported)) : stack.length - 1;
     while (stack.length - 1 > depth) stack.pop();
     const siblings = stack[stack.length - 1]!;
 

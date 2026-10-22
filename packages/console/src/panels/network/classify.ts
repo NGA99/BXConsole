@@ -87,7 +87,9 @@ export function typeLabel(entry: NetworkEntry): string {
   const t = classify(entry);
   if (t === 'fetch' || t === 'xhr') {
     const mime = entry.response?.mimeType;
-    if (mime) {
+    // A response header the page reported: typed as a string, and a number
+    // here used to throw inside the Network grid's own render.
+    if (mime && typeof mime === 'string') {
       const sub = mime.split('/')[1] ?? mime;
       return sub.replace(/^x-/, '').replace('javascript', 'script');
     }
