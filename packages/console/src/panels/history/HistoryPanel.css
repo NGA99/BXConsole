@@ -17,8 +17,20 @@
   container-type: inline-size;
 }
 
-/* In a narrow dock the secondary text is all ellipsis, so drop it and keep the label. */
-@container (max-width: 560px) {
+/*
+ * In a narrow dock the secondary text is all ellipsis, so drop it and keep
+ * the label.
+ *
+ * The threshold is measured rather than guessed, because the first one (560px)
+ * left a band where the column was shown at a width that could not say
+ * anything. With a network row's `200 · /demo/sample.json` in it — 258px of
+ * text — the column gets 107px at a 1200px container, 62px at 900, 41px at
+ * 760, 26px at 660 and 14px at 580. A three-digit status needs about 50px to
+ * survive with its separator, so anything under ~820px was rendering `20…`
+ * and `40…`, which cannot be told apart. The default dock at a 1440px window
+ * put this container at 648px, squarely inside that band.
+ */
+@container (max-width: 820px) {
   .hist-row-detail {
     display: none;
   }

@@ -76,7 +76,7 @@
     <button onclick="document.getElementById('asset-img').src = 'box2.png?t=' + Date.now()">swap image src</button>
 
     <h3>History</h3>
-    <button onclick="window.__bxconsole.mark('checkout:start', { cart: 3, total: 42.5 })">mark()</button>
+    <button onclick="window.__wv.mark('checkout:start', { cart: 3, total: 42.5 })">mark()</button>
     <button onclick="var t = Date.now(); while (Date.now() - t < 250) {} console.log('blocked 250ms')">long task</button>
     <button onclick="var s = document.getElementById('shifter'); s.style.height = s.style.height === '60px' ? '0px' : '60px'">cause layout shift</button>
     <div id="shifter" style="height:0; background:#fbbc04; transition:none"></div>
@@ -90,7 +90,9 @@
     </form>
 
     <script>
-      console.log('demo page booted', { sessionId: window.__bxconsole && window.__bxconsole.sessionId });
+      // `__wv` is the agent's handle under its default mark; `data-mark` on the
+      // script tag renames it, and this page does not set one.
+      console.log('demo page booted', { sessionId: window.__wv && window.__wv.sessionId });
     </script>
   </body>
 </html>

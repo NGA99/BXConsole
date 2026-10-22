@@ -173,6 +173,8 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
   }, [external.screenId, external.label, status.batches]);
   const [hover, setHover] = useState<string>('');
   const wheelAcc = useRef<{ x: number; y: number; cx: number; cy: number; timer: number | null }>({ x: 0, y: 0, cx: 0, cy: 0, timer: null });
+  /** the mirror holds a document with nothing in it to draw */
+  const [blank, setBlank] = useState(false);
   const lastLocalMove = useRef(0);
   const moveTimer = useRef<number | null>(null);
 
@@ -186,10 +188,13 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
     mirror.current.setFocus(snapshot.focus);
     if (syncScrollRef.current) frame.contentWindow?.scrollTo(snapshot.scroll.x, snapshot.scroll.y);
     setStatus({ state, viewport: snapshot.viewport, snapshotAt: snapshot.ts, batches: 0, ops: 0 });
+    setBlank(mirror.current.isBlank());
   };
 
   const applyOps = (ops: ScreenOp[]): { unknownIds: number } | undefined => {
     const result = mirror.current?.apply(ops);
+    // The first batches of a boot recording are what put the body there.
+    setBlank(mirror.current?.isBlank() ?? true);
     const vp = ops.find((o) => o.op === 'viewport');
     setStatus((s) => ({
       ...s,
@@ -668,6 +673,19 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
               ) : (
                 'Waiting for the first snapshot…'
               )}
+            </div>
+          )}
+          {/*
+            A frame that really was empty, which is not the same as a mirror
+            that did not load. A page recorded from boot has its first
+            keyframe taken while the agent's script tag is still running, so
+            the recording opens on a document the parser had not reached the
+            body of yet — a blank pane that stays blank until the batch that
+            builds the page. Without this it reads as a broken replay.
+          */}
+          {replay && !replay.loading && status.snapshotAt !== null && blank && (
+            <div className="screen-overlay">
+              The page had not been drawn yet at this point. Play, or step forward, to the moment it appears.
             </div>
           )}
           {/*
