@@ -23,6 +23,7 @@ import { ProjectBar } from './ProjectBar';
 import { ProjectsPanel } from './ProjectsPanel';
 import { AdminPanel } from './AdminPanel';
 import { useProjectsStore } from '../../state/projects';
+import { plain } from '../../devtools-ui/plain-text';
 import './SessionsPanel.css';
 
 export function SessionsPanel({ view }: { view: SessionView }) {
@@ -245,10 +246,10 @@ function SessionList({
                 moved into the tooltip rather than off the screen. The filter
                 still searches both. */}
             <span className="session-name" title={identity(s)}>
-              {s.name ?? s.title ?? '(untitled)'}
+              {plain(s.name ?? s.title) ?? '(untitled)'}
             </span>
-            <span className="session-url mono" title={s.url}>
-              {shortenUrl(s.url)}
+            <span className="session-url mono" title={plain(s.url)}>
+              {plain(shortenUrl(s.url))}
             </span>
             {/* The user agent as the browser sent it.
                 This used to be parsed down to "Chrome 152", which threw away
@@ -359,7 +360,7 @@ function SessionList({
  */
 /** Everything the row calls this session, for the tooltip the name carries. */
 function identity(s: SessionMeta): string {
-  return [s.name, s.title, `session-${s.sessionId}`].filter(Boolean).join('\n');
+  return [plain(s.name), plain(s.title), `session-${s.sessionId}`].filter(Boolean).join('\n');
 }
 
 /**

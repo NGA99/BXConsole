@@ -3,6 +3,7 @@ import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useSessionList } from '../state/sessions';
 import { useActiveTab } from '../state/active-tab';
 import { navigate, type PanelId } from './router';
+import { plain } from '../devtools-ui/plain-text';
 
 export function SessionPicker({ sessionId, panel }: { sessionId: string; panel: PanelId }) {
   const sessions = useSessionList();
@@ -37,7 +38,7 @@ export function SessionPicker({ sessionId, panel }: { sessionId: string; panel: 
     if (over > 0) el.style.marginLeft = `${-over}px`;
   }, [open]);
 
-  const label = current ? current.name ?? current.title ?? current.sessionId : `session-${sessionId}`;
+  const label = plain(current ? current.name ?? current.title ?? current.sessionId : `session-${sessionId}`);
   // With the window tabs above, this line reads as the address bar: show the selected window.
   const activeTab = useActiveTab(sessionId);
   const tab = current?.tabs?.find((t) => t.tabId === activeTab);
@@ -57,15 +58,15 @@ export function SessionPicker({ sessionId, panel }: { sessionId: string; panel: 
    * be repeating itself.
    */
   const several = (current?.tabs?.length ?? 0) > 1;
-  const windowTitle = several && tab?.title && tab.title !== label ? tab.title : null;
+  const windowTitle = several && tab?.title && tab.title !== label ? plain(tab.title) : null;
 
   return (
     <div className="session-picker" ref={ref}>
-      <button className="session-picker-button" onClick={() => setOpen((o) => !o)} title={shownUrl}>
+      <button className="session-picker-button" onClick={() => setOpen((o) => !o)} title={plain(shownUrl) ?? undefined}>
         <span className={`dot ${live ? 'on' : 'off'}`} />
         <span className="session-picker-name">{label}</span>
         {windowTitle && <span className="session-picker-window">{windowTitle}</span>}
-        {shownUrl && <span className="session-picker-url mono">{shortUrl(shownUrl)}</span>}
+        {shownUrl && <span className="session-picker-url mono">{plain(shortUrl(shownUrl))}</span>}
         <span className="session-picker-caret">▾</span>
       </button>
       {open && (
@@ -80,8 +81,8 @@ export function SessionPicker({ sessionId, panel }: { sessionId: string; panel: 
               }}
             >
               <span className={`dot ${s.connected ? 'on' : 'off'}`} />
-              <span className="session-picker-name">{s.name ?? s.title ?? s.sessionId}</span>
-              <span className="session-picker-url mono">{shortUrl(s.url)}</span>
+              <span className="session-picker-name">{plain(s.name ?? s.title ?? s.sessionId)}</span>
+              <span className="session-picker-url mono">{plain(shortUrl(s.url))}</span>
             </button>
           ))}
           {sessions.length === 0 && <div className="session-picker-empty">No sessions</div>}

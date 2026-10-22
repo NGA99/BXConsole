@@ -16,6 +16,7 @@ import { sessionData } from '../state/session-data';
 import { useActiveTab, setActiveTab } from '../state/active-tab';
 import { compact, describe as describeTab } from './tab-label';
 import { useSelectedInView } from '../devtools-ui/selected-in-view';
+import { plain } from '../devtools-ui/plain-text';
 import './TabStrip.css';
 
 /** Depth of each tab in the opener tree, capped so a long chain stays readable. */
@@ -97,7 +98,7 @@ export function TabStrip({ sessionId }: { sessionId: string }) {
           onClick={() => setActiveTab(sessionId, t.tabId)}
         >
           <span className={`tabstrip-dot${t.connected ? ' on' : ''}`} />
-          <span className="tabstrip-label">{t.title || hostOf(t.url) || t.url}</span>
+          <span className="tabstrip-label">{plain(t.title || hostOf(t.url) || t.url)}</span>
           <span className="tabstrip-where">{whereOf(t.url, baseHost)}</span>
           <span className="tabstrip-count">{compact(counts[t.tabId] ?? 0)}</span>
         </button>

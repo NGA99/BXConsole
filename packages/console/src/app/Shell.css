@@ -91,6 +91,14 @@
   overflow: hidden;
   text-overflow: ellipsis;
   flex-shrink: 1;
+  /*
+   * The page chooses this name, so it is as long as the page likes. One of
+   * three hundred characters took 589px of an 885px row and left the project
+   * before it 53px — the same way round as a long project name did, which is
+   * why both ends of the path are capped now. A name is an identifier: past
+   * this width it is not telling anybody anything the tooltip cannot.
+   */
+  max-width: 260px;
 }
 /*
  * The selected window's title, which its own tab is too narrow to finish.

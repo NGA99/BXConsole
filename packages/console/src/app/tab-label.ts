@@ -5,6 +5,7 @@
  * and these are the parts with decisions in them rather than markup.
  */
 import type { SessionTab } from '@bxconsole/protocol';
+import { plain } from '../devtools-ui/plain-text';
 
 /**
  * A count that has to read at a glance in eleven pixels of space.
@@ -31,7 +32,7 @@ function short(x: number): string {
 
 /** Everything about a window that will not fit on its tab. */
 export function describe(tab: SessionTab, events: number): string {
-  const lines = [tab.title || tab.url, tab.url];
+  const lines = [plain(tab.title || tab.url), plain(tab.url)];
   const ms = Math.max(0, tab.lastSeenAt - tab.startedAt);
   lines.push(`${events.toLocaleString()} events over ${duration(ms)}`);
   if (tab.openedBy) lines.push('Opened by another window of this run');
