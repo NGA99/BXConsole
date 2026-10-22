@@ -88,8 +88,10 @@ export function ProjectBar({ showing, session }: { showing: Showing; session?: {
               a control that quietly did that would be a surprise. */}
           {session ? (
             <button
-              className="projectbar-root"
-              title="The runs in this project"
+              className="projectbar-root projectbar-name"
+              // The name as well as what clicking does: it is capped here, so
+              // a long one is read by hovering or nowhere.
+              title={`${label(currentId)}\nThe runs in this project`}
               onClick={() => {
                 selectProject(currentId);
                 navigateToView('sessions');

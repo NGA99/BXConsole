@@ -64,6 +64,20 @@
 .projectbar .session-picker-button {
   min-width: 0;
 }
+/*
+ * A project's name is as long as whoever named it, and a nowrap segment that
+ * is also allowed to be any width simply takes the row: "Acme Corporation —
+ * Q3 external penetration test, production estate" left the session segment
+ * 0px wide and ran over the account name on the right. So the name is capped
+ * and truncated here, the way the list's dropdown has always capped it, and
+ * the share left over goes to the session — which is the thing you are
+ * actually reading.
+ */
+.projectbar-name {
+  max-width: min(320px, 35%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
 /* The shortcut past the list. Flat until hovered, so the path reads as a
    path rather than as a form control sitting in a toolbar. */
 .projectbar-pick {

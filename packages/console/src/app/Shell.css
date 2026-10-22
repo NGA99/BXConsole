@@ -75,8 +75,22 @@
 .session-picker-item:hover {
   background: var(--sys-color-state-hover-on-subtle);
 }
+/*
+ * What this line loses first, as it runs out of room.
+ *
+ * All three parts shrank at the same rate to begin with, so at 420px the
+ * run's own name came out 10px wide while the url beside it still had most
+ * of a hostname showing — exactly backwards. The weights put the url first,
+ * then the window's title, and the name last: the name is how somebody tells
+ * this run from the other six, and the url is the part they can reconstruct
+ * from the window below.
+ */
 .session-picker-name {
   font-weight: 500;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
 }
 /*
  * The selected window's title, which its own tab is too narrow to finish.
@@ -90,6 +104,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  min-width: 0;
+  flex-shrink: 20;
 }
 .session-picker-window::before {
   content: '·';
@@ -101,13 +117,14 @@
   max-width: 460px;
   overflow: hidden;
   text-overflow: ellipsis;
-  /* The part of the line that gives way when the row runs out of room. */
   min-width: 0;
-  flex: 0 1 auto;
+  flex-shrink: 100;
 }
 .session-picker-caret {
   font-size: 9px;
   color: var(--sys-color-token-subtle);
+  /* The one mark saying this line is a menu; it is four pixels wide. */
+  flex-shrink: 0;
 }
 .session-picker-popup {
   position: absolute;
