@@ -632,6 +632,26 @@ function armHeartbeat(ws: WebSocket): void {
   ws.on('pong', () => {
     (ws as unknown as Alive).isAlive = true;
   });
+  /*
+   * Without this listener a socket error is not a socket error.
+   *
+   * `ws` rethrows anything it has no handler for, so a page whose snapshot
+   * went past maxPayload did not close its own connection with 1009 as the
+   * note above the limit says — it raised `RangeError: Max payload size
+   * exceeded` as an uncaught exception in the relay, the one process holding
+   * every other engagement's recordings. The process survived, because there
+   * is a handler of last resort at the bottom of this file, but a run on one
+   * page should not be reaching that handler at all; and the socket it came
+   * from is the one nothing can authenticate.
+   *
+   * With a listener here `ws` does what the note describes: this connection
+   * closes, that agent reconnects on its usual backoff, and nothing else in
+   * the relay notices.
+   */
+  ws.on('error', (err: Error) => {
+    console.warn('[bxconsole] dropped a socket:', err.message);
+    ws.terminate();
+  });
 }
 
 const heartbeat = setInterval(() => {
