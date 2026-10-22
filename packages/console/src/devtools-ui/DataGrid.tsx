@@ -78,6 +78,26 @@ export function DataGrid<T>({
     return out;
   }, [columns, widths, available]);
 
+  /*
+   * The width the table needs for the last column to keep its share.
+   *
+   * `room` reserves LAST_MIN for it, but the scale that reservation is worked
+   * out from is then overridden column by column by `minWidth` — so once
+   * enough columns are at their floor the fixed ones take more than `room`
+   * and the last column, which has no width of its own, is left with
+   * whatever is over. In a dock narrow enough that was nothing: the Network
+   * waterfall measured 0px, the whole timeline gone rather than merely tight.
+   *
+   * Asking the table for that width instead makes the grid scroll sideways,
+   * which it is already set up to do, and the last column keeps its 90px.
+   * While everything fits this is smaller than the grid and `width: 100%`
+   * wins, so nothing changes.
+   */
+  const tableMin = useMemo(
+    () => columns.slice(0, -1).reduce((sum, c) => sum + (fitted[c.id] ?? c.width), 0) + LAST_MIN,
+    [columns, fitted],
+  );
+
   const sorted = useMemo(() => {
     if (!sort) return rows;
     const col = columns.find((c) => c.id === sort.column);
@@ -145,7 +165,7 @@ export function DataGrid<T>({
 
   return (
     <div className={`datagrid rows-${rowHeight}`} tabIndex={0} onKeyDown={onKeyDown} ref={rootRef}>
-      <table>
+      <table style={{ minWidth: tableMin }}>
         <colgroup>
           {columns.map((c, i) => (
             <col key={c.id} style={i === columns.length - 1 ? undefined : { width: fitted[c.id] }} />

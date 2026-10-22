@@ -236,9 +236,21 @@ function HeadersTab({ entry }: { entry: NetworkEntry }) {
       {entry.response && (
         <Section
           title={`Response Headers (${headerCount(entry.response.headers)})`}
-          action={<button className="detail-link" onClick={() => setRawResponse((r) => !r)}>{rawResponse ? 'view parsed' : 'view source'}</button>}
+          /* No link when there is nothing to see either way: a header count
+             of zero was still offering to show you the source of it, which is
+             a request line and a blank space. */
+          action={
+            headerCount(entry.response.headers) > 0 ? (
+              <button className="detail-link" onClick={() => setRawResponse((r) => !r)}>{rawResponse ? 'view parsed' : 'view source'}</button>
+            ) : undefined
+          }
         >
-          {rawResponse ? (
+          {headerCount(entry.response.headers) === 0 ? (
+            <div className="detail-note">
+              None the page could read. A response fetched with <code>mode: &quot;no-cors&quot;</code> is opaque: its headers never reach the script this
+              console records from, so there is nothing here to have missed.
+            </div>
+          ) : rawResponse ? (
             <pre className="detail-pre">{`HTTP/1.1 ${entry.response.status} ${entry.response.statusText}\n${raw(entry.response.headers)}`}</pre>
           ) : (
             sortedEntries(entry.response.headers).map(([k, v]) => <KV key={k} name={k} value={v} />)
@@ -249,9 +261,15 @@ function HeadersTab({ entry }: { entry: NetworkEntry }) {
         <Section
           title={`Request Headers (${headerCount(entry.request.headers)})`}
           note="Provisional headers are shown. Browser-added headers (cookie, user-agent…) are not visible from page scripts."
-          action={<button className="detail-link" onClick={() => setRawRequest((r) => !r)}>{rawRequest ? 'view parsed' : 'view source'}</button>}
+          action={
+            headerCount(entry.request.headers) > 0 ? (
+              <button className="detail-link" onClick={() => setRawRequest((r) => !r)}>{rawRequest ? 'view parsed' : 'view source'}</button>
+            ) : undefined
+          }
         >
-          {rawRequest ? (
+          {headerCount(entry.request.headers) === 0 ? (
+            <div className="detail-note">The page set none of its own.</div>
+          ) : rawRequest ? (
             <pre className="detail-pre">{`${entry.request.method} ${entry.request.url} HTTP/1.1\n${raw(entry.request.headers)}`}</pre>
           ) : (
             sortedEntries(entry.request.headers).map(([k, v]) => <KV key={k} name={k} value={v} />)

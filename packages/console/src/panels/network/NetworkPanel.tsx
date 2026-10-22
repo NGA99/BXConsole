@@ -312,6 +312,13 @@ export function NetworkPanel({ sessionId }: { sessionId: string }) {
         id: 'status',
         title: 'Status',
         width: 90,
+        // The same floor the Body column needs, for the same reason: fixed
+        // columns are scaled down when they do not all fit, and a status that
+        // is not a number was the first to go — "(opaque)" came out
+        // "(opaqu…", which reads as a word nobody can check. Measured at the
+        // grid's 11px monospace: "(opaque)" and "(failed)" are 53px, and the
+        // cell adds 6px of padding on each side.
+        minWidth: 65,
         render: (e) => (
           <span title={statusTitle(e)} className={statusLabel(e) === '—' || statusLabel(e) === '(opaque)' ? 'status-unknown' : undefined}>
             {statusLabel(e)}
@@ -345,6 +352,10 @@ export function NetworkPanel({ sessionId }: { sessionId: string }) {
         title: 'Size',
         width: 80,
         align: 'right',
+        // "58.5 kB" came out "58.5 …", which is a number with its unit cut
+        // off. The widest this column ever shows is one step below the next
+        // unit — "1023.9 kB" — at 60px, plus the cell's 12px of padding.
+        minWidth: 72,
         render: (e) => (
           <>
             <span>{sizeLabel(e).text}</span>
@@ -353,7 +364,10 @@ export function NetworkPanel({ sessionId }: { sessionId: string }) {
         ),
         sortValue: (e) => sizeLabel(e).bytes,
       },
-      { id: 'time', title: 'Time', width: 80, align: 'right', render: timeLabel, sortValue: (e) => durationOf(e) ?? Infinity },
+      // Its longest readings, "Pending" and "1.3 min", are both 47px wide;
+      // without a floor of its own it would be the next column to lose its
+      // tail once the two beside it stopped giving ground.
+      { id: 'time', title: 'Time', width: 80, minWidth: 59, align: 'right', render: timeLabel, sortValue: (e) => durationOf(e) ?? Infinity },
       {
         id: 'waterfall',
         title: 'Waterfall',
