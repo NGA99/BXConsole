@@ -138,6 +138,23 @@ function CompoundNode({
       </div>
       {expanded && (
         <div className="otree-children">
+          {/*
+            A promise opens on nothing, and said so by showing nothing.
+
+            DevTools prints `Promise {<fulfilled>: 7}` because it is attached
+            to the engine. This console reads the page through page script,
+            and from there a promise's state and its value cannot be had at
+            all: there is no way to ask, and awaiting it would run the page's
+            microtasks to find out, which is not something a tool that is
+            only meant to be watching should do.
+
+            So the row expanded to a bare [[Prototype]] and left the reader
+            to work out whether that was the whole story or a failure. It
+            says which now.
+          */}
+          {value.t === 'promise' && (
+            <div className="otree-note">whether this promise has settled, and what with, cannot be read from page script</div>
+          )}
           {value.t === 'error' && value.stack && <pre className="otree-stack">{value.stack}</pre>}
           {value.t === 'error' && value.cause && (
             <div className="otree-child">
