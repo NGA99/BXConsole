@@ -189,6 +189,12 @@ function ProjectRow({
             className="project-name"
             value={name}
             spellCheck={false}
+            // A bare text box with the name as its only content: nothing said
+            // what it was, and a name cleared by accident left an empty box
+            // with no hint of what belongs in it.
+            aria-label="Project name"
+            placeholder="Project name"
+            title="Rename this project"
             // Clicking the name is a rename, not a way in.
             onClick={(e) => e.stopPropagation()}
             onChange={(e) => setName(e.target.value)}

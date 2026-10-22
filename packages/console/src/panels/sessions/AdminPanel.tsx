@@ -125,7 +125,11 @@ function Accounts({ accounts, loaded, meId }: { accounts: AccountSummary[]; load
           onChange={(e) => setPassword(e.target.value)}
           onKeyDown={(e) => e.key === 'Enter' && add()}
         />
-        <select value={role} onChange={(e) => setRole(e.target.value as AccountRole)}>
+        {/* Three unlabelled dropdowns on one screen, each reading as its own
+            value: "admin", "member", "admin". What they are for is only in
+            the column they sit under, which a reader going control by
+            control never sees. */}
+        <select aria-label="Role for the new account" value={role} onChange={(e) => setRole(e.target.value as AccountRole)}>
           <option value="member">member</option>
           <option value="admin">admin</option>
         </select>
@@ -159,6 +163,7 @@ function AccountRow({
         </td>
         <td>
           <select
+            aria-label={`Role for ${account.user}`}
             value={account.role}
             disabled={lastAdmin}
             title={lastAdmin ? 'The last administrator; make another one first' : undefined}
@@ -289,6 +294,7 @@ function Ownership({
                   <td title={new Date(p.createdAt).toISOString()}>{absoluteTimestamp(p.createdAt)}</td>
                   <td>
                     <select
+                      aria-label={`Owner of ${p.name}`}
                       value={owner ? p.owner : ''}
                       onChange={(e) => e.target.value && transferProject(p.id, e.target.value)}
                     >
