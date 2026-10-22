@@ -155,14 +155,42 @@ function ProjectRow({
 
   const trashed = project.trashedAt !== undefined;
 
+  /*
+   * The card opens the project, the way a row opens a session. It used to take
+   * a button on the right, which is a long way from wherever you were reading
+   * and easy to miss when every other list in here opens on the row.
+   *
+   * Everything in the card that does something of its own — the name, the key,
+   * the actions, a confirmation — stops the click before it gets here, so the
+   * card means "go in" and nothing else does.
+   */
+  const open = () => {
+    selectProject(project.id);
+    navigateToView('sessions');
+  };
+
   return (
-    <div className={`project${selected ? ' selected' : ''}${trashed ? ' trashed' : ''}`}>
+    <div
+      className={`project${selected ? ' selected' : ''}${trashed ? ' trashed' : ''}`}
+      role="button"
+      tabIndex={0}
+      title={selected ? `Showing ${project.name}` : `Show the recordings in ${project.name}`}
+      onClick={open}
+      onKeyDown={(e) => {
+        // The card is a div, so Enter and Space are not free.
+        if (e.target !== e.currentTarget || (e.key !== 'Enter' && e.key !== ' ')) return;
+        e.preventDefault();
+        open();
+      }}
+    >
       <div className="project-top">
         {mine ? (
           <input
             className="project-name"
             value={name}
             spellCheck={false}
+            // Clicking the name is a rename, not a way in.
+            onClick={(e) => e.stopPropagation()}
             onChange={(e) => setName(e.target.value)}
             onBlur={() => name.trim() && name !== project.name && renameProject(project.id, name)}
             onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
@@ -189,14 +217,9 @@ function ProjectRow({
         <span className="project-count">
           {sessions} {sessions === 1 ? 'recording' : 'recordings'}
         </span>
-        {/* Always, not only when it is not the one selected: the point of
-            this button is to go in, and on the list you are not in anything. */}
-        <button className="detail-link" onClick={() => (selectProject(project.id), navigateToView('sessions'))}>
-          open
-        </button>
       </div>
 
-      <div className="project-key">
+      <div className="project-key" onClick={(e) => e.stopPropagation()}>
         <span className="project-key-label">Agent key</span>
         <code className="mono">{project.agentKey}</code>
         <button
@@ -230,7 +253,7 @@ function ProjectRow({
       )}
 
       {mine && (
-        <div className="project-actions">
+        <div className="project-actions" onClick={(e) => e.stopPropagation()}>
           {trashed ? (
             <>
               <button className="detail-link" onClick={() => restoreProject(project.id)}>
@@ -303,7 +326,9 @@ function Confirm({
   onCancel: () => void;
 }) {
   return (
-    <div className="project-confirm">
+    // Typing a project's name to arm a rotate or a delete must not also walk
+    // into the project.
+    <div className="project-confirm" onClick={(e) => e.stopPropagation()}>
       <span>{what}</span>
       <input
         autoFocus

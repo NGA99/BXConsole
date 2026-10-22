@@ -163,3 +163,23 @@
   padding: 1px 4px;
   width: 160px;
 }
+
+/* The card is the way in, the way a row is on the Sessions list: the same
+   hover, and `default` rather than a pointer, because nothing else in this
+   console uses a hand. */
+.project:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+  cursor: default;
+}
+/* Keyboard users get the card as a stop, so it has to say when it is on one. */
+.project:focus-visible {
+  outline: 2px solid var(--sys-color-primary);
+  outline-offset: -2px;
+}
+/* The parts that do something of their own keep the plain background, so the
+   hover reads as "this card", not "this line". */
+.project-key:hover,
+.project-actions:hover,
+.project-confirm:hover {
+  background: var(--sys-color-cdt-base-container);
+}
