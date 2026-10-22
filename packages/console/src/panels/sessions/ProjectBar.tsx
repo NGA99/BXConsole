@@ -13,19 +13,37 @@
 import { useProjectsStore, selectProject } from '../../state/projects';
 import { useSessionList } from '../../state/sessions';
 import { useAccount, useIsAdmin } from '../../state/whoami';
-import { navigateToView } from '../../app/router';
+import { navigateToView, type PanelId } from '../../app/router';
+import { SessionPicker } from '../../app/SessionPicker';
 import './ProjectBar.css';
 
 /** Which of the three things is on screen, which is not always the route. */
 export type Showing = 'projects' | 'admin' | 'inside';
 
-export function ProjectBar({ showing }: { showing: Showing }) {
+/**
+ * @param session  the run being read, when one is open. A session is inside a
+ *                 project, so it belongs at the end of this path — it used to
+ *                 sit up in the title bar instead, which left the path
+ *                 stopping at the project while the thing you were actually
+ *                 looking at was named a row above it.
+ */
+export function ProjectBar({ showing, session }: { showing: Showing; session?: { id: string; panel: PanelId } }) {
   const { order, byId, homeId, selectedId } = useProjectsStore();
   const account = useAccount();
   const isAdmin = useIsAdmin();
   const sessions = useSessionList();
   const inside = showing === 'inside';
-  const current = selectedId ? byId[selectedId] : undefined;
+  /*
+   * Which project the path is about.
+   *
+   * With a session open that is the project the run is in, not whichever one
+   * the list was last left on: those differ as soon as somebody opens a
+   * session from the picker and it belongs somewhere else, and a path that
+   * named the wrong project would be worse than no path.
+   */
+  const open = session ? sessions.find((s) => s.sessionId === session.id) : undefined;
+  const currentId = session ? open?.projectId ?? homeId : selectedId;
+  const current = currentId ? byId[currentId] : undefined;
 
   /** Live and recorded runs in each project, home standing in for none. */
   const counts = new Map<string, { live: number; kept: number }>();
@@ -61,21 +79,45 @@ export function ProjectBar({ showing }: { showing: Showing }) {
 
       {/* Only inside one. On the list itself there is no "where you are" to
           say, and a name beside the root would read as a second heading. */}
-      {inside && current && (
+      {inside && current && currentId && (
         <>
           <span className="projectbar-sep">/</span>
-          <select
-            className="projectbar-pick"
-            value={selectedId}
-            title="The project these tabs are about"
-            onChange={(e) => selectProject(e.target.value)}
-          >
-            {order.map((id) => (
-              <option key={id} value={id}>
-                {label(id)}
-              </option>
-            ))}
-          </select>
+          {/* With a session open the project is the way back to its runs, so
+              it is a link like the root above it. The dropdown is the list's:
+              switching project from inside one session means leaving it, and
+              a control that quietly did that would be a surprise. */}
+          {session ? (
+            <button
+              className="projectbar-root"
+              title="The runs in this project"
+              onClick={() => {
+                selectProject(currentId);
+                navigateToView('sessions');
+              }}
+            >
+              {label(currentId)}
+            </button>
+          ) : (
+            <select
+              className="projectbar-pick"
+              value={selectedId}
+              title="The project these tabs are about"
+              onChange={(e) => selectProject(e.target.value)}
+            >
+              {order.map((id) => (
+                <option key={id} value={id}>
+                  {label(id)}
+                </option>
+              ))}
+            </select>
+          )}
+        </>
+      )}
+
+      {session && (
+        <>
+          <span className="projectbar-sep">/</span>
+          <SessionPicker sessionId={session.id} panel={session.panel} />
         </>
       )}
 

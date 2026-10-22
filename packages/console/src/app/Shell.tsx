@@ -28,9 +28,9 @@ import { TabStrip } from './TabStrip';
 import { useActiveTab } from '../state/active-tab';
 import { SessionContext } from './session-context';
 import { ScreenPanel } from '../panels/screen/ScreenPanel';
+import { ProjectBar } from '../panels/sessions/ProjectBar';
 import { useSessionsStore } from '../state/sessions';
 import { subscribeSession } from '../transport/client';
-import { SessionPicker } from './SessionPicker';
 import { ContextMenu } from '../devtools-ui/ContextMenu';
 import { ErrorBoundary } from '../devtools-ui/ErrorBoundary';
 import { useInspectMode } from '../state/inspect-mode';
@@ -324,14 +324,12 @@ export function Shell({ route }: { route: Route }) {
   return (
     <SessionContext.Provider value={sessionId}>
     <div className="shell">
-      {/* The session's windows sit above everything, where a browser keeps its tabs. */}
+      <TopBar relayUp={relayUp} theme={theme} onCycleTheme={cycleTheme} />
+      {/* The session's windows, kept directly above the row that names the one
+          you are reading — where a browser keeps its tabs, over the address
+          bar rather than over the title bar. */}
       <TabStrip sessionId={sessionId} />
-      <TopBar relayUp={relayUp} theme={theme} onCycleTheme={cycleTheme}>
-        <button className="topbar-back" title="All sessions" onClick={() => navigate({ panel: 'sessions', sessionId: null })}>
-          ‹ Sessions
-        </button>
-        <SessionPicker sessionId={sessionId} panel={route.panel} />
-      </TopBar>
+      <ProjectBar showing="inside" session={{ id: sessionId, panel: route.panel }} />
       {screenCollapsed ? (
         <div className="dock">
           <div className="dock-strip">

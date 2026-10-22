@@ -39,19 +39,6 @@
 .topbar-spacer {
   flex: 1;
 }
-.topbar-back {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--sys-color-primary);
-  font: inherit;
-  padding: 0 4px;
-  cursor: default;
-  white-space: nowrap;
-}
-.topbar-back:hover {
-  text-decoration: underline;
-}
 .relay-status {
   font-size: 11px;
   color: var(--sys-color-token-subtle);
