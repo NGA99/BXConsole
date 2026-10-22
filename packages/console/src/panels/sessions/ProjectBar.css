@@ -43,10 +43,6 @@
 .projectbar-sep {
   color: var(--sys-color-token-subtle);
 }
-.projectbar-none {
-  font-style: italic;
-}
-
 /* The shortcut past the list. Flat until hovered, so the path reads as a
    path rather than as a form control sitting in a toolbar. */
 .projectbar-pick {

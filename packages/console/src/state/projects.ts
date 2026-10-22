@@ -144,9 +144,6 @@ export function useSnippetProject(): Project | null {
   return useProjectsStore((s) => (s.selectedId ? (s.byId[s.selectedId] ?? null) : null));
 }
 
-/** The project being looked at, which is the same one. */
-export const useSelectedProject = useSnippetProject;
-
 export function selectProject(projectId: string): void {
   useProjectsStore.getState().select(projectId);
 }
