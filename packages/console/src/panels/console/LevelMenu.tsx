@@ -1,6 +1,7 @@
 /** The "Default levels ▾" dropdown with Verbose / Info / Warnings / Errors checkboxes. */
 import { useEffect, useRef, useState } from 'react';
 import { ALL_LEVELS, DEFAULT_LEVELS, type LevelFilter } from './group-tree';
+import { useKeepInViewport } from '../../devtools-ui/in-viewport';
 
 const ITEMS: Array<{ key: keyof LevelFilter; label: string }> = [
   { key: 'verbose', label: 'Verbose' },
@@ -12,6 +13,8 @@ const ITEMS: Array<{ key: keyof LevelFilter; label: string }> = [
 export function LevelMenu({ value, onChange }: { value: LevelFilter; onChange: (v: LevelFilter) => void }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const popup = useRef<HTMLDivElement>(null);
+  useKeepInViewport(popup, open);
 
   useEffect(() => {
     if (!open) return;
@@ -34,7 +37,7 @@ export function LevelMenu({ value, onChange }: { value: LevelFilter; onChange: (
         {label} <span className="level-menu-caret">▾</span>
       </button>
       {open && (
-        <div className="level-menu-popup">
+        <div className="level-menu-popup" ref={popup}>
           <button className="level-menu-item" onClick={() => onChange(DEFAULT_LEVELS)}>
             <span className="level-menu-check" /> Default
           </button>

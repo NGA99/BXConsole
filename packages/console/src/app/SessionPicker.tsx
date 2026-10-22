@@ -1,9 +1,10 @@
 /** Top-bar dropdown to switch the session the whole window is looking at. */
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useSessionList } from '../state/sessions';
 import { useActiveTab } from '../state/active-tab';
 import { navigate, type PanelId } from './router';
 import { plain } from '../devtools-ui/plain-text';
+import { useKeepInViewport } from '../devtools-ui/in-viewport';
 
 export function SessionPicker({ sessionId, panel }: { sessionId: string; panel: PanelId }) {
   const sessions = useSessionList();
@@ -22,21 +23,12 @@ export function SessionPicker({ sessionId, panel }: { sessionId: string; panel: 
   }, [open]);
 
   /*
-   * Keep inside the viewport, the way the context menu does.
-   *
    * The menu hangs from the left edge of the button, and the button sits at
    * the end of the path — so the longer the project's name, or the narrower
    * the window, the further right it opens. Past the edge there is nothing
-   * to scroll to: the page itself does not overflow, so half the list of
-   * sessions was simply unreachable.
+   * to scroll to, so half the list of sessions was simply unreachable.
    */
-  useLayoutEffect(() => {
-    const el = popup.current;
-    if (!open || !el) return;
-    el.style.marginLeft = '0px';
-    const over = el.getBoundingClientRect().right - (window.innerWidth - 4);
-    if (over > 0) el.style.marginLeft = `${-over}px`;
-  }, [open]);
+  useKeepInViewport(popup, open);
 
   const label = plain(current ? current.name ?? current.title ?? current.sessionId : `session-${sessionId}`);
   // With the window tabs above, this line reads as the address bar: show the selected window.
