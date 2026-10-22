@@ -166,6 +166,9 @@ export function restoreProject(projectId: string): void {
 
 /** Deletes the project and every recording in it. There is no undo. */
 export function forgetProject(projectId: string): void {
+  // Noted first, so the removal coming back is not reported to whoever
+  // asked for it as though it had happened to them.
+  useProjectsStore.getState().expectRemoval(projectId);
   send({ type: 'project.forget', projectId });
 }
 
@@ -472,7 +475,7 @@ function dispatch(msg: ServerToConsole): void {
       useProjectsStore.getState().upsert(msg.project);
       return;
     case 'project.removed':
-      useProjectsStore.getState().remove(msg.projectId);
+      useProjectsStore.getState().remove(msg.projectId, msg.reason);
       return;
     case 'session.updated': {
       const was = sessions.byId[msg.session.sessionId]?.connected ?? false;

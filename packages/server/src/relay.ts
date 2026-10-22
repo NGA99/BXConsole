@@ -641,7 +641,7 @@ export class Relay {
          */
         for (const meta of inIt) await this.forgetAndTell(meta.sessionId);
         if (!(await this.projects!.remove(msg.projectId))) return;
-        this.sendTo(audience, { type: 'project.removed', projectId: msg.projectId });
+        this.sendTo(audience, { type: 'project.removed', projectId: msg.projectId, reason: 'deleted' });
         this.refreshAdmins();
         return;
       }
@@ -670,7 +670,7 @@ export class Relay {
         if (!next) return;
         // Both sides: whoever could see it before, so the ones who just lost
         // it hear that it is gone, and whoever can see it now.
-        this.sendTo(before, { type: 'project.removed', projectId: msg.projectId });
+        this.sendTo(before, { type: 'project.removed', projectId: msg.projectId, reason: 'transferred' });
         this.tellAboutProject(next);
         this.refreshAdmins();
         return;
@@ -998,7 +998,7 @@ export class Relay {
       const audience = this.projectAudience(project.id);
       for (const meta of inIt) await this.forgetAndTell(meta.sessionId);
       if (await this.projects!.remove(project.id)) {
-        this.sendTo(audience, { type: 'project.removed', projectId: project.id });
+        this.sendTo(audience, { type: 'project.removed', projectId: project.id, reason: 'deleted' });
         console.log(
           `[bxconsole] trash: deleted project "${project.name}" and ${inIt.length} recording(s), trashed ${new Date(project.trashedAt).toISOString()}`,
         );

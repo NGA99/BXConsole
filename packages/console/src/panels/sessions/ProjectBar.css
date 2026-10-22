@@ -69,3 +69,30 @@
   white-space: nowrap;
   padding-right: 2px;
 }
+
+/*
+ * Losing the project you were reading.
+ *
+ * Above the path rather than inside it, because it is about where you were
+ * and the path already says where you are. It stays until dismissed or until
+ * another project is chosen: it is not an error to shrug off, it is the
+ * reason the screen under it changed.
+ */
+.projectbar-lost {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 8px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--sys-color-divider);
+  background: color-mix(in srgb, var(--sys-color-error) 9%, transparent);
+  color: var(--sys-color-on-surface);
+  font-size: 11px;
+}
+.projectbar-lost strong {
+  font-weight: 500;
+}
+.projectbar-lost .detail-link {
+  margin-left: auto;
+  white-space: nowrap;
+}

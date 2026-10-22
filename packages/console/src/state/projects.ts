@@ -65,10 +65,29 @@ interface ProjectsState {
    * scoped to a project it cannot see shows an empty list and no reason.
    */
   selectedId: string;
+  /**
+   * The project this console was looking at when it stopped being readable,
+   * until somebody has seen the notice.
+   *
+   * Worth saying out loud because the console recovers silently otherwise:
+   * it falls back to another project and goes on working, so an operator who
+   * looked away comes back to a different engagement's recordings with
+   * nothing to say the one they had is gone.
+   */
+  lost: { name: string; reason: 'deleted' | 'transferred'; landedOn: string | null } | null;
   setAll(list: Project[], homeId: string): void;
   upsert(project: Project): void;
-  remove(projectId: string): void;
+  remove(projectId: string, reason?: 'deleted' | 'transferred'): void;
   select(projectId: string): void;
+  clearLost(): void;
+  /**
+   * Say that this console asked for a project to go, so its removal is not
+   * reported back to it as something that happened.
+   *
+   * Nobody needs telling what they just did, and a notice there would read
+   * as a second, unexplained event right after a confirmation.
+   */
+  expectRemoval(projectId: string): void;
 }
 
 /** The selection to use, given what the account can actually read. */
@@ -79,12 +98,16 @@ function settleSelection(order: string[], wanted: string, homeId: string): strin
   return order[0] ?? '';
 }
 
+/** Projects this console asked to delete, so their removal is not news. */
+const asked = new Set<string>();
+
 export const useProjectsStore = create<ProjectsState>((set) => ({
   byId: {},
   order: [],
   loaded: false,
   homeId: '',
   selectedId: '',
+  lost: null,
   setAll: (list, homeId) =>
     set((s) => {
       const order = list.map((p) => p.id);
@@ -106,24 +129,36 @@ export const useProjectsStore = create<ProjectsState>((set) => ({
       writeSelected(selectedId);
       return { byId, order, selectedId };
     }),
-  remove: (projectId) =>
+  remove: (projectId, reason) =>
     set((s) => {
-      const { [projectId]: _dropped, ...rest } = s.byId;
+      const { [projectId]: dropped, ...rest } = s.byId;
       const order = s.order.filter((id) => id !== projectId);
       // Not cleared: the relay only names a home project this account can
       // read, so one that has gone means it is no longer theirs and the
       // next snapshot says so.
       const homeId = s.homeId === projectId ? '' : s.homeId;
-      const selectedId = s.selectedId === projectId ? settleSelection(order, '', homeId) : s.selectedId;
+      const wasLookingAt = s.selectedId === projectId;
+      const selectedId = wasLookingAt ? settleSelection(order, '', homeId) : s.selectedId;
       writeSelected(selectedId);
-      return { byId: rest, order, homeId, selectedId };
+      // Only for the one being looked at, and only when this console did not
+      // ask for it: a project going from a list you are not reading is not
+      // something to interrupt anybody about.
+      const ours = asked.delete(projectId);
+      const lost =
+        wasLookingAt && !ours && dropped
+          ? { name: dropped.name, reason: reason ?? 'deleted', landedOn: rest[selectedId]?.name ?? null }
+          : s.lost;
+      return { byId: rest, order, homeId, selectedId, lost };
     }),
   select: (projectId) =>
     set((s) => {
       if (!s.order.includes(projectId)) return s;
       writeSelected(projectId);
-      return { selectedId: projectId };
+      // Choosing where to be is an answer to "the one you had is gone".
+      return { selectedId: projectId, lost: null };
     }),
+  clearLost: () => set({ lost: null }),
+  expectRemoval: (projectId) => void asked.add(projectId),
 }));
 
 export function useProjectList(): Project[] {

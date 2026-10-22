@@ -447,7 +447,17 @@ export type ServerToConsole =
   | { type: 'console.whoami'; account: AccountSummary }
   | { type: 'projects.snapshot'; projects: Project[]; homeProjectId: string }
   | { type: 'project.updated'; project: Project }
-  | { type: 'project.removed'; projectId: string }
+  /**
+   * This project is no longer one you can read.
+   *
+   * `reason` is there because the two causes want different words from a
+   * console that was looking at it: a project deleted is gone for everybody,
+   * and one handed over is still there and no longer yours. Who it went to
+   * is deliberately not said — the person losing it may be a member with no
+   * admin screen, and the account names on this relay are not theirs to
+   * learn this way.
+   */
+  | { type: 'project.removed'; projectId: string; reason?: 'deleted' | 'transferred' }
   /**
    * Every account, and every project with its owner — an administrator's view.
    *
