@@ -43,6 +43,27 @@
 .projectbar-sep {
   color: var(--sys-color-token-subtle);
 }
+
+/*
+ * Every segment of the path stays on its one line.
+ *
+ * The row is 26px and the names in it are as long as somebody made them, so
+ * a narrow window broke "First project (1 recorded)" across three lines and
+ * the row grew to swallow them. What gives way instead is the session's url,
+ * which is the one part of the path that already ends in an ellipsis and the
+ * one a reader can lose the tail of and still know where they are.
+ *
+ * No overflow rule here: the session picker's menu hangs out of this row.
+ */
+.projectbar-root,
+.projectbar-sep,
+.projectbar-who {
+  white-space: nowrap;
+}
+.projectbar .session-picker,
+.projectbar .session-picker-button {
+  min-width: 0;
+}
 /* The shortcut past the list. Flat until hovered, so the path reads as a
    path rather than as a form control sitting in a toolbar. */
 .projectbar-pick {

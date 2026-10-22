@@ -66,6 +66,10 @@
   border-radius: 4px;
   cursor: default;
   white-space: nowrap;
+  /* Nothing here wraps, so without a cap the button keeps its full width and
+     spills over whatever is to the right of it. Capped, it is the url inside
+     that gives way. */
+  max-width: 100%;
 }
 .session-picker-button:hover,
 .session-picker-item:hover {
@@ -97,6 +101,9 @@
   max-width: 460px;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* The part of the line that gives way when the row runs out of room. */
+  min-width: 0;
+  flex: 0 1 auto;
 }
 .session-picker-caret {
   font-size: 9px;

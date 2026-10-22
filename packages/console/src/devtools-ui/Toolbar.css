@@ -52,6 +52,14 @@
   align-items: center;
   justify-content: center;
   line-height: 1;
+  /* A label is one line and the button is as wide as that line.
+     Without these the flex row squeezes a button a few pixels under its
+     own text and the label breaks in half — "Empty trash" came out as
+     "Empty" over "trash", spilling past the 22px the button is tall. The
+     toolbar scrolls when its controls do not fit, which is the behaviour
+     this leaves it to. */
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .toolbar-button:hover {
   background: color-mix(in srgb, var(--sys-color-on-surface) 8%, transparent);
