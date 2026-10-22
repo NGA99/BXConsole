@@ -96,3 +96,21 @@ export function CollapsePaneIcon({ size = 15 }: IconProps) {
     </svg>
   );
 }
+
+/**
+ * Stands in for a site's own icon when there is not one to show.
+ *
+ * A filled square was reading as a picture that failed to load rather than
+ * as a picture nobody has — and a list of recordings is mostly rows that have
+ * none, because the console will not call out to every origin it has ever
+ * seen just to decorate a row.
+ */
+export function SiteIcon({ size = 14 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M3.5 12h17" />
+      <path d="M12 3.5c2.4 2.3 3.6 5.1 3.6 8.5s-1.2 6.2-3.6 8.5c-2.4-2.3-3.6-5.1-3.6-8.5S9.6 5.8 12 3.5z" />
+    </svg>
+  );
+}

@@ -15,6 +15,7 @@ import { useSessionList } from '../../state/sessions';
 import { useAccount, useIsAdmin } from '../../state/whoami';
 import { navigateToView, type PanelId } from '../../app/router';
 import { SessionPicker } from '../../app/SessionPicker';
+import { projectCounts, describeCount } from './project-counts';
 import './ProjectBar.css';
 
 /** Which of the three things is on screen, which is not always the route. */
@@ -45,22 +46,12 @@ export function ProjectBar({ showing, session }: { showing: Showing; session?: {
   const currentId = session ? open?.projectId ?? homeId : selectedId;
   const current = currentId ? byId[currentId] : undefined;
 
-  /** Live and recorded runs in each project, home standing in for none. */
-  const counts = new Map<string, { live: number; kept: number }>();
-  for (const s of sessions) {
-    const id = s.projectId ?? homeId;
-    if (!id) continue;
-    const at = counts.get(id) ?? { live: 0, kept: 0 };
-    if (s.connected) at.live++;
-    else at.kept++;
-    counts.set(id, at);
-  }
+  const counts = projectCounts(sessions, homeId);
 
   const label = (id: string): string => {
     const project = byId[id];
     if (!project) return id;
-    const at = counts.get(id);
-    const both = [at?.live ? `${at.live} live` : '', at?.kept ? `${at.kept} recorded` : ''].filter(Boolean).join(' · ');
+    const both = describeCount(counts.get(id));
     const trashed = project.trashedAt !== undefined ? ' — in the trash' : '';
     return `${project.name}${both ? ` (${both})` : ''}${trashed}`;
   };

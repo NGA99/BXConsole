@@ -181,11 +181,17 @@
   width: 16px;
   height: 16px;
   flex-shrink: 0;
+  /* A site whose icon is not square is shown as it is, not squashed. */
+  object-fit: contain;
 }
+/* An outline rather than a filled tile: a tile read as a picture that failed
+   to load, and most rows simply have no icon to show. */
 .session-favicon.placeholder {
-  display: inline-block;
-  border-radius: 3px;
-  background: var(--sys-color-surface3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--sys-color-token-subtle);
+  opacity: 0.55;
 }
 .install {
   margin: 24px 28px;

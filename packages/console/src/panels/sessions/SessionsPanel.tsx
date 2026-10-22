@@ -24,6 +24,7 @@ import { ProjectsPanel } from './ProjectsPanel';
 import { AdminPanel } from './AdminPanel';
 import { useProjectsStore } from '../../state/projects';
 import { plain } from '../../devtools-ui/plain-text';
+import { SiteIcon } from '../../devtools-ui/icons';
 import './SessionsPanel.css';
 
 export function SessionsPanel({ view }: { view: SessionView }) {
@@ -405,12 +406,23 @@ function Favicon({ url, sessionId }: { url: string; sessionId: string }) {
     // page, and recorded ones show whatever the run already cached.
     src = assetPath(sessionId, `${new URL(url).origin}/favicon.ico`, { fallback: false });
   } catch {
-    return <span className="session-favicon placeholder" />;
+    return <NoFavicon />;
   }
-  if (failed) return <span className="session-favicon placeholder" />;
+  if (failed) return <NoFavicon />;
+  // contain, so a site whose icon is not square is shown as it is rather than
+  // squashed into the 16px box.
   return <img className="session-favicon" src={src} alt="" onError={() => setFailed(true)} />;
 }
 
+
+/** No icon of its own, which is the ordinary case for a recorded run. */
+function NoFavicon() {
+  return (
+    <span className="session-favicon placeholder">
+      <SiteIcon />
+    </span>
+  );
+}
 
 function relative(ts: number): string {
   const d = Date.now() - ts;
