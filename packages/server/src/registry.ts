@@ -8,6 +8,7 @@
 import type { WebSocket } from 'ws';
 import type { SessionHello, SessionMeta, SessionTab } from '@bxconsole/protocol';
 import type { SessionStore } from './store';
+import { usableTabPatch } from './tab-patch';
 
 export interface SessionEntry {
   meta: SessionMeta;
@@ -186,7 +187,10 @@ export class SessionRegistry {
   async updateTab(sessionId: string, tabId: string, patch: Partial<SessionTab>): Promise<void> {
     const entry = this.sessions.get(sessionId);
     if (!entry) return;
-    const tabs = entry.meta.tabs.map((t) => (t.tabId === tabId ? { ...t, ...patch, lastSeenAt: Date.now() } : t));
+    // Everything that reaches here came out of a page's own event, so it is
+    // checked before it can become part of what is on disk.
+    const safe = usableTabPatch(patch);
+    const tabs = entry.meta.tabs.map((t) => (t.tabId === tabId ? { ...t, ...safe, lastSeenAt: Date.now() } : t));
     const active = tabs.find((t) => t.tabId === tabId);
     entry.meta = { ...entry.meta, tabs, lastSeenAt: Date.now(), ...(active ? { url: active.url, title: active.title } : {}) };
     await this.store.writeMeta(entry.meta);
