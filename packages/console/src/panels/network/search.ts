@@ -11,7 +11,8 @@
  */
 import { isTextualMime } from '@bxconsole/protocol';
 import type { NetworkEntry } from '../../state/session-data';
-import { textOf } from './stored-bodies';
+import { textOf, textOfUrl, urlIsBinary, type UnloadedBody } from './stored-bodies';
+import { bodyState } from './body-state';
 import { headerOf, headerPairs } from './field-guard';
 
 export interface SearchHit {
@@ -30,8 +31,8 @@ export interface SearchHit {
 
 export interface SearchResult {
   hits: SearchHit[];
-  /** bodies held in the store and not loaded, so this search did not see them */
-  unloaded: Array<{ sha: string; mime?: string }>;
+  /** bodies the relay is holding and this search did not see */
+  unloaded: UnloadedBody[];
 }
 
 /** What to call a match that is not a named header. */
@@ -58,7 +59,27 @@ export function searchEntries(
   query: string,
   opts: { regex: boolean; caseSensitive: boolean },
   loaded: (sha: string) => string | null = textOf,
+  /**
+   * The bodies the relay holds under a url rather than a hash.
+   *
+   * `kept` is the files manifest — the same set the Body column reads to say
+   * "Stored" — and only those are offered for fetching. `bodySource` would
+   * also answer "ask" for a body nobody kept, and that asks the page, which
+   * would turn a search into a round of fresh requests the operator never
+   * made.
+   */
+  byUrl: {
+    kept?: ReadonlySet<string>;
+    sessionId?: string;
+    text?: (session: string, url: string) => string | null;
+    /** fetched already and not text, so there is nothing left to offer */
+    binary?: (session: string, url: string) => boolean;
+  } = {},
 ): SearchResult {
+  const kept = byUrl.kept ?? new Set<string>();
+  const sessionId = byUrl.sessionId ?? '';
+  const loadedUrl = byUrl.text ?? textOfUrl;
+  const alreadyBinary = byUrl.binary ?? urlIsBinary;
   if (!query) return { hits: [], unloaded: [] };
   let rx: RegExp;
   try {
@@ -67,7 +88,7 @@ export function searchEntries(
     return { hits: [], unloaded: [] };
   }
   const hits: SearchHit[] = [];
-  const unloaded = new Map<string, { sha: string; mime?: string }>();
+  const unloaded = new Map<string, UnloadedBody>();
   /**
    * @param from  where in `text` the part worth showing begins.
    *
@@ -109,6 +130,24 @@ export function searchEntries(
     else test(requestId, where, text);
   };
 
+  /**
+   * The other kind of kept body: no content hash, held by the relay under the
+   * url it was fetched from. Most of what a run collects is one of these, and
+   * this search used to pass over every one of them without a word — which is
+   * the one thing the note at the top of this file says it must never do.
+   */
+  const viaUrl = (e: NetworkEntry, where: SearchHit['where']) => {
+    const mime = e.response?.mimeType;
+    if (mime && !isTextualMime(mime)) return;
+    const url = e.request.url;
+    const text = loadedUrl(sessionId, url);
+    if (text !== null) test(e.requestId, where, text);
+    // Not offered again once it has been fetched and turned out to be bytes:
+    // a mime type is often missing on a resource-timing entry, so this is the
+    // only point at which some bodies can be known not to be worth grepping.
+    else if (!alreadyBinary(sessionId, url)) unloaded.set(`url:${url}`, { url, ...(mime ? { mime } : {}) });
+  };
+
   for (const e of entries) {
     test(e.requestId, 'url', e.request.url);
     // headerPairs, not Object.entries: the page reported these maps, and
@@ -121,8 +160,10 @@ export function searchEntries(
 
     if (e.response?.body != null) {
       if (e.response.bodyEncoding !== 'base64') test(e.requestId, 'response body', e.response.body);
-    } else {
-      viaStore(e.requestId, 'response body', e.response?.bodyRef, e.response?.mimeType);
+    } else if (e.response?.bodyRef) {
+      viaStore(e.requestId, 'response body', e.response.bodyRef, e.response.mimeType);
+    } else if (bodyState(e, kept, false) === 'stored') {
+      viaUrl(e, 'response body');
     }
 
     for (const f of e.frames ?? []) test(e.requestId, 'ws message', f.data);

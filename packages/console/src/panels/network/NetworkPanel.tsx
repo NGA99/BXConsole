@@ -251,9 +251,9 @@ export function NetworkPanel({ sessionId }: { sessionId: string }) {
   const [bodiesLoaded, setBodiesLoaded] = useState(0);
   const [loadingBodies, setLoadingBodies] = useState(false);
   const { hits, unloaded } = useMemo(
-    () => (searchOpen ? searchEntries(entries, search, searchOpts) : { hits: [], unloaded: [] }),
+    () => (searchOpen ? searchEntries(entries, search, searchOpts, undefined, { kept: keptFiles, sessionId }) : { hits: [], unloaded: [] }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [entries, search, searchOpts, searchOpen, bodiesLoaded],
+    [entries, search, searchOpts, searchOpen, bodiesLoaded, keptFiles, sessionId],
   );
   const searchStoredBodies = () => {
     setLoadingBodies(true);

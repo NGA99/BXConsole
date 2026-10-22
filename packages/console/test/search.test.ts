@@ -127,3 +127,76 @@ describe('the query itself', () => {
     assert.equal(search([e], 'findme', { regex: false, caseSensitive: true }).hits.length, 0);
   });
 });
+
+describe('bodies the relay holds under a url', () => {
+  /** A recorded GET whose body the relay kept during the run: no hash on the event. */
+  const urlHeld = (): NetworkEntry =>
+    ({
+      requestId: 'r9',
+      request: { url: 'https://site.example/app.css', method: 'GET', headers: {}, ts: 0 },
+      response: { status: 200, statusText: 'OK', headers: {}, mimeType: 'text/css' },
+    }) as unknown as NetworkEntry;
+
+  const KEPT = new Set(['https://site.example/app.css']);
+
+  test('one the relay holds is reported, not passed over in silence', () => {
+    // The thing the note at the top of search.ts says must never happen.
+    const { hits, unloaded } = searchEntries([urlHeld()], 'findme', OPTS, () => null, { kept: KEPT, text: () => null });
+    assert.equal(hits.length, 0);
+    assert.deepEqual(unloaded, [{ url: 'https://site.example/app.css', mime: 'text/css' }]);
+  });
+
+  test('once fetched it is searched like any other body', () => {
+    const { hits, unloaded } = searchEntries([urlHeld()], 'findme', OPTS, () => null, {
+      kept: KEPT,
+      text: () => 'before findme after',
+    });
+    assert.equal(hits.length, 1);
+    assert.equal(hits[0]!.where, 'response body');
+    assert.deepEqual(unloaded, []);
+  });
+
+  test('one the relay is not holding is left alone, so a search makes no requests', () => {
+    // bodySource would say "ask" here, and asking means going to the page.
+    const { hits, unloaded } = searchEntries([urlHeld()], 'findme', OPTS, () => null, { kept: new Set(), text: () => null });
+    assert.deepEqual(unloaded, []);
+    assert.equal(hits.length, 0);
+  });
+
+  test('a binary one is not queued for a fetch nobody wants', () => {
+    const png = { ...urlHeld(), response: { status: 200, headers: {}, mimeType: 'image/png' } } as unknown as NetworkEntry;
+    const { unloaded } = searchEntries([png], 'findme', OPTS, () => null, { kept: new Set(['https://site.example/app.css']), text: () => null });
+    assert.deepEqual(unloaded, []);
+  });
+
+  test('a non-GET is never fetched by url, whatever the relay has', () => {
+    // Re-reading a POST as a GET would hit an endpoint nobody asked for.
+    const post = { ...urlHeld(), request: { ...urlHeld().request, method: 'POST' } } as unknown as NetworkEntry;
+    const { unloaded } = searchEntries([post], 'findme', OPTS, () => null, { kept: KEPT, text: () => null });
+    assert.deepEqual(unloaded, []);
+  });
+})
+
+describe('a url-held body that turned out to be bytes', () => {
+  const png = (): NetworkEntry =>
+    ({
+      requestId: 'r10',
+      // No mimeType: a resource-timing entry often has none, which is why the
+      // guard above it cannot catch this one.
+      request: { url: 'https://site.example/logo.png', method: 'GET', headers: {}, ts: 0 },
+      response: { status: 200, headers: {} },
+    }) as unknown as NetworkEntry;
+  const KEPT = new Set(['https://site.example/logo.png']);
+
+  test('is offered once, while nobody has looked at it', () => {
+    const { unloaded } = searchEntries([png()], 'findme', OPTS, () => null, { kept: KEPT, text: () => null, binary: () => false });
+    assert.deepEqual(unloaded, [{ url: 'https://site.example/logo.png' }]);
+  });
+
+  test('is not offered again once it has been fetched and found to be bytes', () => {
+    // Otherwise the panel says "1 body was not searched" for ever, over a
+    // button that fetches it from the cache and changes nothing.
+    const { unloaded } = searchEntries([png()], 'findme', OPTS, () => null, { kept: KEPT, text: () => null, binary: () => true });
+    assert.deepEqual(unloaded, []);
+  });
+})
