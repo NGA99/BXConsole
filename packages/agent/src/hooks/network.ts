@@ -275,8 +275,14 @@ function parseRawHeaders(raw: string): Record<string, string> {
  * The body is only taken when it is something we can look at for free. A
  * stream, a Blob or a Request's own body is left alone: reading it would
  * either consume what the page is about to send or make the call wait on us.
+ *
+ * Left alone is not the same as absent, and the recording has to say which.
+ * A POST showing no payload weeks later reads as a page that sent none,
+ * which is a different fact from one whose body we chose not to touch — so
+ * each of those comes back as a note saying what was there. The XHR half of
+ * this hook has always done that; this half returned a bare null.
  */
-function describeRequest(input: RequestInfo | URL, init?: RequestInit): { url: string; method: string; headers: Record<string, string>; body: string | null } {
+export function describeRequest(input: RequestInfo | URL, init?: RequestInit): { url: string; method: string; headers: Record<string, string>; body: string | null } {
   const fromRequest = typeof Request !== 'undefined' && input instanceof Request ? input : null;
   const url = fromRequest ? fromRequest.url : String(input);
   const method = (init?.method ?? fromRequest?.method ?? 'GET').toUpperCase();
@@ -289,7 +295,13 @@ function describeRequest(input: RequestInfo | URL, init?: RequestInit): { url: s
   } catch {
     /* an init the Headers constructor refuses; report none */
   }
-  return { url, method, headers, body: plainBody(init?.body) };
+  /*
+   * A Request carries its own body, and `init.body` is empty in that case.
+   * Reading it means cloning the Request, which marks a stream body used —
+   * so it is named rather than read, like the others.
+   */
+  const body = init?.body !== undefined && init.body !== null ? plainBody(init.body) : fromRequest?.body ? '[body on the Request object]' : null;
+  return { url, method, headers, body };
 }
 
 function plainBody(body: BodyInit | null | undefined): string | null {
@@ -300,7 +312,12 @@ function plainBody(body: BodyInit | null | undefined): string | null {
     body.forEach((v, k) => parts.push(`${k}=${typeof v === 'string' ? v : '(file)'}`));
     return parts.join('&');
   }
-  return null; // stream, Blob, ArrayBuffer, or a Request's own body
+  // Named, not read: the size of a Blob or a buffer is free, and a stream
+  // cannot be looked at without taking it from the page.
+  if (body instanceof Blob) return `[Blob ${body.size} bytes]`;
+  if (body instanceof ArrayBuffer || ArrayBuffer.isView(body)) return `[Binary ${body.byteLength} bytes]`;
+  if (typeof ReadableStream !== 'undefined' && body instanceof ReadableStream) return '[stream]';
+  return body == null ? null : '[body this console cannot read without consuming it]';
 }
 
 async function readResponseBody(res: Response, config: AgentConfig) {
