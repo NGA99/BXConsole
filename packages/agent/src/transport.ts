@@ -6,7 +6,7 @@
  * and flush the queue, so a relay restart does not lose events.
  */
 import type { AgentToServer, ServerToAgent, SessionHello } from '@bxconsole/protocol';
-import { PROTOCOL_VERSION } from '@bxconsole/protocol';
+import { AGENT_MAX_MESSAGE_BYTES, PROTOCOL_VERSION } from '@bxconsole/protocol';
 
 type MessageHandler = (msg: ServerToAgent) => void;
 
@@ -23,12 +23,45 @@ function isExpendable(msg: AgentToServer): boolean {
 }
 const BACKOFF_MS = [500, 1000, 2000, 5000, 10000];
 
+/**
+ * How long a connection has to last before it counts as one that worked.
+ *
+ * The backoff used to reset the moment a socket opened, and opening is not
+ * the same as working: the relay drops a connection as soon as a message
+ * arrives past its size limit, so the handshake succeeds, the session is
+ * acknowledged, and the link dies anyway — every time, identically. With the
+ * counter reset on open, that is a reconnection every 500ms for as long as
+ * the page is open, from a browser nobody can reach. Measured against a real
+ * relay before this: seventeen in thirteen seconds.
+ *
+ * Longer than the longest backoff, so a connection that merely survived one
+ * wait does not count as healthy.
+ */
+const STEADY_MS = 30_000;
+
+/**
+ * Whether a message would be refused by the relay for its size.
+ *
+ * Cheap in the two cases that matter and exact in the narrow band between
+ * them: a string can never encode to fewer bytes than it has code units, and
+ * never to more than three times as many, so only a length inside that range
+ * has to be measured — and measuring means copying the whole string, which
+ * is the thing to avoid when it may be eight megabytes.
+ */
+function tooBigForRelay(raw: string): boolean {
+  if (raw.length > AGENT_MAX_MESSAGE_BYTES) return true;
+  if (raw.length <= AGENT_MAX_MESSAGE_BYTES / 3) return false;
+  return new TextEncoder().encode(raw).length > AGENT_MAX_MESSAGE_BYTES;
+}
+
 export class Transport {
   private ws: WebSocket | null = null;
   private ready = false;
   private queue: AgentToServer[] = [];
   private handlers: MessageHandler[] = [];
   private attempt = 0;
+  /** when the live socket opened, for deciding whether it ever worked */
+  private openedAt = 0;
   private closedByUser = false;
   /**
    * The relay said this run is not wanted. One way, and not cleared by
@@ -57,6 +90,16 @@ export class Transport {
   }
 
   send(msg: AgentToServer): void {
+    /*
+     * Measured before anything else, including the queue: a message the relay
+     * will refuse is not worth keeping either. Handing it over closes the
+     * connection, and the agent comes straight back and does it again —
+     * which is how a single page too large to mirror turned into a permanent
+     * reconnect loop against the relay.
+     */
+    const raw = JSON.stringify(msg);
+    if (tooBigForRelay(raw)) return this.reportTooBig(msg.type, raw.length);
+
     if (this.ready && this.ws?.readyState === NativeWebSocket.OPEN) {
       // The browser buffers without limit, inside the page being debugged, so
       // a slow link plus a chatty page would grow the page's memory until the
@@ -67,7 +110,7 @@ export class Transport {
         this.dropped++;
         return;
       }
-      this.ws.send(JSON.stringify(msg));
+      this.ws.send(raw);
       this.reportDrops();
       return;
     }
@@ -76,6 +119,28 @@ export class Transport {
       this.dropped++;
     }
     this.queue.push(msg);
+  }
+
+  /**
+   * Say which frame was never sent, on the timeline where it happened.
+   *
+   * There is no message for "this page is too big to mirror", and a mark is
+   * one the console already draws — so the Screen pane staying empty has
+   * something next to it in History saying why, rather than being a gap the
+   * operator is left to guess at. Sent at once rather than counted up: a
+   * snapshot that is too large tends to be the only thing the page was
+   * trying to send, so there may be no later traffic to carry the news.
+   */
+  private reportTooBig(type: string, chars: number): void {
+    if (!this.ready || this.ws?.readyState !== NativeWebSocket.OPEN) return;
+    this.ws.send(
+      JSON.stringify({
+        type: 'mark.custom',
+        ts: Date.now(),
+        name: `${type} was too large to send`,
+        data: { t: 'number', v: chars },
+      } satisfies AgentToServer),
+    );
   }
 
   /**
@@ -112,7 +177,7 @@ export class Transport {
     this.ws = ws;
 
     ws.addEventListener('open', () => {
-      this.attempt = 0;
+      this.openedAt = Date.now();
       ws.send(JSON.stringify({ type: 'session.hello', v: PROTOCOL_VERSION, hello: this.hello() }));
     });
 
@@ -152,6 +217,9 @@ export class Transport {
     ws.addEventListener('close', () => {
       this.ready = false;
       this.ws = null;
+      // Reset here rather than on open: a connection counts as one that
+      // worked only once it has lasted, and this is where that is known.
+      if (this.openedAt && Date.now() - this.openedAt >= STEADY_MS) this.attempt = 0;
       if (!this.closedByUser && !this.refused) this.scheduleReconnect();
     });
 
