@@ -9,7 +9,7 @@
 import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { NetworkEntry } from '../src/state/session-data';
-import { BAND, LABEL, bodyState, type BodyState } from '../src/panels/network/body-state';
+import { BAND, LABEL, bodyState, bodyTitle, type BodyState } from '../src/panels/network/body-state';
 
 const URL_JS = 'http://app.test/main.js';
 const SHA = 'a'.repeat(64);
@@ -135,5 +135,44 @@ describe('the three bands a reader scans', () => {
     assert.ok(readable(entry({ response: { body: 'x' } }), NOTHING_KEPT));
     assert.ok(readable(entry(), KEPT));
     assert.ok(!readable(entry(), NOTHING_KEPT));
+  });
+});
+
+describe('a truncated body that went to the store', () => {
+  /** The case the rule above had never been applied to. */
+  const cutAndStored = (over: Record<string, unknown> = {}): NetworkEntry =>
+    ({
+      requestId: 'rT',
+      request: { url: URL_JS, method: 'GET', headers: {}, ts: 0 },
+      response: { status: 200, headers: {}, bodyRef: 'a'.repeat(64), bodyBytes: 49152, bodyTruncated: true, ...over },
+    }) as unknown as NetworkEntry;
+
+  test('is not called captured — the same rule the inline branch states', () => {
+    // A five-megabyte response of which forty-eight kilobytes survived read
+    // as "Captured. It is part of the recording."
+    assert.notEqual(bodyState(cutAndStored(), NOTHING_KEPT, ENDED), 'captured');
+  });
+
+  test('falls through to the answers a cut inline body already got', () => {
+    assert.equal(bodyState(cutAndStored(), NOTHING_KEPT, ENDED), 'lost');
+    assert.equal(bodyState(cutAndStored(), KEPT, ENDED), 'stored');
+  });
+
+  test('a whole body in the store is still captured', () => {
+    assert.equal(bodyState(cutAndStored({ bodyTruncated: undefined }), NOTHING_KEPT, ENDED), 'captured');
+  });
+});
+
+describe('what the dropped-body note claims', () => {
+  test('it no longer quotes a run budget this console was never told', () => {
+    const dropped = {
+      requestId: 'rD',
+      request: { url: 'https://site.example/x', method: 'GET', headers: {}, ts: 0 },
+      response: { status: 200, headers: {}, bodyDropped: true, bodyBytes: 49152 },
+    } as unknown as NetworkEntry;
+    const title = bodyTitle(dropped, bodyState(dropped, NOTHING_KEPT, ENDED));
+    assert.ok(!/50 MB/.test(title), `still quoting a figure it cannot know: ${title}`);
+    assert.match(title, /4 MB each/);
+    assert.match(title, /49,152 bytes/);
   });
 });

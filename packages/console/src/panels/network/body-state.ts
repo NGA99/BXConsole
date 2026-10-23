@@ -14,6 +14,7 @@
  * here, it is only here while the run is — and the split inside each band is
  * what matters when they want to know why.
  */
+import { BLOB_MAX_BYTES } from '@bxconsole/protocol';
 import type { NetworkEntry } from '../../state/session-data';
 import { streamsFrames } from './classify';
 
@@ -63,8 +64,18 @@ export function bodyState(entry: NetworkEntry, kept: ReadonlySet<string>, connec
 
   // In the event already. A truncated body is not the body, so it does not count.
   if (!entry.resource && res?.body != null && !res.bodyTruncated && res.responseType !== 'opaque') return 'captured';
-  // Moved out of the event into the store, but still this run's own bytes.
-  if (!entry.resource && res?.bodyRef) return 'captured';
+  /*
+   * Moved out of the event into the store, but still this run's own bytes —
+   * and only when the whole body got there.
+   *
+   * The branch above excludes a truncated body on purpose, with a rule in
+   * its comment: a truncated body is not the body. This one did not look, so
+   * a five-megabyte response of which forty-eight kilobytes survived was
+   * labelled "Captured", over a tooltip saying it was part of the recording.
+   * Both halves ask the same question now, and a cut body falls through to
+   * the same answers it gets when it stayed inline.
+   */
+  if (!entry.resource && res?.bodyRef && !res.bodyTruncated) return 'captured';
 
   // An opaque response is one the page itself could not read, and a WebSocket
   // carries frames rather than a body.
@@ -95,8 +106,17 @@ export function bodyState(entry: NetworkEntry, kept: ReadonlySet<string>, connec
 export function bodyTitle(entry: NetworkEntry, state: BodyState): string {
   const res = entry.response;
   if (res?.bodyDropped) {
+    /*
+     * The per-body limit is a protocol constant, read from there rather than
+     * written out a second time. The budget for a whole run is not: a relay
+     * sets its own and never tells this console the figure, so it is
+     * described instead of quoted. This used to say "50 MB", which is only
+     * the default — a relay started with a smaller one had the operator
+     * reading a number two orders of magnitude out.
+     */
     const size = typeof res.bodyBytes === 'number' ? `${res.bodyBytes.toLocaleString()} bytes` : 'This body';
-    return `${size} went past and none of it was kept: the relay holds bodies up to 4 MB and up to 50 MB for a whole run, and this one did not fit. ${TITLE[state]}`;
+    const cap = `${Math.round(BLOB_MAX_BYTES / (1024 * 1024))} MB`;
+    return `${size} went past and none of it was kept: the relay holds bodies up to ${cap} each, within a budget for the whole run that it sets itself, and this one did not fit. ${TITLE[state]}`;
   }
   return TITLE[state];
 }
