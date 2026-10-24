@@ -344,6 +344,11 @@ export class Relay {
     if (event.type === 'page.title') {
       void this.registry.updateTab(entry.meta.sessionId, tabId, { title: event.title });
     }
+    // Kept on the window for the same reason its url is: a console that
+    // attaches later never saw the event go past.
+    if (event.type === 'page.visibility') {
+      void this.registry.updateTab(entry.meta.sessionId, tabId, { hidden: event.hidden });
+    }
     // The page just loaded a file. It can hand the bytes over now; after the
     // run ends nothing can. `collect !== false` so a recording from before the
     // option existed still collects.

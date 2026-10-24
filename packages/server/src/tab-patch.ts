@@ -34,6 +34,8 @@ export function usableTabPatch(patch: Partial<SessionTab>): Partial<SessionTab> 
   const out: Partial<SessionTab> = { ...patch };
   keep(out, 'url', URL_MAX);
   keep(out, 'title', TITLE_MAX);
+  // A flag the page reports; anything that is not a boolean says nothing.
+  if ('hidden' in out && typeof out.hidden !== 'boolean') delete out.hidden;
   return out;
 }
 

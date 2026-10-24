@@ -20,6 +20,15 @@ export interface SessionTab {
   startedAt: number;
   lastSeenAt: number;
   connected: boolean;
+  /**
+   * What the page last said about being the tab in front, if it has said.
+   *
+   * It travels with the window rather than only as an event because the page
+   * reports it once at boot and then only on change — so a console that
+   * attaches later, which is the ordinary case, would never see it. Absent
+   * means the page has not said, not that it is in front.
+   */
+  hidden?: boolean;
 }
 
 /** Everything the console needs to show a session in the Sessions tab. */

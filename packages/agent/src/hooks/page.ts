@@ -30,9 +30,22 @@ export function installPageHook(transport: Transport): void {
   window.addEventListener('popstate', reportNavigation);
   window.addEventListener('hashchange', reportNavigation);
 
-  document.addEventListener('visibilitychange', () => {
+  /*
+   * Reported once at boot as well as on every change.
+   *
+   * `visibilitychange` only fires when it changes, and the common way a
+   * payload lands is a middle-click or "open in new tab" — a document that
+   * is hidden from its first frame and never changes. Without the first
+   * report the console cannot tell that from a page sitting in front of
+   * somebody, which are very different readings of a quiet screen: a
+   * backgrounded tab has its timers throttled by the browser to a fraction
+   * of their rate, so the page genuinely does less.
+   */
+  const reportVisibility = () => {
     transport.send({ type: 'page.visibility', ts: Date.now(), hidden: document.hidden });
-  });
+  };
+  reportVisibility();
+  document.addEventListener('visibilitychange', reportVisibility);
 
   // Document milestones for the Network overview markers and status bar.
   const timing = () => {

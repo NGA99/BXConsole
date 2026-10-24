@@ -14,6 +14,18 @@
   background: var(--sys-color-error);
   box-shadow: 0 0 0 2px color-mix(in srgb, var(--sys-color-error) 30%, transparent);
 }
+/*
+ * Still recording, but the page is behind another tab and the browser has
+ * slowed its timers down. Dimmed rather than coloured like a fault: nothing
+ * is wrong, there is simply less happening.
+ */
+.screen-status.backgrounded .dot {
+  background: var(--sys-color-token-subtle);
+  box-shadow: none;
+}
+.screen-status.backgrounded {
+  color: var(--sys-color-token-subtle);
+}
 .screen-meta {
   padding: 0 6px;
   color: var(--sys-color-token-subtle);

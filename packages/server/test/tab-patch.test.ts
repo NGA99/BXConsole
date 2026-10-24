@@ -51,3 +51,24 @@ describe('usableTabPatch', () => {
     assert.deepEqual(usableTabPatch({ connected: false, tabId: 'abc' } as never), { connected: false, tabId: 'abc' });
   });
 });
+
+describe('what the page says about being in front', () => {
+  test('a boolean is kept, both ways', () => {
+    // It travels on the window because the page reports it once at boot and
+    // then only on change, so a console that attaches later never saw it.
+    assert.deepEqual(usableTabPatch({ hidden: true }), { hidden: true });
+    assert.deepEqual(usableTabPatch({ hidden: false }), { hidden: false });
+  });
+
+  test('anything that is not a boolean says nothing', () => {
+    assert.deepEqual(usableTabPatch({ hidden: 'yes' } as never), {});
+    assert.deepEqual(usableTabPatch({ hidden: 1 } as never), {});
+    assert.deepEqual(usableTabPatch({ hidden: null } as never), {});
+  });
+
+  test('not saying is different from saying no', () => {
+    // Absent means the page has not reported, which is not the same as being
+    // in front — the console must be able to tell those apart.
+    assert.equal('hidden' in usableTabPatch({ url: 'https://a/' }), false);
+  });
+});

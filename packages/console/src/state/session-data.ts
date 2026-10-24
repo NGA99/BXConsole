@@ -482,6 +482,8 @@ function applyEvent(state: SessionDataState, seq: number, event: AgentEvent, tab
       return { console: nextConsole, network: keptNetwork, networkIndex: reindex(keptNetwork), history, issues: countIssues(nextConsole), ...clearedTiming };
     }
     case 'page.visibility':
+      // Kept on the window by the relay, where a console that attached later
+      // can still read it; nothing for this buffer to hold.
       return null;
   }
 }

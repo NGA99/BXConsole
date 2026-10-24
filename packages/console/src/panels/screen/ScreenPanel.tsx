@@ -209,6 +209,15 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
   // Re-subscribing is what moves the mirror to another window: the relay stops the
   // old one streaming and the new one answers with a fresh snapshot.
   const activeTab = useActiveTab(sessionId);
+  /*
+   * Whether the page itself says it is out of sight.
+   *
+   * A backgrounded tab has its timers throttled by the browser to a fraction
+   * of their rate, so the page does less and the mirror has less to draw —
+   * which looks exactly like a recording that has stopped working. Nothing
+   * here can tell those apart; the page can, and does.
+   */
+  const hidden = useSessionsStore((s) => s.byId[sessionId]?.tabs?.find((t) => t.tabId === activeTab)?.hidden === true);
   const tabCount = useSessionsStore((s) => s.byId[sessionId]?.tabs?.length ?? 0);
   const sessionTabs = useSessionsStore((s) => s.byId[sessionId]?.tabs) ?? [];
   /*
@@ -532,7 +541,16 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
           <RefreshIcon />
         </ToolbarButton>
         <ToolbarDivider />
-        <span className={`screen-status ${status.state}`} title={status.snapshotAt ? `frame ${clockTime(status.snapshotAt)}` : undefined}>
+        <span
+          className={`screen-status ${status.state}${hidden && !replay && connected ? ' backgrounded' : ''}`}
+          title={
+            hidden && !replay && connected
+              ? 'This window is not the one in front in the browser it is running in. A background tab has its timers slowed down by the browser, so the page itself does less and there is less for the mirror to show — every change it does make is still recorded.'
+              : status.snapshotAt
+                ? `frame ${clockTime(status.snapshotAt)}`
+                : undefined
+          }
+        >
           <span className="dot" />
           {replay
             ? `replay · ${clockTime(replay.ts)}${replayWindow ? ` · ${replayWindow}` : ''}`
@@ -541,7 +559,9 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
                 ? 'offline · last frame'
                 : 'session offline'
               : status.state === 'live'
-                ? 'live'
+                ? hidden
+                  ? 'live · behind another tab'
+                  : 'live'
                 : status.state === 'stopped'
                   ? 'stopped'
                   : 'waiting for snapshot…'}
