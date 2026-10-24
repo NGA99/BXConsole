@@ -71,8 +71,9 @@ export function ProjectsPanel() {
 
   return (
     <div className="projects">
+      {/* No heading here: the path row above already says Projects, and the
+          screen saying it twice reads as two different things. */}
       <div className="projects-head">
-        <span className="projects-title">Projects</span>
         <span className="projects-sub">
           A project owns its recordings and its agent key. Runs land in the project whose key the
           payload carries.

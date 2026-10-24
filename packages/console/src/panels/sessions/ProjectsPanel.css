@@ -17,11 +17,6 @@
   gap: 2px;
   padding-bottom: 8px;
 }
-.projects-title {
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--sys-color-on-surface);
-}
 .projects-sub,
 .projects-empty,
 .project-note {
@@ -164,22 +159,19 @@
   width: 160px;
 }
 
-/* The card is the way in, the way a row is on the Sessions list: the same
-   hover, and `default` rather than a pointer, because nothing else in this
-   console uses a hand. */
-.project:hover {
-  background: var(--sys-color-state-hover-on-subtle);
-  cursor: default;
-}
-/* Keyboard users get the card as a stop, so it has to say when it is on one. */
+/*
+ * The card is still the way in — clicking it opens the project — but it does
+ * not light up under the pointer, and nothing inside it does either. The one
+ * exception is the name, which is a field you type in and says so.
+ *
+ * This is deliberately unlike the Sessions list, whose rows do light up. The
+ * card carries several things that are their own controls, and a wash moving
+ * across all of them read as the whole card being one button.
+ *
+ * Keyboard users still get the card as a stop, so it still has to say when it
+ * is on one — that is focus, not hover.
+ */
 .project:focus-visible {
   outline: 2px solid var(--sys-color-primary);
   outline-offset: -2px;
-}
-/* The parts that do something of their own keep the plain background, so the
-   hover reads as "this card", not "this line". */
-.project-key:hover,
-.project-actions:hover,
-.project-confirm:hover {
-  background: var(--sys-color-cdt-base-container);
 }
