@@ -6,9 +6,11 @@
  * beside a Projects tab, which gave two ways to change project and no sense
  * of being inside one; it reads as a path now, with the list at its root.
  *
- * The dropdown stays, because going out to the list and back in is three
- * clicks for something somebody does all day. It is the shortcut, not the
- * only route: everything it does, the Projects screen does as well.
+ * There is no project switcher in the path. The one that was here — a
+ * dropdown on the current crumb — was a second door onto the Projects list,
+ * which the root a click to the left already opens, and which shows every
+ * project's counts besides. A breadcrumb switches nothing: its last crumb is
+ * where you stand, and its earlier ones are the way back out.
  */
 import { useProjectsStore, selectProject } from '../../state/projects';
 import { useSessionList } from '../../state/sessions';
@@ -29,7 +31,7 @@ export type Showing = 'projects' | 'admin' | 'inside';
  *                 looking at was named a row above it.
  */
 export function ProjectBar({ showing, session }: { showing: Showing; session?: { id: string; panel: PanelId } }) {
-  const { order, byId, homeId, selectedId } = useProjectsStore();
+  const { byId, homeId, selectedId } = useProjectsStore();
   const account = useAccount();
   const isAdmin = useIsAdmin();
   const sessions = useSessionList();
@@ -91,18 +93,13 @@ export function ProjectBar({ showing, session }: { showing: Showing; session?: {
               {label(currentId)}
             </button>
           ) : (
-            <select
-              className="projectbar-pick"
-              value={selectedId}
-              title="The project these tabs are about"
-              onChange={(e) => selectProject(e.target.value)}
-            >
-              {order.map((id) => (
-                <option key={id} value={id}>
-                  {label(id)}
-                </option>
-              ))}
-            </select>
+            // The list view: this is where you already are, so the crumb
+            // names the project without offering to switch it. A dropdown
+            // used to sit here; it only reopened the Projects list, which the
+            // root to the left already does.
+            <span className="projectbar-name projectbar-current" title="The project these tabs are about">
+              {label(currentId)}
+            </span>
           )}
         </>
       )}

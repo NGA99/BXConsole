@@ -78,23 +78,13 @@
   overflow: hidden;
   text-overflow: ellipsis;
 }
-/* The shortcut past the list. Flat until hovered, so the path reads as a
-   path rather than as a form control sitting in a toolbar. */
-.projectbar-pick {
-  max-width: 320px;
-  font: inherit;
+/* The current project in the list view: the crumb you are standing on, so it
+   is named, not offered as a control — darker than the links around it and a
+   touch heavier, the same weight the dropdown here used to carry. */
+.projectbar-current {
   font-size: 11px;
   font-weight: 500;
   color: var(--sys-color-on-surface);
-  background: transparent;
-  border: 1px solid transparent;
-  border-radius: 2px;
-  padding: 1px 2px;
-}
-.projectbar-pick:hover,
-.projectbar-pick:focus {
-  border-color: var(--sys-color-neutral-outline);
-  background: var(--sys-color-cdt-base-container);
 }
 
 .projectbar-spacer {
