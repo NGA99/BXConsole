@@ -46,18 +46,29 @@
 
 .project {
   border: 1px solid var(--sys-color-divider);
+  /* A light on the left edge, three pixels of it on every card. It used to
+     mark the project you had open; that is what the breadcrumb and the card's
+     own title are for, so the edge now reports the runs inside instead. The
+     padding drops by the two extra pixels so the text does not shift. */
+  border-left-width: 3px;
   border-radius: 3px;
   padding: 7px 9px;
+  padding-left: 7px;
   margin-bottom: 8px;
   display: flex;
   flex-direction: column;
   gap: 5px;
 }
-/* The one being looked at, marked on the edge rather than by colouring the
-   whole card: it is where you are, not a warning. */
-.project.selected {
-  border-left: 3px solid var(--sys-color-primary);
-  padding-left: 7px;
+/* Green while a run in it is connected, red once they have all gone quiet but
+   recordings remain, and the plain accent while it holds none. */
+.project.project-live {
+  border-left-color: var(--sys-color-green);
+}
+.project.project-dead {
+  border-left-color: var(--sys-color-error);
+}
+.project.project-empty {
+  border-left-color: var(--sys-color-primary);
 }
 .project.trashed {
   opacity: 0.72;

@@ -32,6 +32,7 @@ import { copyText } from '../network/copy';
 import './ProjectsPanel.css';
 import { fullTimestamp } from '../../devtools-ui/time';
 import { isEnterSubmit } from '../../devtools-ui/enter-key';
+import { projectCounts, liveness, type Liveness } from './project-counts';
 
 export function ProjectsPanel() {
   const { order, byId, homeId, selectedId } = useProjectsStore();
@@ -45,6 +46,9 @@ export function ProjectsPanel() {
     const id = s.projectId ?? homeId;
     if (id) counts.set(id, (counts.get(id) ?? 0) + 1);
   }
+  // The live/dead split for the edge light, which — unlike the recordings
+  // count above — leaves out the trash, the way the list itself does.
+  const live = projectCounts(sessions, homeId);
 
   const [entering, setEntering] = useState<string | null>(null);
 
@@ -110,6 +114,7 @@ export function ProjectsPanel() {
               mine={project.owner === account?.id}
               home={id === homeId}
               selected={id === selectedId}
+              liveness={liveness(live.get(id))}
               sessions={counts.get(id) ?? 0}
               purgeDays={purgeDays}
             />
@@ -125,6 +130,7 @@ function ProjectRow({
   mine,
   home,
   selected,
+  liveness,
   sessions,
   purgeDays,
 }: {
@@ -132,6 +138,8 @@ function ProjectRow({
   mine: boolean;
   home: boolean;
   selected: boolean;
+  /** which colour the left edge carries: live (green), dead (red), empty (blue) */
+  liveness: Liveness;
   sessions: number;
   /** days in the trash before it is deleted; 0 when nothing is purged */
   purgeDays: number;
@@ -174,7 +182,7 @@ function ProjectRow({
 
   return (
     <div
-      className={`project${selected ? ' selected' : ''}${trashed ? ' trashed' : ''}`}
+      className={`project project-${liveness}${trashed ? ' trashed' : ''}`}
       role="button"
       tabIndex={0}
       title={selected ? `Showing ${project.name}` : `Show the recordings in ${project.name}`}

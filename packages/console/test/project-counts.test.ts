@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { SessionMeta } from '@bxconsole/protocol';
-import { projectCounts, describeCount } from '../src/panels/sessions/project-counts';
+import { projectCounts, describeCount, liveness } from '../src/panels/sessions/project-counts';
 
 const run = (over: Partial<SessionMeta>): SessionMeta =>
   ({ sessionId: 'a', url: 'http://x/', startedAt: 0, lastSeenAt: 0, connected: false, ...over }) as SessionMeta;
@@ -42,4 +42,19 @@ test('the label says only what there is', () => {
   assert.equal(describeCount({ live: 2, kept: 0 }), '2 live');
   assert.equal(describeCount({ live: 0, kept: 3 }), '3 recorded');
   assert.equal(describeCount({ live: 0, kept: 0 }), '');
+});
+
+test('a project with a connected run is live', () => {
+  assert.equal(liveness({ live: 1, kept: 3 }), 'live');
+});
+
+test('a project whose runs have all gone quiet is dead, not empty', () => {
+  assert.equal(liveness({ live: 0, kept: 2 }), 'dead');
+});
+
+test('a project with no runs at all is empty', () => {
+  // Also the case for one whose only recordings are in the trash: projectCounts
+  // skips those, so there is no entry here.
+  assert.equal(liveness(undefined), 'empty');
+  assert.equal(liveness({ live: 0, kept: 0 }), 'empty');
 });

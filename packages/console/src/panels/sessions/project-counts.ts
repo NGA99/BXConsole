@@ -41,3 +41,20 @@ export function projectCounts(sessions: SessionMeta[], homeId: string | null): M
 export function describeCount(at: ProjectCount | undefined): string {
   return [at?.live ? `${at.live} live` : '', at?.kept ? `${at.kept} recorded` : ''].filter(Boolean).join(' · ');
 }
+
+/** The colour of the light on a project's left edge. */
+export type Liveness = 'live' | 'dead' | 'empty';
+
+/**
+ * Green while a run in the project is connected, red once they have all gone
+ * quiet but recordings remain, and the plain accent while it holds no runs.
+ *
+ * The trash does not count, the same as the counts above: a project whose
+ * only recordings are in the trash reads as empty here too, because the list
+ * you are looking at shows none.
+ */
+export function liveness(at: ProjectCount | undefined): Liveness {
+  if (at?.live) return 'live';
+  if (at?.kept) return 'dead';
+  return 'empty';
+}
