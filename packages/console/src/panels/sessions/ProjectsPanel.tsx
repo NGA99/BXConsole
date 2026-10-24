@@ -31,6 +31,7 @@ import { navigateToView } from '../../app/router';
 import { copyText } from '../network/copy';
 import './ProjectsPanel.css';
 import { fullTimestamp } from '../../devtools-ui/time';
+import { isEnterSubmit } from '../../devtools-ui/enter-key';
 
 export function ProjectsPanel() {
   const { order, byId, homeId, selectedId } = useProjectsStore();
@@ -86,7 +87,7 @@ export function ProjectsPanel() {
           placeholder="New project name"
           spellCheck={false}
           onChange={(e) => setMaking(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && make()}
+          onKeyDown={(e) => isEnterSubmit(e.nativeEvent) && make()}
         />
         <button className="detail-link" disabled={!making.trim()} onClick={make}>
           create
@@ -201,7 +202,7 @@ function ProjectRow({
             onClick={(e) => e.stopPropagation()}
             onChange={(e) => setName(e.target.value)}
             onBlur={() => name.trim() && name !== project.name && renameProject(project.id, name)}
-            onKeyDown={(e) => e.key === 'Enter' && (e.target as HTMLInputElement).blur()}
+            onKeyDown={(e) => isEnterSubmit(e.nativeEvent) && (e.target as HTMLInputElement).blur()}
           />
         ) : (
           <span className="project-name readonly">{project.name}</span>
@@ -345,7 +346,7 @@ function Confirm({
         spellCheck={false}
         onChange={(e) => setTyped(e.target.value)}
         onKeyDown={(e) => {
-          if (e.key === 'Enter' && enabled) onGo();
+          if (isEnterSubmit(e.nativeEvent) && enabled) onGo();
           if (e.key === 'Escape') onCancel();
         }}
       />
