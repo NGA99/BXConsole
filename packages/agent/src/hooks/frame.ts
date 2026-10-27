@@ -26,7 +26,7 @@
  *     know before they start.
  */
 import type { AgentConfig } from '../config';
-import { flagName, getFlag, setFlag } from '../mark';
+import { flagName, getFlag, getHandle, setFlag } from '../mark';
 import { adoptChildren, adoptOpeners, askOpenerToWatch, watchWindow } from './adopt';
 
 /**
@@ -180,7 +180,7 @@ function whenBodyExists(run: () => void): void {
   once(); // in case it arrived between the check and the observer
 }
 
-/** How long to let the frame prove it loaded before giving the page back. */
+/** How long to let an agent come up inside the frame before giving the page back. */
 const FRAME_TIMEOUT_MS = 8000;
 
 function wrap(config: AgentConfig, sessionId: string, giveUp: () => void): void {
@@ -246,10 +246,14 @@ function wrap(config: AgentConfig, sessionId: string, giveUp: () => void): void 
 
   let settled = false;
   let stopWatching: () => void = () => undefined;
+  const stopTimers = () => {
+    clearTimeout(timer);
+    clearInterval(probe);
+  };
   const restore = () => {
     if (settled) return;
     settled = true;
-    clearTimeout(timer);
+    stopTimers();
     stopWatching();
     frame.remove();
     for (const { el, css } of reset) el.style.cssText = css;
@@ -259,25 +263,45 @@ function wrap(config: AgentConfig, sessionId: string, giveUp: () => void): void 
   const keep = () => {
     if (settled) return;
     settled = true;
-    clearTimeout(timer);
+    stopTimers();
   };
 
   /*
-   * The frame's src is this window's own URL, so its document is same-origin
-   * by construction and we can always read it — unless the browser refused
-   * the frame, in which case it holds an error page we cannot touch. That is
-   * the whole test. A load event fires either way.
+   * Hosting has worked only once an agent is actually running inside the
+   * frame — not merely once the frame has loaded.
+   *
+   * The frame loading was the test this used to settle on, and it is not
+   * enough. watchWindow below injects the agent into the frame, but that can
+   * come to nothing and still leave a loaded page: a CSP that blocks the
+   * agent's own script, a document that holds the app but never re-runs an
+   * injected payload, a relay that cannot be reached from in there. Each of
+   * those is a framed page recording nothing, and settling on "loaded" left
+   * it there — a run with no session and no way back. So the signal is the
+   * agent's handle appearing on the framed window, which is same-origin and
+   * so readable; until it does, the window is still ours to hand back.
    */
+  const probe = setInterval(() => {
+    try {
+      if (frame.contentWindow && getHandle(frame.contentWindow)) keep();
+    } catch {
+      // A frame the browser refused sits on an opaque origin and throws here;
+      // the load handler and the timeout below are what deal with that.
+    }
+  }, 150);
+
+  // A refused frame never gets an agent, so give the page back the moment the
+  // load event shows it was blocked rather than waiting the timeout out.
   frame.addEventListener('load', () => {
-    if (framedOk(frame)) keep();
-    else restore();
-  });
-  // A frame that never fires load at all, on a page that is simply slow or
-  // gone. Better to hand the window back late than to leave it blank.
-  const timer = setTimeout(() => {
     if (!framedOk(frame)) restore();
-    else keep();
-  }, FRAME_TIMEOUT_MS);
+  });
+  /*
+   * The backstop for every other way hosting comes to nothing: a frame that
+   * loaded but booted no agent, or one that never fires load at all. Handing
+   * the window back here is what keeps a hosting failure from costing the
+   * session — the run carries on in this window, ending at the first
+   * navigation, which is far better than nothing recorded at all.
+   */
+  const timer = setTimeout(restore, FRAME_TIMEOUT_MS);
 
   // The agent goes in as soon as the frame has a document, and again after
   // every navigation it makes — which is the entire point of the arrangement.
