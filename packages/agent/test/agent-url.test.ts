@@ -14,7 +14,7 @@ import { agentUrl } from '../src/agent-url';
 
 const BASE = 'https://app.test/checkout';
 
-/** What the agent assumes when a URL says nothing: everything on. */
+/** What the agent assumes when a URL says nothing: everything on but hosting. */
 const DEFAULTS: AgentConfig = {
   name: null,
   scriptSrc: 'http://relay.test:7331/agent.js',
@@ -25,7 +25,7 @@ const DEFAULTS: AgentConfig = {
   sessionId: null,
   tabId: null,
   adopt: true,
-  frame: 'host',
+  frame: 'off',
   collect: true,
 };
 const config = (over: Partial<AgentConfig> = {}): AgentConfig => ({ ...DEFAULTS, ...over });
@@ -43,13 +43,13 @@ describe('what always travels', () => {
     assert.equal(got.session, 'sess1', 'the stale session should be replaced, not kept');
   });
 
-  test('hosting travels as the default, so a stale flag is cleared rather than repeated', () => {
-    const hosted = config({ frame: 'host', scriptSrc: 'http://relay.test:7331/agent.js?frame=off' });
-    assert.equal(params(agentUrl(hosted, 'sess1', BASE)).frame, undefined, 'on is the default and needs no parameter');
+  test('hosting off is the default, so a stale frame flag is cleared rather than repeated', () => {
+    const plain = config({ frame: 'off', scriptSrc: 'http://relay.test:7331/agent.js?frame=host' });
+    assert.equal(params(agentUrl(plain, 'sess1', BASE)).frame, undefined, 'off is the default and needs no parameter');
   });
 
-  test('a run with hosting turned off says so, or the next window turns it back on', () => {
-    assert.equal(params(agentUrl(config({ frame: 'off' }), 'sess1', BASE)).frame, 'off');
+  test('a run with hosting turned on says so, or the next window leaves it off', () => {
+    assert.equal(params(agentUrl(config({ frame: 'host' }), 'sess1', BASE)).frame, 'host');
   });
 
   test('a relative script src resolves against the page, not against nothing', () => {
@@ -78,9 +78,9 @@ describe('the run’s choices reach the next window', () => {
     assert.equal(params(agentUrl(config({ name: 'checkout flow' }), 's', BASE)).name, 'checkout flow');
   });
 
-  test('every switch turned off at once, and nothing else', () => {
-    const url = agentUrl(config({ name: 'n', screen: 'viewer', captureBodies: false, collect: false, adopt: false, frame: 'off' }), 'sess1', BASE);
-    assert.deepEqual(params(url), { session: 'sess1', name: 'n', screen: 'viewer', bodies: '0', collect: '0', adopt: '0', frame: 'off' });
+  test('every switch at its non-default at once, and nothing else', () => {
+    const url = agentUrl(config({ name: 'n', screen: 'viewer', captureBodies: false, collect: false, adopt: false, frame: 'host' }), 'sess1', BASE);
+    assert.deepEqual(params(url), { session: 'sess1', name: 'n', screen: 'viewer', bodies: '0', collect: '0', adopt: '0', frame: 'host' });
   });
 
   test('a run with nothing turned off carries only the session', () => {

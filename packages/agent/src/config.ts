@@ -8,9 +8,9 @@
  *        data-screen   "viewer" to stream the DOM only while a Screen tab is
  *                      open; the default records from boot, so History can
  *                      time-travel over the whole run
- *        data-frame    "off" to leave the page where it is; the default puts
- *                      it inside a full-page iframe and keeps the agent in
- *                      the window around it, so navigating does not end the run
+ *        data-frame    "host" to put the app inside a full-page iframe the
+ *                      agent keeps, so navigating does not end the run; the
+ *                      default leaves the page where it is
  *        data-collect  "0" to stop the relay fetching and keeping the files
  *                      the page loads as it loads them
  *        data-mark     the token every trace left in the page is named from;
@@ -60,12 +60,14 @@ export interface AgentConfig {
    */
   adopt: boolean;
   /**
-   * `host`  (default) the top window keeps nothing but a full-page iframe of
-   *         the app, and re-installs the agent into that frame after every
-   *         navigation, so one run spans them. Only possible where the page
-   *         allows itself to be framed — the Webhook tab reads that from its
-   *         headers, and a page that refuses shows nothing at all.
-   * `off`   the agent lives in the page, and a navigation ends the run.
+   * `off`   (default) the agent lives in the page, and a navigation ends the
+   *         run.
+   * `host`  the top window keeps nothing but a full-page iframe of the app,
+   *         and re-installs the agent into that frame after every navigation,
+   *         so one run spans them. Only where the page allows itself to be
+   *         framed — the Webhook tab reads that from its headers — and when no
+   *         agent comes up inside the frame the run carries on in the page
+   *         instead, so turning it on never costs a session.
    */
   frame: 'off' | 'host';
   /**
@@ -121,7 +123,7 @@ export function readConfig(): AgentConfig {
     sessionId: ds.session ?? queryParam(scriptSrc, 'session') ?? null,
     tabId: ds.tab ?? queryParam(scriptSrc, 'tab') ?? null,
     adopt: (ds.adopt ?? injected.adopt ?? queryParam(scriptSrc, 'adopt')) !== '0',
-    frame: (ds.frame ?? injected.frame ?? queryParam(scriptSrc, 'frame')) === 'off' ? 'off' : 'host',
+    frame: (ds.frame ?? injected.frame ?? queryParam(scriptSrc, 'frame')) === 'host' ? 'host' : 'off',
     collect: (ds.collect ?? injected.collect ?? queryParam(scriptSrc, 'collect')) !== '0',
     mark: ds.mark ?? injected.mark ?? queryParam(scriptSrc, 'mark') ?? null,
     pre: injected.pre ?? null,

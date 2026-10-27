@@ -60,7 +60,7 @@ const OPTION_TEXT: Array<{
     // programmers that word is a command line before it is anything else.
     name: "Nest",
     label: "Host the page in an iframe",
-    hint: "Puts the app one level down, in a frame the agent keeps, so navigating no longer ends the run. It changes the page: window.top is not the app, frame-busting code undoes it, and the address bar keeps the first URL. Webhook says whether a page allows framing.",
+    hint: "Off by default. Puts the app one level down, in a frame the agent keeps, so navigating no longer ends the run. It changes the page: window.top is not the app, frame-busting code undoes it, and the address bar keeps the first URL. A page that refuses framing falls back to a single-document run rather than losing the session. Webhook says whether a page allows framing.",
   },
   {
     key: "pre",

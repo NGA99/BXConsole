@@ -37,8 +37,11 @@ export interface Setup extends Options {
  * the tab hands out a bare script tag.
  */
 /**
- * Everything on except the pre-payload, which runs code of its own in
- * someone else's browser and so is never something to arrive switched on.
+ * Everything on except the pre-payload and Nest. The pre-payload runs code of
+ * its own in someone else's browser, so it never arrives switched on. Nesting
+ * rewrites the page it debugs — window.top is no longer the app, frame-busting
+ * undoes it, the address bar freezes — and a page that refuses framing has to
+ * fall back, so it is a choice to make per target rather than a default.
  */
 export const DEFAULTS: Setup = {
   name: "my-app",
@@ -46,7 +49,7 @@ export const DEFAULTS: Setup = {
   record: true,
   bodies: true,
   adopt: true,
-  frame: true,
+  frame: false,
   collect: true,
   pre: false,
 };
@@ -121,11 +124,12 @@ export function paramsFor(setup: Setup): Array<[string, string]> {
   if (!setup.bodies) out.push(["bodies", "0"]);
   if (!setup.adopt) out.push(["adopt", "0"]);
   if (!setup.collect) out.push(["collect", "0"]);
-  if (!setup.frame) out.push(["frame", "off"]);
-  // The exception to the rule above: off is the default here, so this one
-  // appears when it is turned ON. It also only ever travels in the query —
-  // the relay has to see it to know to send the script, and it never sees a
-  // data attribute.
+  // The two exceptions to the rule above, both off by default, so each shows
+  // up when it is turned ON rather than off. Nest (frame) travels like the
+  // others, as a data attribute or a query param. pre only ever travels in
+  // the query — the relay has to see it to know to send the script, and it
+  // never reads a data attribute.
+  if (setup.frame) out.push(["frame", "host"]);
   if (setup.pre) out.push(["pre", "1"]);
   return out;
 }

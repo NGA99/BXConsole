@@ -41,9 +41,10 @@ afterEach(clear);
 const RELAY = 'http://relay.test:7331/agent.js';
 
 describe('the defaults', () => {
-  test('a snippet that says nothing is a run with everything on', () => {
+  test('a snippet that says nothing is a run with everything on but hosting', () => {
     // Which is why the Agent tab's default snippet is a bare script tag: a
-    // parameter should mean "this run is not the usual one".
+    // parameter should mean "this run is not the usual one". Hosting is the
+    // exception — off by default, because it rewrites the page it debugs.
     page({ src: RELAY });
     const c = readConfig();
     assert.equal(c.name, null);
@@ -51,7 +52,7 @@ describe('the defaults', () => {
     assert.equal(c.adopt, true);
     assert.equal(c.collect, true);
     assert.equal(c.screen, 'record');
-    assert.equal(c.frame, 'host');
+    assert.equal(c.frame, 'off');
   });
 
   test('the relay address is derived from where the script came from', () => {
@@ -71,15 +72,16 @@ describe('the defaults', () => {
 });
 
 describe('data-* on the script tag', () => {
-  test('each switch can be turned off', () => {
-    page({ src: RELAY, data: { name: 'checkout', bodies: '0', adopt: '0', collect: '0', screen: 'viewer', frame: 'off' } });
+  test('each switch is read from its data attribute', () => {
+    // Everything off, and hosting — the one that is off by default — on.
+    page({ src: RELAY, data: { name: 'checkout', bodies: '0', adopt: '0', collect: '0', screen: 'viewer', frame: 'host' } });
     const c = readConfig();
     assert.equal(c.name, 'checkout');
     assert.equal(c.captureBodies, false);
     assert.equal(c.adopt, false);
     assert.equal(c.collect, false);
     assert.equal(c.screen, 'viewer');
-    assert.equal(c.frame, 'off');
+    assert.equal(c.frame, 'host');
   });
 
   test('only the exact off value turns something off', () => {
@@ -94,11 +96,14 @@ describe('data-* on the script tag', () => {
     }
   });
 
-  test('only the exact off value turns the costly ones off', () => {
-    for (const v of ['0', 'false', 'no', 'record', 'host', '']) {
+  test('only the exact magic value flips the page-changing ones', () => {
+    // Recording stops only on "viewer" and hosting starts only on "host"; a
+    // guessed spelling leaves both at their default rather than silently
+    // changing the page or dropping the DOM stream.
+    for (const v of ['0', 'false', 'no', 'record', 'on', 'HOST', '']) {
       page({ src: RELAY, data: { screen: v, frame: v } });
       assert.equal(readConfig().screen, 'record', `screen=${v}`);
-      assert.equal(readConfig().frame, 'host', `frame=${v}`);
+      assert.equal(readConfig().frame, 'off', `frame=${v}`);
     }
   });
 });

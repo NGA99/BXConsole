@@ -25,16 +25,17 @@ export function agentUrl(config: AgentConfig, sessionId: string, base: string): 
     u.searchParams.set('session', sessionId);
     if (config.name) u.searchParams.set('name', config.name);
     else u.searchParams.delete('name');
-    // The rest of the run's choices. Every one of these is on unless turned
-    // off, so only the off-switches travel and the URL stays readable.
+    // The rest of the run's choices. These are on unless turned off, so only
+    // the off-switches travel and the URL stays readable — hosting below is
+    // the one that is off by default and travels when on.
     setFlag(u, 'screen', config.screen !== 'record', 'viewer');
     setFlag(u, 'bodies', !config.captureBodies, '0');
     setFlag(u, 'collect', !config.collect, '0');
     setFlag(u, 'adopt', !config.adopt, '0');
-    // Hosting travels too. A window this one opened is itself a top window,
-    // so it wraps its own page and its own navigations stay in the run; a run
-    // with hosting off must say so, or the new window would switch it back on.
-    setFlag(u, 'frame', config.frame !== 'host', 'off');
+    // Hosting travels too, but as an on-switch: it is off by default, so a run
+    // that turned it on must say so, or a window this one opened would default
+    // back to off and leave its own navigations out of the run.
+    setFlag(u, 'frame', config.frame === 'host', 'host');
     // Every window of a run must leave the same trace, or the page can tell
     // the windows apart by how they were marked.
     if (config.mark) u.searchParams.set('mark', config.mark);

@@ -27,7 +27,7 @@ function fakeStorage(seed: Record<string, string> = {}) {
  * the same as the tab. So a run with nothing turned off needs no parameters,
  * and the snippet is a bare script tag.
  */
-const AGENT_DEFAULTS: Omit<Setup, 'name'> = { record: true, bodies: true, adopt: true, frame: true, collect: true, pre: false, key: '' };
+const AGENT_DEFAULTS: Omit<Setup, 'name'> = { record: true, bodies: true, adopt: true, frame: false, collect: true, pre: false, key: '' };
 const asAgent = (over: Partial<Setup> = {}): Setup => ({ name: 'my-app', ...AGENT_DEFAULTS, ...over });
 /** A project key is 16 bytes of hex; the value does not matter here, the shape does. */
 const KEY = 'a'.repeat(32);
@@ -47,19 +47,19 @@ describe('the choices', () => {
   test('only the switches that are off are spelled out', () => {
     // A parameter should mean "this run is not the usual one", so reading a
     // snippet tells you what the person chose rather than restating defaults.
-    assert.deepEqual(paramsFor(asAgent({ record: false, bodies: false, adopt: false, frame: false, collect: false })), [
+    assert.deepEqual(paramsFor(asAgent({ record: false, bodies: false, adopt: false, collect: false })), [
       ['name', 'my-app'],
       ['screen', 'viewer'],
       ['bodies', '0'],
       ['adopt', '0'],
       ['collect', '0'],
-      ['frame', 'off'],
     ]);
   });
 
-  test('one switch off names that one and no others', () => {
-    assert.deepEqual(paramsFor(asAgent({ frame: false })), [['name', 'my-app'], ['frame', 'off']]);
+  test('one switch changed names that one and no others', () => {
     assert.deepEqual(paramsFor(asAgent({ bodies: false })), [['name', 'my-app'], ['bodies', '0']]);
+    // Nest is off by default, so it is the one that names itself when turned on.
+    assert.deepEqual(paramsFor(asAgent({ frame: true })), [['name', 'my-app'], ['frame', 'host']]);
   });
 
   test('an empty name is left out rather than sent as empty', () => {
@@ -76,11 +76,11 @@ describe('the choices', () => {
 
 describe('the snippets', () => {
   test('every form carries the same choices', () => {
-    const chosen = asAgent({ name: 'checkout', record: false, frame: false });
+    const chosen = asAgent({ name: 'checkout', record: false, frame: true });
     for (const s of snippetsFor(chosen, ORIGIN)) {
       assert.match(s.code, /checkout/, `${s.id} lost the name`);
       assert.match(s.code, /viewer/, `${s.id} lost the screen option`);
-      assert.match(s.code, /off/, `${s.id} lost the frame option`);
+      assert.match(s.code, /host/, `${s.id} lost the frame option`);
       assert.match(s.code, new RegExp(ORIGIN.replace(/[.:/]/g, '\\$&')), `${s.id} lost the relay`);
     }
   });
@@ -175,18 +175,19 @@ describe('remembering the setup', () => {
 
 describe('every parameter a snippet can emit is one the agent reads', () => {
   test('nothing the tab writes is dropped on the way', () => {
-    // The gap that let `frame=off` be ignored: the console wrote a name the
-    // relay did not forward, and the only symptom was an option that quietly
-    // did nothing in every snippet except the script tag.
-    const allOff: Setup = { name: 'n', record: false, bodies: false, adopt: false, frame: false, collect: false, pre: false };
-    for (const [key] of paramsFor(allOff)) {
+    // The gap that let the frame option be ignored: the console wrote a name
+    // the relay did not forward, and the only symptom was an option that
+    // quietly did nothing in every snippet except the script tag. Every switch
+    // at its non-default — frame on, the rest off — so each one has to travel.
+    const nonDefault: Setup = { name: 'n', record: false, bodies: false, adopt: false, frame: true, collect: false, pre: false, key: '' };
+    for (const [key] of paramsFor(nonDefault)) {
       assert.ok((AGENT_PARAMS as readonly string[]).includes(key), `the agent does not read "${key}"`);
     }
   });
 
   test('and every switch is represented, so none is unreachable', () => {
-    const allOff: Setup = { name: 'n', record: false, bodies: false, adopt: false, frame: false, collect: false, pre: false };
-    const written = paramsFor(allOff).map(([k]) => k);
+    const nonDefault: Setup = { name: 'n', record: false, bodies: false, adopt: false, frame: true, collect: false, pre: false, key: '' };
+    const written = paramsFor(nonDefault).map(([k]) => k);
     assert.deepEqual(written.sort(), ['adopt', 'bodies', 'collect', 'frame', 'name', 'screen']);
   });
 });
