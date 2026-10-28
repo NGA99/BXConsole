@@ -13,7 +13,7 @@
 }
 .projects-empty,
 .project-note {
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   color: var(--sys-color-token-subtle);
 }
 .projects-empty {
@@ -34,7 +34,7 @@
 }
 .projects-new-title {
   margin: 0 0 8px;
-  font-size: 12px;
+  font-size: var(--ui-font-size);
   font-weight: 600;
   color: var(--sys-color-on-surface);
 }
@@ -117,7 +117,7 @@
 }
 .project-name {
   font: inherit;
-  font-size: 12px;
+  font-size: var(--ui-font-size);
   font-weight: 500;
   color: var(--sys-color-on-surface);
   background: transparent;
@@ -138,7 +138,7 @@
   flex: 1;
 }
 .project-count {
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   color: var(--sys-color-token-subtle);
   white-space: nowrap;
 }
@@ -151,13 +151,13 @@
   display: flex;
   align-items: center;
   gap: 7px;
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
 }
 .project-key-label {
   color: var(--sys-color-token-subtle);
 }
 .project-key code {
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   color: var(--sys-color-on-surface);
   background: var(--sys-color-surface2);
   border-radius: var(--radius-sm);

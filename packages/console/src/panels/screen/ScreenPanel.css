@@ -104,7 +104,7 @@
   background: transparent;
   color: var(--sys-color-on-surface-subtle);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   height: 18px;
   padding: 0 7px;
   cursor: default;
@@ -209,7 +209,7 @@
   padding: 1px 6px;
   background: #1f1f1f;
   color: #fff;
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   white-space: nowrap;
   border-radius: var(--radius-xs);
 }

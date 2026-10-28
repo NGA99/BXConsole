@@ -18,7 +18,7 @@
   margin-right: 2px;
   flex-shrink: 0;
   color: var(--sys-color-token-subtle);
-  font-size: 9px;
+  font-size: var(--ui-font-size-micro);
 }
 .otree-arrow::before {
   content: '▶';

@@ -92,7 +92,7 @@ html:not([data-theme='light']) .hist-body {
   background: transparent;
   color: var(--sys-color-token-subtle);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -131,7 +131,7 @@ html:not([data-theme='light']) .hist-body {
   background: transparent;
   color: var(--sys-color-on-surface);
   font: inherit;
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   cursor: pointer;
   white-space: nowrap;
 }
@@ -147,7 +147,7 @@ html:not([data-theme='light']) .hist-body {
 
 .hist-status {
   color: var(--sys-color-token-subtle);
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   white-space: nowrap;
   padding-right: 4px;
 }
@@ -179,7 +179,7 @@ html:not([data-theme='light']) .hist-body {
   gap: 5px;
   height: 22px;
   padding: 0 6px;
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   color: var(--sys-color-on-surface-subtle);
   white-space: nowrap;
   overflow: hidden;
@@ -212,7 +212,7 @@ html:not([data-theme='light']) .hist-body {
   top: 2px;
   transform: translateX(-100%);
   padding-right: 3px;
-  font-size: 10px;
+  font-size: var(--ui-font-size-tiny);
   color: var(--sys-color-token-subtle);
   border-right: 1px solid var(--sys-color-divider);
   line-height: 12px;
@@ -486,7 +486,7 @@ html:not([data-theme='light']) .hist-body {
   border: 1px solid var(--sys-color-divider);
   border-radius: var(--radius-xs);
   line-height: 13px;
-  font-size: 10px;
+  font-size: var(--ui-font-size-tiny);
   cursor: pointer;
   align-self: center;
 }
@@ -519,7 +519,7 @@ html:not([data-theme='light']) .hist-body {
   justify-content: center;
   border: none;
   border-radius: var(--radius-xs);
-  font-size: 9px;
+  font-size: var(--ui-font-size-micro);
   line-height: 1;
   cursor: pointer;
   color: var(--sys-color-cdt-base-container);

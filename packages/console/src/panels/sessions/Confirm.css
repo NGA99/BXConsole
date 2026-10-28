@@ -4,7 +4,7 @@
   align-items: center;
   flex-wrap: wrap;
   gap: 7px;
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   color: var(--sys-color-error);
   border: 1px solid var(--sys-color-error);
   border-radius: var(--radius-sm);

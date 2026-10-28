@@ -63,7 +63,7 @@
 }
 .diag-method {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   color: var(--sys-color-primary-bright);
 }
 .diag-req-probe {
@@ -74,7 +74,7 @@
 }
 .diag-req-sub {
   color: var(--sys-color-token-subtle);
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   margin-top: 1px;
 }
 

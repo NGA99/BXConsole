@@ -31,7 +31,7 @@
    is named, not offered as a control — darker than the links around it and a
    touch heavier, the same weight the dropdown here used to carry. */
 .projectbar-current {
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   font-weight: 500;
   color: var(--sys-color-on-surface);
 }
@@ -58,7 +58,7 @@
   border-bottom: 1px solid var(--sys-color-divider);
   background: color-mix(in srgb, var(--sys-color-error) 9%, transparent);
   color: var(--sys-color-on-surface);
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
 }
 .projectbar-lost strong {
   font-weight: 500;

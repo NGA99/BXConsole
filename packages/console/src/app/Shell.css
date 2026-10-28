@@ -40,7 +40,7 @@
   flex: 1;
 }
 .relay-status {
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   color: var(--sys-color-token-subtle);
 }
 .relay-status.on {
@@ -124,7 +124,7 @@
   align-items: center;
   gap: 8px;
   padding: 0 10px;
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   cursor: default;
 }
 .issue-badge {
@@ -145,7 +145,7 @@
 /* Right of the title row: the accounts screen, and who is signed in. */
 .topbar-link {
   font: inherit;
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   color: var(--sys-color-primary);
   background: none;
   border: none;
@@ -158,7 +158,7 @@
   background: var(--sys-color-state-hover-on-subtle);
 }
 .topbar-who {
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   color: var(--sys-color-token-subtle);
   margin-right: 10px;
   white-space: nowrap;
@@ -174,14 +174,14 @@
  */
 .topbar-sep {
   color: var(--sys-color-token-subtle);
-  font-size: 12px;
+  font-size: var(--ui-font-size);
   flex-shrink: 0;
 }
 .topbar-crumb {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  font-size: 12px;
+  font-size: var(--ui-font-size);
   color: var(--sys-color-on-surface);
   white-space: nowrap;
   overflow: hidden;
@@ -191,7 +191,7 @@
 
 /* The selected window's own title, when its tab was too narrow to hold it. */
 .topbar-detail {
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   color: var(--sys-color-on-surface);
   white-space: nowrap;
   overflow: hidden;
@@ -206,7 +206,7 @@
  * better handle and this is the longest thing on the line.
  */
 .topbar-url {
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   color: var(--sys-color-token-subtle);
   white-space: nowrap;
   overflow: hidden;

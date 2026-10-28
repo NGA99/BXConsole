@@ -110,7 +110,7 @@
 .datagrid .cell-sub {
   display: block;
   color: var(--sys-color-token-subtle);
-  font-size: 10px;
+  font-size: var(--ui-font-size-tiny);
   line-height: 14px;
   white-space: nowrap;
   overflow: hidden;

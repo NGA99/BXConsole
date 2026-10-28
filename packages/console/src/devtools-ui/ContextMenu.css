@@ -34,7 +34,7 @@
 .context-menu-check {
   display: inline-block;
   width: 12px;
-  font-size: 10px;
+  font-size: var(--ui-font-size-tiny);
 }
 .context-menu-sep {
   height: 1px;

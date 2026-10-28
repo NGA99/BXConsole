@@ -58,7 +58,7 @@
 .console-sidebar-head {
   padding: 6px 12px 2px;
   color: var(--sys-color-token-subtle);
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
 }
 .console-sidebar-count {
   color: var(--sys-color-token-subtle);
@@ -126,7 +126,7 @@
 }
 .console-hidden-count {
   color: var(--sys-color-token-subtle);
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   padding: 0 6px;
 }
 
@@ -205,7 +205,7 @@
   height: 14px;
   padding: 0 4px;
   border-radius: var(--radius-pill);
-  font-size: 10px;
+  font-size: var(--ui-font-size-tiny);
   line-height: 14px;
   text-align: center;
   color: #fff;
@@ -319,7 +319,7 @@
   white-space: nowrap;
 }
 .level-menu-caret {
-  font-size: 9px;
+  font-size: var(--ui-font-size-micro);
   margin-left: 2px;
 }
 /*

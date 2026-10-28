@@ -51,7 +51,7 @@
   display: inline-block;
   width: 12px;
   color: var(--sys-color-token-subtle);
-  font-size: 9px;
+  font-size: var(--ui-font-size-micro);
 }
 .dom-arrow::before {
   content: '▶';
@@ -152,7 +152,7 @@
 .styles-source {
   margin-left: auto;
   color: var(--sys-color-token-subtle);
-  font-size: 10px;
+  font-size: var(--ui-font-size-tiny);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -208,7 +208,7 @@
   display: flex;
   justify-content: center;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: var(--ui-font-size-tiny);
 }
 .boxmodel-layer {
   position: relative;

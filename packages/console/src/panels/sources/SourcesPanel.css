@@ -52,7 +52,7 @@
   width: 10px;
   flex-shrink: 0;
   color: var(--sys-color-token-subtle);
-  font-size: 9px;
+  font-size: var(--ui-font-size-micro);
 }
 .sources-arrow::before {
   content: '▶';
@@ -70,7 +70,7 @@
 .sources-kind {
   flex-shrink: 0;
   width: 24px;
-  font-size: 9px;
+  font-size: var(--ui-font-size-micro);
   font-weight: bold;
   text-align: center;
   border-radius: var(--radius-xs);

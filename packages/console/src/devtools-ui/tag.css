@@ -21,7 +21,7 @@
   border: 1px solid var(--sys-color-neutral-outline);
   border-radius: var(--radius-pill);
   padding: 0 6px;
-  font-size: 10px;
+  font-size: var(--ui-font-size-tiny);
   line-height: 14px;
   color: var(--sys-color-token-subtle);
   white-space: nowrap;

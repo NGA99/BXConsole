@@ -49,7 +49,22 @@
 
   --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: Menlo, Monaco, Consolas, 'Courier New', monospace;
+  /*
+   * Four sizes of UI text, named.
+   *
+   * They were already four — 12, 11, 10 and 9 — written as numbers in 65
+   * places, which is why a label on one screen was 11px and the same label
+   * on another was 10. Nothing here changes a size; it gives the four the
+   * names they were being used under, so the next change to one of them is
+   * one line rather than a search.
+   *
+   * `--mono-font-size` stays what it was: the size code is set in, which
+   * happens to equal `small` and does not have to.
+   */
   --ui-font-size: 12px;
+  --ui-font-size-small: 11px;
+  --ui-font-size-tiny: 10px;
+  --ui-font-size-micro: 9px;
   --mono-font-size: 11px;
   --tabbar-height: 27px;
 

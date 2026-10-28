@@ -87,7 +87,7 @@
 }
 
 .chrome-url {
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -121,7 +121,7 @@
   flex: 0 0 auto;
   margin-left: auto;
   padding-left: 10px;
-  font-size: 10px;
+  font-size: var(--ui-font-size-tiny);
   letter-spacing: 0.02em;
   color: var(--sys-color-green);
   white-space: nowrap;

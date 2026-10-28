@@ -140,7 +140,7 @@
   min-width: 2.5em;
   opacity: 0.6;
   /* One step under the title, which is the strip's size. */
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
 }
 
 /*
@@ -166,7 +166,7 @@
   border-radius: var(--radius-pill);
   background: var(--sys-color-state-hover-on-subtle);
   color: var(--sys-color-token-subtle);
-  font-size: 10px;
+  font-size: var(--ui-font-size-tiny);
   font-variant-numeric: tabular-nums;
 }
 

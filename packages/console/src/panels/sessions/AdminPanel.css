@@ -15,14 +15,14 @@
   padding-bottom: 18px;
 }
 .admin-section h2 {
-  font-size: 12px;
+  font-size: var(--ui-font-size);
   font-weight: 500;
   color: var(--sys-color-on-surface);
   margin: 0 0 2px;
 }
 .admin-sub,
 .admin-empty {
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   color: var(--sys-color-token-subtle);
   margin: 0 0 8px;
   max-width: 68ch;
@@ -36,7 +36,7 @@
   display: flex;
   align-items: center;
   gap: 10px;
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   color: var(--sys-color-error);
   border: 1px solid var(--sys-color-error);
   border-radius: var(--radius-xs);
@@ -46,7 +46,7 @@
 
 .admin-table {
   border-collapse: collapse;
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   width: 100%;
   max-width: 760px;
 }
@@ -65,7 +65,7 @@
 }
 .admin-table select {
   font: inherit;
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   color: var(--sys-color-on-surface);
   background: var(--sys-color-cdt-base-container);
   border: 1px solid var(--sys-color-neutral-outline);
@@ -116,7 +116,7 @@
 }
 .admin-add select {
   font: inherit;
-  font-size: 11px;
+  font-size: var(--ui-font-size-small);
   color: var(--sys-color-on-surface);
   background: var(--sys-color-cdt-base-container);
   border: 1px solid var(--sys-color-neutral-outline);
