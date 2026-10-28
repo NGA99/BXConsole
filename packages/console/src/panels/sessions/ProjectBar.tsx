@@ -1,127 +1,19 @@
 /**
- * Where you are, and the way back out.
+ * Where you are, said on the title row — and the notice when it goes away.
  *
- * Projects are a level above Sessions, Webhook, Trash and Agent — those four
- * are all about one project, and this says which. It used to be a switcher
- * beside a Projects tab, which gave two ways to change project and no sense
- * of being inside one; it reads as a path now, with the list at its root.
- *
- * There is no project switcher in the path. The one that was here — a
- * dropdown on the current crumb — was a second door onto the Projects list,
- * which the root a click to the left already opens, and which shows every
- * project's counts besides. A breadcrumb switches nothing: its last crumb is
- * where you stand, and its earlier ones are the way back out.
+ * The bar this file is named after is gone. It drew `Projects / NC` and then
+ * `Projects | Sessions` and then the windows, each screen a slightly
+ * different row, which is the drift ProjectTabs exists to end: the tabs are
+ * one row built once, the windows are the browser block's, and what is left
+ * here is the project's name beside the console's, who is signed in, and the
+ * one thing that has to interrupt.
  */
-import { useProjectsStore, selectProject } from '../../state/projects';
+import { useProjectsStore } from '../../state/projects';
 import { useSessionList } from '../../state/sessions';
 import { useAccount, useIsAdmin } from '../../state/whoami';
-import { navigateToView, type PanelId, type SessionView } from '../../app/router';
-import { projectCounts, describeCount } from './project-counts';
+import { navigateToView, type SessionView } from '../../app/router';
 import { plain } from '../../devtools-ui/plain-text';
-import '../../devtools-ui/strip.css';
 import './ProjectBar.css';
-
-/** Which of the three things is on screen, which is not always the route. */
-export type Showing = 'projects' | 'admin' | 'inside';
-
-/**
- * @param session  the run being read, when one is open. A session is inside a
- *                 project, so it belongs at the end of this path — it used to
- *                 sit up in the title bar instead, which left the path
- *                 stopping at the project while the thing you were actually
- *                 looking at was named a row above it.
- */
-export function ProjectBar({ showing, session }: { showing: Showing; session?: { id: string; panel: PanelId } }) {
-  const { byId, homeId, selectedId } = useProjectsStore();
-  const sessions = useSessionList();
-  const inside = showing === 'inside';
-  /*
-   * Which project the path is about.
-   *
-   * With a session open that is the project the run is in, not whichever one
-   * the list was last left on: those differ as soon as somebody opens a
-   * session from the picker and it belongs somewhere else, and a path that
-   * named the wrong project would be worse than no path.
-   */
-  const open = session ? sessions.find((s) => s.sessionId === session.id) : undefined;
-  const currentId = session ? open?.projectId ?? homeId : selectedId;
-  const current = currentId ? byId[currentId] : undefined;
-
-  const counts = projectCounts(sessions, homeId);
-
-  const label = (id: string): string => {
-    const project = byId[id];
-    if (!project) return id;
-    const both = describeCount(counts.get(id));
-    const trashed = project.trashedAt !== undefined ? ' — in the trash' : '';
-    return `${project.name}${both ? ` (${both})` : ''}${trashed}`;
-  };
-
-  return (
-    <>
-      <LostNotice />
-      <div className="projectbar strip">
-      {/*
-        * In the session list the tab row carries this instead, so it is not
-        * drawn twice; there it sits among the tabs, which is where people
-        * look. Here it is still the only way out.
-        */}
-      {!(showing === 'inside' && !session) && (
-        <button
-          className={`strip-item${showing === 'projects' ? ' selected' : ''}`}
-          title="Every project you can read"
-          onClick={() => navigateToView('projects')}
-        >
-          Projects
-        </button>
-      )}
-
-      {/* Only inside one. On the list itself there is no "where you are" to
-          say, and a name beside the root would read as a second heading. */}
-      {inside && current && currentId && (
-        <>
-          {/*
-            * Inside a session this is the way back to the list you came from,
-            * so it is named after that list rather than after the project. A
-            * project name is as long as whoever made it — one here reads
-            * "NC / Do not delete! (3 recorded)", whose own slash made the row
-            * look like four levels instead of three. The name is still on the
-            * button, to be read by hovering.
-            */}
-          {session ? (
-            <button
-              className="strip-item"
-              title={`${label(currentId)}\nThe runs in this project`}
-              onClick={() => {
-                selectProject(currentId);
-                navigateToView('sessions');
-              }}
-            >
-              Sessions
-            </button>
-          ) : (
-            // The list view: this is where you already are, so the crumb
-            // names the project without offering to switch it. A dropdown
-            // used to sit here; it only reopened the Projects list, which the
-            // root to the left already does.
-            <span className="projectbar-name projectbar-current" title="The project these tabs are about">
-              {label(currentId)}
-            </span>
-          )}
-        </>
-      )}
-
-      {/*
-        * The windows are not here. They are the tab row of the browser block
-        * below this strip (BrowserChrome), where they sit above the address
-        * of the one selected and read as what they are. This strip stays the
-        * ways out, and keeps its place whether a run is open or not.
-        */}
-      <div className="strip-spacer" />
-      </div>
-    </>
-  );
-}
 
 /**
  * The project you were reading is not yours to read any more.

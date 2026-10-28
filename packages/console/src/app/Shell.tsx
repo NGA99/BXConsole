@@ -29,7 +29,8 @@ import { BrowserChrome } from './BrowserChrome';
 import { useActiveTab } from '../state/active-tab';
 import { SessionContext } from './session-context';
 import { ScreenPanel } from '../panels/screen/ScreenPanel';
-import { ProjectBar, TopBarProject, TopBarAccount } from '../panels/sessions/ProjectBar';
+import { LostNotice, TopBarProject, TopBarAccount } from '../panels/sessions/ProjectBar';
+import { ProjectTabs } from '../panels/sessions/ProjectTabs';
 import { useSessionsStore } from '../state/sessions';
 import { subscribeSession } from '../transport/client';
 import { ContextMenu } from '../devtools-ui/ContextMenu';
@@ -334,7 +335,10 @@ export function Shell({ route }: { route: Route }) {
         <TopBarProject sessionId={sessionId} />
         <SessionLabel sessionId={sessionId} />
       </TopBar>
-      <ProjectBar showing="inside" session={{ id: sessionId, panel: route.panel }} />
+      {/* The same row as every list screen, and live: a run is inside a
+          project, so all four of its tabs have something to be about. */}
+      <LostNotice />
+      <ProjectTabs active={null} sessionId={sessionId} />
       {/* Below the strip, so opening a window never moves the rows above it. */}
       <BrowserChrome sessionId={sessionId} />
       {screenCollapsed ? (

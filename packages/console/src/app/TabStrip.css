@@ -87,9 +87,15 @@
   font-weight: 500;
 }
 
+/*
+ * A window that has closed. Dimmed, and nothing more.
+ *
+ * It was struck through as well, which put a line across the one thing the
+ * tab is there to be read by. The grey dot beside it already says the window
+ * is gone, and so does the address bar under the strip, in a word.
+ */
 .tabstrip-tab.gone .tabstrip-label {
   opacity: 0.6;
-  text-decoration: line-through;
 }
 
 .tabstrip-dot {

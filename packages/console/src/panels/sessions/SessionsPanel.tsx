@@ -16,7 +16,7 @@ import { forgetSession, trashSession, restoreSession } from '../../transport/cli
 import { navigate, navigateToView, type SessionView } from '../../app/router';
 import { absoluteTimestamp, fullTimestamp } from '../../devtools-ui/time';
 import { Toolbar, ToolbarButton, ToolbarDivider, ToolbarInput } from '../../devtools-ui/Toolbar';
-import { TabBar } from '../../devtools-ui/TabBar';
+import { ProjectTabs } from './ProjectTabs';
 import { AgentPanel } from './AgentPanel';
 import { WebhookPanel } from './WebhookPanel';
 import { LostNotice } from './ProjectBar';
@@ -77,56 +77,12 @@ export function SessionsPanel({ view }: { view: SessionView }) {
    * connection would be worse than waiting.
    */
   const nothingToBeIn = inside && projectsLoaded && order.length === 0;
-  // The Projects screen is also what shows when there is no project to be in.
-  const atProjects = view === 'projects' || nothingToBeIn;
 
   return (
     <>
       <LostNotice />
-      {/*
-        * One strip on every screen of the list, so the way up does not change
-        * shape as you move. Projects is a tab like the four beside it — it
-        * takes the selected underline when its screen is the one showing,
-        * which is what makes it a tab rather than a button wearing a tab's
-        * clothes. The divider is all that marks it as the level above.
-        */}
-      <TabBar
-        tabs={
-          inside && !nothingToBeIn
-            ? [
-                { id: 'sessions', label: live > 0 ? `Sessions (${live} live)` : 'Sessions' },
-                { id: 'webhook', label: 'Webhook' },
-                { id: 'trash', label: trashed.length > 0 ? `Trash (${trashed.length})` : 'Trash' },
-                { id: 'agent', label: 'Agent' },
-              ]
-            : []
-        }
-          active={view}
-          onSelect={setView}
-          /*
-           * The way out sits in the tab row, divided off from it.
-           *
-           * It was a blue word in the thin row above, and QA rounds showed
-           * people scanning the tabs and reading that row as decoration. A
-           * tab is what they look at, so this is shaped like one — but it
-           * leaves the project rather than choosing a view inside it, so it
-           * keeps the arrow, the border and the divider, and never takes the
-           * selected underline the four beside it use.
-           */
-          leading={
-            <div className="strip-leading">
-              <button
-                className={`strip-item${atProjects ? ' selected' : ''}`}
-                role="tab"
-                aria-selected={atProjects}
-                title="Every project you can read"
-                onClick={() => setView('projects')}
-              >
-                Projects
-              </button>
-            </div>
-          }
-        />
+      {/* The same row every screen draws; see ProjectTabs for why it is one. */}
+      <ProjectTabs active={view} />
       {nothingToBeIn ? (
         <ProjectsPanel />
       ) : view === 'webhook' ? (
