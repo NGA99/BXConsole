@@ -7,16 +7,10 @@
   font-size: 11px;
   color: var(--sys-color-error);
   border: 1px solid var(--sys-color-error);
-  border-radius: 2px;
+  border-radius: var(--radius-sm);
   padding: 5px 7px;
 }
-.confirm input {
-  font: inherit;
-  font-size: 11px;
-  color: var(--sys-color-on-surface);
-  background: var(--sys-color-cdt-base-container);
-  border: 1px solid var(--sys-color-neutral-outline);
-  border-radius: 2px;
-  padding: 1px 4px;
+/* The shared field (field.css), narrowed: a project's name is short. */
+.confirm .field {
   width: 160px;
 }

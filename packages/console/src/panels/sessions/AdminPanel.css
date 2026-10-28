@@ -90,7 +90,7 @@
 
 .admin-tag {
   border: 1px solid var(--sys-color-neutral-outline);
-  border-radius: 7px;
+  border-radius: var(--radius-pill);
   padding: 0 5px;
   margin-left: 6px;
   font-size: 10px;
@@ -114,15 +114,6 @@
   padding: 5px 0;
 }
 .admin-add input,
-.admin-reset input {
-  font: inherit;
-  font-size: 11px;
-  color: var(--sys-color-on-surface);
-  background: var(--sys-color-cdt-base-container);
-  border: 1px solid var(--sys-color-neutral-outline);
-  border-radius: 2px;
-  padding: 2px 4px;
-}
 .admin-add input:first-child {
   width: 140px;
 }

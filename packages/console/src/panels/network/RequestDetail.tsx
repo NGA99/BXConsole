@@ -483,7 +483,7 @@ function MessagesTab({ entry }: { entry: NetworkEntry }) {
   return (
     <div className="ws-messages">
       <div className="detail-bar">
-        <input className="toolbar-input" placeholder="Filter messages" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <input className="field toolbar-input" placeholder="Filter messages" value={filter} onChange={(e) => setFilter(e.target.value)} />
         <span className="detail-note">
           {entry.frames?.length ?? 0} messages{entry.closed ? ` · closed ${entry.closed.code}${entry.closed.reason ? ` ${entry.closed.reason}` : ''}` : ''}
         </span>

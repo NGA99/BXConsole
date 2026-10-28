@@ -119,6 +119,7 @@ export function AgentPanel({ onDiagnose }: { onDiagnose?: () => void }) {
         <label className="install-name">
           Session name{" "}
           <input
+            className="field"
             value={setup.name}
             onChange={(e) => setSetup({ name: e.target.value })}
             spellCheck={false}

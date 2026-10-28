@@ -14,7 +14,7 @@ export function ComputedPane({ styles }: { styles: ElementStyles | null }) {
   return (
     <div className="styles-pane">
       <div className="styles-filter">
-        <input className="toolbar-input" placeholder="Filter" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <input className="field toolbar-input" placeholder="Filter" value={filter} onChange={(e) => setFilter(e.target.value)} />
         <span className="detail-note">{list.length} properties</span>
       </div>
       <div className="styles-list mono">

@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import { App } from './App';
 import { connect } from './transport/client';
 import './devtools-ui/theme.css';
+import './devtools-ui/field.css';
 
 connect();
 

@@ -46,7 +46,7 @@ export function ToolbarInput({
   return (
     <input
       ref={inputRef}
-      className="toolbar-input"
+      className="field toolbar-input"
       placeholder={placeholder}
       value={value}
       onChange={(e) => onChange(e.target.value)}

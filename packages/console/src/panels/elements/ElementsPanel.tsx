@@ -161,7 +161,7 @@ export function ElementsPanel({ sessionId }: { sessionId: string }) {
         <div className="elements-main">
           <Toolbar>
             <input
-              className="toolbar-input"
+              className="field toolbar-input"
               data-find=""
               placeholder="Find by string, tag, id or class"
               value={find}

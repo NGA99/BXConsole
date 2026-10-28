@@ -111,6 +111,7 @@ export function ProjectsPanel() {
         <h2 className="projects-new-title">New project</h2>
         <div className="projects-new-row">
           <input
+            className="field roomy"
             ref={nameRef}
             value={making}
             placeholder="Name it after the engagement"

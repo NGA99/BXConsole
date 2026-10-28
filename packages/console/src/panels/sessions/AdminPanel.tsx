@@ -112,6 +112,7 @@ function Accounts({ accounts, loaded, meId }: { accounts: AccountSummary[]; load
 
       <div className="admin-add">
         <input
+          className="field"
           value={user}
           placeholder="name"
           spellCheck={false}
@@ -122,6 +123,7 @@ function Accounts({ accounts, loaded, meId }: { accounts: AccountSummary[]; load
             somebody else's first password needs to read back what they are
             about to pass on, and a masked box makes that a guess. */}
         <input
+          className="field"
           value={password}
           placeholder={`password (${PASSWORD_MIN_LENGTH}+ characters)`}
           spellCheck={false}
@@ -204,6 +206,7 @@ function AccountRow({
         <tr>
           <td colSpan={4} className="admin-reset">
             <input
+              className="field"
               autoFocus
               value={password}
               placeholder={`new password for ${account.user} (${PASSWORD_MIN_LENGTH}+ characters)`}

@@ -89,17 +89,7 @@
   background: var(--sys-color-divider);
   margin: 0 4px;
 }
+/* The shared field (field.css), plus the width a toolbar gives it. */
 .toolbar-input {
-  font: inherit;
-  height: 20px;
-  padding: 0 6px;
-  border: 1px solid var(--sys-color-neutral-outline);
-  border-radius: 4px;
-  background: var(--sys-color-surface);
-  color: var(--sys-color-on-surface);
   width: 200px;
-}
-.toolbar-input:focus {
-  outline: none;
-  border-color: var(--sys-color-primary-bright);
 }

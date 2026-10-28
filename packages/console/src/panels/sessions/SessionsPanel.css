@@ -319,7 +319,7 @@
  */
 .install-key {
   border: 1px solid var(--sys-color-divider);
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   padding: 8px 10px;
   margin-bottom: 10px;
   background: var(--sys-color-surface1);
@@ -361,15 +361,9 @@
   flex: 1 1 0;
   min-width: 0;
 }
+/* The shared field (field.css); it shrinks with the row it is in. */
 .install-name input {
-  font: inherit;
-  height: 20px;
   min-width: 0;
-  padding: 0 6px;
-  border: 1px solid var(--sys-color-neutral-outline);
-  border-radius: 4px;
-  background: var(--sys-color-surface);
-  color: var(--sys-color-on-surface);
   width: 160px;
 }
 .install-snippet {

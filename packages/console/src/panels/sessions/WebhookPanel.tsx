@@ -164,7 +164,7 @@ export function WebhookPanel() {
             </button>
           </span>
         </div>
-        <input className="toolbar-input diag-search" placeholder="Filter" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <input className="field toolbar-input diag-search" placeholder="Filter" value={filter} onChange={(e) => setFilter(e.target.value)} />
         {arrivals.length === 0 && <div className="diag-empty">Waiting for the first request</div>}
         {arrivals.length > 0 && shown.length === 0 && <div className="diag-empty">Nothing matches.</div>}
         {shown.map((a) => (

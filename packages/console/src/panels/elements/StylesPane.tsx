@@ -16,7 +16,7 @@ export function StylesPane({ styles, onSelectAncestor }: { styles: ElementStyles
   return (
     <div className="styles-pane">
       <div className="styles-filter">
-        <input className="toolbar-input" placeholder="Filter" value={filter} onChange={(e) => setFilter(e.target.value)} />
+        <input className="field toolbar-input" placeholder="Filter" value={filter} onChange={(e) => setFilter(e.target.value)} />
         {styles.unreadableSheets > 0 && (
           <span className="detail-note" title="Cross-origin stylesheets without CORS cannot be read from the page">
             {styles.unreadableSheets} sheet{styles.unreadableSheets > 1 ? 's' : ''} unreadable

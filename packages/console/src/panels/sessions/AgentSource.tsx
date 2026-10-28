@@ -72,7 +72,7 @@ export function AgentSource({ origin }: { origin: string }) {
         </span>
         <div style={{ flex: 1 }} />
         <input
-          className="toolbar-input"
+          className="field toolbar-input"
           placeholder="Find"
           value={find}
           onChange={(e) => setFind(e.target.value)}

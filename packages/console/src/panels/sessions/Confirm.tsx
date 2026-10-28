@@ -40,6 +40,7 @@ export function Confirm({
     <div className="confirm" onClick={(e) => e.stopPropagation()}>
       <span>{what}</span>
       <input
+        className="field"
         autoFocus
         value={typed}
         placeholder={name}

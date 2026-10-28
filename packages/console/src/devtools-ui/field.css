@@ -1,0 +1,49 @@
+/*
+ * A box you type in.
+ *
+ * There were five of them, written one at a time: the filter in a toolbar,
+ * the name on the Agent tab, the new project's name, the password an
+ * administrator sets, and the name you type to confirm a deletion. They
+ * agreed on being a bordered rectangle and on nothing else — 11px against
+ * 12, a 2px corner against a 4px one, and four different paddings, so the
+ * same control was a different size depending on which screen asked for it.
+ *
+ * This is the toolbar's shape, which was the one two of the five already
+ * had. The height is fixed so a field is the same height as the buttons
+ * beside it in a row, and so two fields on different screens are the same
+ * height as each other.
+ *
+ * What a field is for is not in here. A filter that searches as you type and
+ * a name that commits on Enter are the same box; what they do with what you
+ * type belongs to the screen that asked for it.
+ */
+.field {
+  font: inherit;
+  height: 20px;
+  padding: 0 6px;
+  color: var(--sys-color-on-surface);
+  background: var(--sys-color-cdt-base-container);
+  border: 1px solid var(--sys-color-neutral-outline);
+  border-radius: var(--radius-sm);
+}
+
+.field:focus-visible {
+  outline: 1px solid var(--sys-color-primary-bright);
+  outline-offset: -1px;
+  border-color: transparent;
+}
+
+.field:disabled {
+  color: var(--sys-color-state-disabled);
+}
+
+.field::placeholder {
+  color: var(--sys-color-token-subtle);
+}
+
+/* Roomier, where a field is the thing the screen is for rather than one
+   control among many in a row — the name of a project being made. */
+.field.roomy {
+  height: 26px;
+  padding: 0 8px;
+}

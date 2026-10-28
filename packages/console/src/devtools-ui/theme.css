@@ -52,6 +52,19 @@
   --ui-font-size: 12px;
   --mono-font-size: 11px;
   --tabbar-height: 27px;
+
+  /*
+   * Three corners, not eleven.
+   *
+   * The console had 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 and 14px rounding in
+   * it, which is eleven decisions nobody made and nobody can tell apart: a
+   * 2px corner and a 3px corner are the same corner. These are the ones
+   * worth telling apart — something you type in, something boxed off, and
+   * something shaped like a pill. A circle is still 50%.
+   */
+  --radius-sm: 4px;
+  --radius-md: 6px;
+  --radius-pill: 999px;
   --toolbar-height: 26px;
 
   color-scheme: light dark;
