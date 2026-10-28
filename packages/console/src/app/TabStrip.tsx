@@ -83,7 +83,16 @@ export function TabStrip({ sessionId }: { sessionId: string }) {
   const strip = useSelectedInView(active);
 
   // One window is the ordinary case; a strip would just take up room.
-  if (tabs.length < 2) return null;
+  /*
+   * Shown from the first window, not the second.
+   *
+   * It used to appear only once a run had two windows, so the chrome gained a
+   * row the moment a page opened a popup and everything below it jumped. With
+   * `spread` on that happens constantly, and the strip is the control you
+   * reach for when it does. One window draws one tab, which costs a row but
+   * keeps the session view the same shape throughout the run.
+   */
+  if (tabs.length === 0) return null;
 
   return (
     <div className="tabstrip" role="tablist" ref={strip}>
