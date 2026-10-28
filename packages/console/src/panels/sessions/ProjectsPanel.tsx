@@ -28,7 +28,7 @@ import { copyText } from '../network/copy';
 import { Confirm } from './Confirm';
 import './ProjectsPanel.css';
 import { isEnterSubmit } from '../../devtools-ui/enter-key';
-import { projectCounts, liveness, type Liveness } from './project-counts';
+import { projectCounts, liveness, describeRecordings, type Liveness, type ProjectCount } from './project-counts';
 
 export function ProjectsPanel() {
   const { order, byId, homeId, selectedId } = useProjectsStore();
@@ -46,7 +46,6 @@ export function ProjectsPanel() {
   // count above — leaves out the trash, the way the list itself does.
   const live = projectCounts(sessions, homeId);
 
-  const [entering, setEntering] = useState<string | null>(null);
   const nameRef = useRef<HTMLInputElement>(null);
 
   /*
@@ -70,18 +69,21 @@ export function ProjectsPanel() {
       return;
     }
     createProject(name);
-    setEntering(name);
     setMaking('');
+    /*
+     * And you stay here.
+     *
+     * Making a project used to walk straight into it, on the reasoning that
+     * naming the thing you are about to work on is the start of working on
+     * it. It is not, often: a project is made to have a key to paste, and
+     * being thrown into an empty session list hid the card that carries the
+     * key behind a screen saying nothing was recorded yet. Several in a row
+     * — one per engagement — meant leaving and coming back each time.
+     *
+     * The cursor goes back to the field instead, so the next one is typing.
+     */
+    nameRef.current?.focus();
   };
-
-  useEffect(() => {
-    if (!entering) return;
-    const made = order.map((id) => byId[id]).find((p) => p?.name === entering.replace(/\s+/g, ' ').trim());
-    if (!made) return;
-    setEntering(null);
-    selectProject(made.id);
-    navigateToView('sessions');
-  }, [entering, order, byId]);
 
   return (
     <div className="projects">
@@ -143,6 +145,7 @@ export function ProjectsPanel() {
               home={id === homeId}
               selected={id === selectedId}
               liveness={liveness(live.get(id))}
+              count={live.get(id)}
               sessions={counts.get(id) ?? 0}
               purgeDays={purgeDays}
             />
@@ -159,6 +162,7 @@ function ProjectRow({
   home,
   selected,
   liveness,
+  count,
   sessions,
   purgeDays,
 }: {
@@ -168,6 +172,7 @@ function ProjectRow({
   selected: boolean;
   /** which colour the left edge carries: live (green), dead (red), empty (blue) */
   liveness: Liveness;
+  count: ProjectCount | undefined;
   sessions: number;
   /** days in the trash before it is deleted; 0 when nothing is purged */
   purgeDays: number;
@@ -269,8 +274,11 @@ function ProjectRow({
           </span>
         )}
         <div className="project-spacer" />
-        <span className="project-count">
-          {sessions} {sessions === 1 ? 'recording' : 'recordings'}
+        {/* Live out of all, from the same count as the dot. `sessions` is a
+            different number and stays one: it is what the deletion warning
+            promises to take, and deleting takes the trash as well. */}
+        <span className="project-count" title={`${sessions} in all, counting the trash`}>
+          {describeRecordings(count)}
         </span>
       </div>
 

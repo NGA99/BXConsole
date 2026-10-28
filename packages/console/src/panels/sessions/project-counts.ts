@@ -42,7 +42,28 @@ export function describeCount(at: ProjectCount | undefined): string {
   return [at?.live ? `${at.live} live` : '', at?.kept ? `${at.kept} recorded` : ''].filter(Boolean).join(' · ');
 }
 
-/** The colour of the light on a project's left edge. */
+/**
+ * What a project holds, as its card says it: how many runs are live, out of
+ * how many there are.
+ *
+ * The live part is dropped when it is none, rather than reading "0 live" on
+ * every card of a relay nobody is running a payload against — the dot beside
+ * the name already says that, and a column of zeroes says it again eight
+ * times.
+ *
+ * Counted the same way as the dot, which means the trash is left out: a
+ * project whose only recordings are in the trash reads as empty here, and the
+ * list you reach by opening it shows none. The number in the deletion warning
+ * is a different one on purpose — deleting takes the trash too.
+ */
+export function describeRecordings(at: ProjectCount | undefined): string {
+  const total = (at?.live ?? 0) + (at?.kept ?? 0);
+  if (total === 0) return 'no recordings';
+  const all = `${total} ${total === 1 ? 'recording' : 'recordings'}`;
+  return at?.live ? `${at.live} live · ${all}` : all;
+}
+
+/** The colour of the light beside a project's name. */
 export type Liveness = 'live' | 'dead' | 'empty';
 
 /**
