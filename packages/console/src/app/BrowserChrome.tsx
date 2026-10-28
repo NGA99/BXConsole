@@ -54,7 +54,7 @@ export function BrowserChrome({ sessionId }: { sessionId: string }) {
           band: the strip itself draws nothing, and a 29px gap above the
           address would read as a tab that failed to render. */}
       {windows > 0 && (
-        <div className="chrome-tabs">
+        <div className="chrome-tabs strip">
           <TabStrip sessionId={sessionId} />
         </div>
       )}

@@ -45,15 +45,20 @@
   width: 180px;
   flex: 0 0 auto;
   min-width: 0;
-  height: 27px;
+  /*
+   * Two short of the strip, so the row shows above the tab and the shape
+   * reads as a tab sitting on an edge rather than a block filling a band.
+   * The strip's own height is the one that is set; this follows it.
+   */
+  height: calc(var(--tabbar-height) - 2px);
   padding: 0 10px 0 8px;
   border: 1px solid transparent;
   border-bottom: none;
   border-radius: 9px 9px 0 0;
   background: transparent;
   color: var(--sys-color-token-subtle);
+  /* The strip's font, like every other tab in the console. */
   font: inherit;
-  font-size: 11px;
   white-space: nowrap;
   cursor: pointer;
 }
@@ -134,7 +139,8 @@
   flex: 0 4 auto;
   min-width: 2.5em;
   opacity: 0.6;
-  font-size: 10px;
+  /* One step under the title, which is the strip's size. */
+  font-size: 11px;
 }
 
 /*
@@ -160,7 +166,7 @@
   border-radius: 7px;
   background: var(--sys-color-state-hover-on-subtle);
   color: var(--sys-color-token-subtle);
-  font-size: 9px;
+  font-size: 10px;
   font-variant-numeric: tabular-nums;
 }
 

@@ -10,16 +10,20 @@
 }
 
 /*
- * The tab row is a shade darker than the bar, which is how a browser separates
- * "which window" from "what that window is on". The selected tab is the bar's
- * own colour, so it joins the surface below it and the rest stay behind.
+ * The window tabs wear the strip, like every other tab row in the console:
+ * its height, its surface, its font. This row had a hand-written set of its
+ * own — 29px against 27, a different grey, 11px against 12 — which is how
+ * three rows that are meant to look alike stop looking alike.
+ *
+ * Two things are its own. The tabs sit on the bottom edge rather than filling
+ * the row, because that is the shape of a browser tab; and there is no rule
+ * under the row, so the open tab's surface runs straight into the address bar
+ * and the two read as one browser instead of two more toolbars.
  */
 .chrome-tabs {
-  display: flex;
   align-items: flex-end;
-  height: 29px;
   padding: 0 8px;
-  background: var(--sys-color-surface3);
+  border-bottom: 0;
 }
 
 .chrome-bar {
