@@ -73,13 +73,17 @@ export function BrowserChrome({ sessionId }: { sessionId: string }) {
         >
           ⟳
         </button>
-        <span className="chrome-pill">
+        <span className={`chrome-pill${live ? '' : ' gone'}`}>
           {/*
-            * Where a browser puts the lock. It says whether the agent in this
-            * window is still connected, which is the one thing about the
-            * address that can change under you.
+            * Where a browser puts the lock — and, unlike a lock, it says so in
+            * words.
+            *
+            * A dot alone was not read. It is 8px of grey against 8px of green
+            * in the one place people have learnt to ignore, and "is this run
+            * still going?" is the question the address raises every time. The
+            * word is the answer; the dot is what makes it findable.
             */}
-          <span className={`dot ${live ? 'on' : 'off'}`} title={live ? 'This window is connected' : 'This window is gone'} />
+          <span className={`dot ${live ? 'on' : 'off'}`} />
           {shown ? (
             <span className="chrome-url mono" title={plain(url!)}>
               <span className="chrome-host">{plain(shown.head)}</span>
@@ -88,6 +92,16 @@ export function BrowserChrome({ sessionId }: { sessionId: string }) {
           ) : (
             <span className="chrome-url empty">no address recorded</span>
           )}
+          <span
+            className="chrome-state"
+            title={
+              live
+                ? 'The agent in this window is connected: what you are seeing is the page as it is now'
+                : 'This window is closed, or the run has ended. Everything here is what was recorded before it went.'
+            }
+          >
+            {live ? 'live' : 'gone'}
+          </span>
         </span>
       </div>
     </div>

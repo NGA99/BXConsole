@@ -104,3 +104,36 @@
 .chrome-path {
   color: var(--sys-color-token-subtle);
 }
+
+/*
+ * Whether the window at this address is still there, in a word.
+ *
+ * At the far end of the pill rather than beside the dot, so the address
+ * always starts in the same place however long the word is. It never gives
+ * way: when the row is tight the address is what shrinks, because a truncated
+ * host is still readable and half a state word is not.
+ */
+.chrome-state {
+  flex: 0 0 auto;
+  margin-left: auto;
+  padding-left: 10px;
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  color: var(--sys-color-green);
+  white-space: nowrap;
+}
+
+/*
+ * A run that has ended: the address is a record of where the window was, not
+ * where anything is. The whole pill steps back to say so, which is the same
+ * move the strip makes on the tab of a window that has closed.
+ */
+.chrome-pill.gone .chrome-state {
+  color: var(--sys-color-token-subtle);
+}
+.chrome-pill.gone .chrome-host {
+  color: var(--sys-color-on-surface-subtle);
+}
+.chrome-pill.gone .chrome-path {
+  opacity: 0.7;
+}
