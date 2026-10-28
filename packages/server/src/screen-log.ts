@@ -21,7 +21,7 @@ import { createReadStream, createWriteStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import path from 'node:path';
 import readline from 'node:readline';
-import { SCREEN_LOG_FILE, SCREEN_LOG_MAX_BYTES, type ScreenRecord, type ScreenSegment } from '@bxconsole/protocol';
+import { SCREEN_LAST_DIR, SCREEN_LOG_FILE, SCREEN_LOG_MAX_BYTES, type ScreenRecord, type ScreenSegment, type ScreenMutations, type ScreenSnapshot } from '@bxconsole/protocol';
 
 /** flush the write buffer at least this often */
 const FLUSH_MS = 250;
@@ -33,6 +33,51 @@ const COMPACT_TARGET = 0.75;
 const SEGMENT_MS = 30_000;
 /** hard ceiling on one answer, for a page that churns the DOM far faster than that */
 const SEGMENT_MAX_BYTES = 8 * 1024 * 1024;
+/**
+ * Ceiling on the ops kept with a window's rescued last frame.
+ *
+ * The keyframe alone is a whole document and restores on its own, so the ops
+ * after it only sharpen the moment. Past this they are dropped and the frame
+ * is the keyframe's — slightly earlier than the window's true last instant,
+ * which is worth far more than an unbounded file per window.
+ */
+const LAST_FRAME_MAX_OP_BYTES = 2 * 1024 * 1024;
+/**
+ * Window ids name files here, and they arrive from the page.
+ *
+ * Everything the relay mints matches this, so the guard costs nothing — and
+ * without it an agent could choose where in the filesystem its "last frame"
+ * is written.
+ */
+const SAFE_TAB = /^[A-Za-z0-9_-]{1,64}$/;
+
+/** A window's last frame, as sendFrozenScreen replays it. */
+export interface LastFrame {
+  snapshot: ScreenSnapshot;
+  ops: ScreenMutations[];
+}
+
+/**
+ * The windows whose last keyframe is in the part about to be thrown away,
+ * mapped to the offset of that keyframe.
+ *
+ * A window with a keyframe at or after the cut survives the rewrite and
+ * needs nothing. Every other window named in the recording is about to lose
+ * the only frame it had.
+ */
+export function orphanedWindows(keyframes: Array<{ tab?: string; offset: number }>, cutOffset: number): Map<string, number> {
+  const surviving = new Set<string>();
+  for (const kf of keyframes) {
+    if (kf.offset >= cutOffset && kf.tab) surviving.add(kf.tab);
+  }
+  const orphans = new Map<string, number>();
+  for (const kf of keyframes) {
+    // Later keyframes overwrite earlier ones, so what is left is each
+    // window's newest — the closest thing it has to a last look.
+    if (kf.offset < cutOffset && kf.tab && !surviving.has(kf.tab)) orphans.set(kf.tab, kf.offset);
+  }
+  return orphans;
+}
 
 interface Keyframe {
   ts: number;
@@ -325,6 +370,12 @@ export class ScreenLog {
     }
     if (cut.offset === 0) return;
 
+    // Before the front of the file goes, rescue the last frame of every
+    // window that lives entirely in it. Read directly rather than through
+    // `segment`: this runs inside the write chain, and `segment` waits on
+    // that chain to settle, which would be waiting on itself.
+    await this.keepLastFrames(sessionId, idx, cut.offset);
+
     const file = this.fileFor(sessionId);
     const tmp = `${file}.compact`;
     await pipeline(createReadStream(file, { start: cut.offset }), createWriteStream(tmp));
@@ -345,6 +396,86 @@ export class ScreenLog {
     // The scan promise is what `ensureIndex` hands back, so the cached index
     // alone is not the cache.
     this.indexing.delete(sessionId);
+  }
+
+  /**
+   * Copy out the last frame of each window that the coming rewrite would
+   * erase, into a file of its own that compaction never touches.
+   *
+   * One keyframe per closed window, not a second recording: the cost is a
+   * window's DOM once, and only for windows that were about to have nothing.
+   */
+  private async keepLastFrames(sessionId: string, idx: Index, cutOffset: number): Promise<void> {
+    const orphans = orphanedWindows(idx.keyframes, cutOffset);
+    if (orphans.size === 0) return;
+    const file = this.fileFor(sessionId);
+    for (const [tab, offset] of orphans) {
+      if (!SAFE_TAB.test(tab)) continue;
+      try {
+        const frame = await this.readFrameAt(file, offset, cutOffset, tab);
+        if (!frame) continue;
+        const dir = path.join(path.dirname(file), SCREEN_LAST_DIR);
+        await fs.mkdir(dir, { recursive: true });
+        await fs.writeFile(path.join(dir, `${tab}.json`), JSON.stringify(frame));
+      } catch (err) {
+        // A frame that cannot be rescued must not stop the compaction that
+        // is keeping the recording inside its budget.
+        console.warn('[bxconsole] could not keep the last frame of a window', err);
+      }
+    }
+  }
+
+  /** The keyframe at `from`, plus this window's op batches up to `until`. */
+  private async readFrameAt(file: string, from: number, until: number, tab: string): Promise<LastFrame | null> {
+    const rl = readline.createInterface({ input: createReadStream(file, { start: from, end: until - 1 }), crlfDelay: Infinity });
+    let snapshot: ScreenSnapshot | null = null;
+    const ops: ScreenMutations[] = [];
+    let bytes = 0;
+    try {
+      for await (const line of rl) {
+        if (!line.trim()) continue;
+        let record: ScreenRecord;
+        try {
+          record = JSON.parse(line) as ScreenRecord;
+        } catch {
+          continue;
+        }
+        if (record.tab !== tab) continue;
+        if (record.k === 1) {
+          // The range starts at this window's newest keyframe, so the first
+          // one of its own is the frame; a later one would mean the window
+          // was not an orphan after all.
+          if (!snapshot) snapshot = record.snapshot;
+          continue;
+        }
+        // Cursor samples (k: 2) replay from the recording, which this window
+        // no longer has. The frame is the page, not the pointer over it.
+        if (record.k !== 0 || !snapshot) continue;
+        bytes += line.length;
+        if (bytes > LAST_FRAME_MAX_OP_BYTES) break;
+        ops.push({ type: 'screen.mutations', ts: record.ts, ops: record.ops });
+      }
+    } finally {
+      rl.close();
+    }
+    return snapshot ? { snapshot, ops } : null;
+  }
+
+  /**
+   * The frame kept for a window whose stretch of the recording is gone.
+   *
+   * Read when the recording itself has nothing under this window's name, so
+   * a tab that outlived its own segments still shows the page it closed on
+   * rather than an empty Screen.
+   */
+  async lastFrame(sessionId: string, tab: string): Promise<LastFrame | null> {
+    if (!SAFE_TAB.test(tab)) return null;
+    try {
+      const file = path.join(path.dirname(this.fileFor(sessionId)), SCREEN_LAST_DIR, `${tab}.json`);
+      return JSON.parse(await fs.readFile(file, 'utf8')) as LastFrame;
+    } catch {
+      return null;
+    }
   }
 
   // ------------------------------------------------------------------ reading

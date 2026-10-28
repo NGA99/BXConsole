@@ -320,16 +320,32 @@ export class Relay {
    */
   private async sendFrozenScreen(entry: SessionEntry, ws: WebSocket, tabId?: string): Promise<void> {
     const id = entry.meta.sessionId;
+    const deliver = (frame: { snapshot: ScreenSnapshot; batches: Array<{ ts: number; ops: ScreenMutations['ops'] }> }): void => {
+      send(ws, { type: 'screen.event', sessionId: id, event: frame.snapshot });
+      for (const b of frame.batches) send(ws, { type: 'screen.event', sessionId: id, event: { type: 'screen.mutations', ts: b.ts, ops: b.ops } });
+      send(ws, { type: 'screen.event', sessionId: id, event: { type: 'screen.stopped', ts: Date.now() } });
+    };
+
     const bounds = await this.store.screen.bounds(id, tabId);
-    /*
-     * The legacy single-frame file belongs to a session with no timeline at
-     * all. A window that never streamed has no bounds either, and reading
-     * that file for it would hand the run's frame back under this window's
-     * name — the very thing freezing per window exists to stop. So it is
-     * read only when the recording itself is empty.
-     */
-    if (!bounds && tabId !== undefined && (await this.store.screen.bounds(id)) !== null) {
-      return send(ws, { type: 'error', message: 'nothing was recorded for this window' });
+    if (!bounds && tabId !== undefined) {
+      /*
+       * The recording has nothing under this window's name. It may still
+       * have had a frame rescued before compaction threw its segments away,
+       * which is the usual case for a window that closed early in a long
+       * run — and that frame is the whole of what its tab has to show.
+       */
+      const kept = await this.store.screen.lastFrame(id, tabId);
+      if (kept) return deliver({ snapshot: kept.snapshot, batches: kept.ops });
+      /*
+       * The legacy single-frame file belongs to a session with no timeline at
+       * all. A window that never streamed has no bounds either, and reading
+       * that file for it would hand the run's frame back under this window's
+       * name — the very thing freezing per window exists to stop. So it is
+       * read only when the recording itself is empty.
+       */
+      if ((await this.store.screen.bounds(id)) !== null) {
+        return send(ws, { type: 'error', message: 'nothing was recorded for this window' });
+      }
     }
     const frame = bounds
       ? await this.store.screen.segment(id, bounds.end, 'seek', tabId)
@@ -337,9 +353,7 @@ export class Relay {
           f ? { snapshot: f.snapshot, batches: f.ops.map((o) => ({ ts: o.ts, ops: o.ops })) } : null,
         );
     if (!frame?.snapshot) return send(ws, { type: 'error', message: 'session not connected' });
-    send(ws, { type: 'screen.event', sessionId: id, event: frame.snapshot });
-    for (const b of frame.batches) send(ws, { type: 'screen.event', sessionId: id, event: { type: 'screen.mutations', ts: b.ts, ops: b.ops } });
-    send(ws, { type: 'screen.event', sessionId: id, event: { type: 'screen.stopped', ts: Date.now() } });
+    deliver({ snapshot: frame.snapshot, batches: frame.batches });
   }
 
   /**

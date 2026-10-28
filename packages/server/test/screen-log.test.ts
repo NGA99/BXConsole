@@ -251,6 +251,62 @@ describe('ScreenLog', () => {
     log.forget(SESSION);
   });
 
+  /*
+   * The budget belongs to the run, not to each window, and `data-screen` is
+   * `record` by default — so a run that has spread streams several windows
+   * into one file. A window that closed early sits entirely in the part
+   * compaction throws away, and once it was gone the console had nothing to
+   * show for that tab at all: the tab stayed in the strip and opening it gave
+   * a blank Screen. What a closed window last looked like is the only thing
+   * its tab has left.
+   */
+  test('a window whose segments compaction drops keeps its last frame', async () => {
+    const BUDGET = 200 * 1024;
+    const { log } = await newLog(BUDGET);
+    const EARLY = 'tabearly';
+    const LONG = 'tablong';
+
+    // The window that closes early, with a recognisable last moment.
+    log.append(SESSION, { k: 1, ts: T0, tab: EARLY, snapshot: snapshot(T0, 2000) });
+    log.append(SESSION, { ...batch(T0 + 1, 'the last thing it showed'), tab: EARLY });
+
+    // The one that stays open and pushes the file past its budget.
+    for (let seg = 0; seg < 40; seg++) {
+      const base = T0 + 10_000 + seg * 10_000;
+      log.append(SESSION, { k: 1, ts: base, tab: LONG, snapshot: snapshot(base, 2000) });
+      for (let i = 0; i < 20; i++) log.append(SESSION, { ...batch(base + i * 100 + 1, `${seg}:${i}`.padEnd(200, 'x')), tab: LONG });
+    }
+
+    // segment() flushes and settles the write chain, so compaction has run.
+    await log.segment(SESSION, T0 + 10_000, 'seek', LONG);
+    assert.equal(await log.bounds(SESSION, EARLY), null, 'the early window still has segments, so compaction never reached it');
+
+    const kept = await log.lastFrame(SESSION, EARLY);
+    assert.ok(kept, 'the early window lost its last frame, so its tab opens on a blank Screen');
+    assert.equal(kept.snapshot.ts, T0);
+    assert.deepEqual(
+      kept.ops.map((o) => o.ops[0]),
+      [{ op: 'text', id: 1, text: 'the last thing it showed' }],
+      'the ops after the keyframe were not kept with it',
+    );
+    log.forget(SESSION);
+  });
+
+  test('a window still in the recording is not given a rescued frame it does not need', async () => {
+    const { log } = await newLog();
+    log.append(SESSION, { k: 1, ts: T0, tab: 'tabhere', snapshot: snapshot(T0) });
+    await log.segment(SESSION, T0, 'seek', 'tabhere');
+    assert.equal(await log.lastFrame(SESSION, 'tabhere'), null);
+    log.forget(SESSION);
+  });
+
+  test('a window id that is not one refuses to name a file', async () => {
+    // Window ids arrive from the page, and they name files on disk.
+    const { log } = await newLog();
+    assert.equal(await log.lastFrame(SESSION, '../../etc/passwd'), null);
+    log.forget(SESSION);
+  });
+
   test('a restart rebuilds the same bounds and keyframes by scanning the file', async () => {
     // Guards the `{"k":1,"ts":…}` prefix scan: a record shape that no longer
     // matches it would leave a restarted relay with no keyframes at all.

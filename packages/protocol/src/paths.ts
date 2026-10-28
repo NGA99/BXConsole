@@ -64,6 +64,16 @@ export type SessionFile = keyof typeof SESSION_FILES;
 export const SCREEN_LOG_FILE = 'screen.ndjson';
 /** Pre-timeline single frame, still read so older session dirs keep working. */
 export const SCREEN_FRAME_FILE = 'screen.json';
+/**
+ * One frame per window, kept outside the recording's budget.
+ *
+ * The recording is compacted from the front when a session passes
+ * SCREEN_LOG_MAX_BYTES, and the budget is the run's rather than each
+ * window's. A window that closed early sits entirely in the part that goes,
+ * and what a closed window last looked like is the only thing its tab has
+ * left to show. So the frame about to be dropped is copied here first.
+ */
+export const SCREEN_LAST_DIR = 'screen-last';
 
 /**
  * Script every agent runs the moment it installs, held on the relay.
