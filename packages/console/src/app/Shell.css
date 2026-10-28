@@ -48,117 +48,7 @@
 }
 
 /* session picker */
-.session-picker {
-  position: relative;
-}
-.session-picker-button,
-.session-picker-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--sys-color-on-surface);
-  font: inherit;
-  height: 22px;
-  padding: 0 8px;
-  border-radius: 4px;
-  cursor: default;
-  white-space: nowrap;
-  /* Nothing here wraps, so without a cap the button keeps its full width and
-     spills over whatever is to the right of it. Capped, it is the url inside
-     that gives way. */
-  max-width: 100%;
-}
-.session-picker-button:hover,
-.session-picker-item:hover {
-  background: var(--sys-color-state-hover-on-subtle);
-}
-/*
- * What this line loses first, as it runs out of room.
- *
- * All three parts shrank at the same rate to begin with, so at 420px the
- * run's own name came out 10px wide while the url beside it still had most
- * of a hostname showing — exactly backwards. The weights put the url first,
- * then the window's title, and the name last: the name is how somebody tells
- * this run from the other six, and the url is the part they can reconstruct
- * from the window below.
- */
-.session-picker-name {
-  font-weight: 500;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex-shrink: 1;
-  /*
-   * The page chooses this name, so it is as long as the page likes. One of
-   * three hundred characters took 589px of an 885px row and left the project
-   * before it 53px — the same way round as a long project name did, which is
-   * why both ends of the path are capped now. A name is an identifier: past
-   * this width it is not telling anybody anything the tooltip cannot.
-   */
-  max-width: 260px;
-}
-/*
- * The selected window's title, which its own tab is too narrow to finish.
- *
- * Wider than the url beside it, because a title is what the tab cut and this
- * is where it gets read; the url is already short enough to survive up there.
- */
-.session-picker-window {
-  color: var(--sys-color-on-surface);
-  max-width: 420px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-  flex-shrink: 20;
-}
-.session-picker-window::before {
-  content: '·';
-  color: var(--sys-color-token-subtle);
-  margin-right: 6px;
-}
-.session-picker-url {
-  color: var(--sys-color-token-subtle);
-  max-width: 460px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  min-width: 0;
-  flex-shrink: 100;
-}
-.session-picker-caret {
-  font-size: 9px;
-  color: var(--sys-color-token-subtle);
-  /* The one mark saying this line is a menu; it is four pixels wide. */
-  flex-shrink: 0;
-}
-.session-picker-popup {
-  position: absolute;
-  top: 100%;
-  left: 0;
-  z-index: 20;
-  min-width: 280px;
-  padding: 4px;
-  background: var(--sys-color-surface);
-  border: 1px solid var(--sys-color-divider);
-  border-radius: 6px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
-  display: flex;
-  flex-direction: column;
-}
-.session-picker-item {
-  width: 100%;
-  height: 26px;
-}
-.session-picker-item.current {
-  background: var(--sys-color-tonal-container);
-}
-.session-picker-empty {
-  padding: 8px;
-  color: var(--sys-color-token-subtle);
-}
+
 
 /* dock layout */
 .dock {
@@ -252,28 +142,6 @@
   color: var(--sys-color-yellow-outline);
 }
 
-/*
- * The title row's context: `BXConsole | NC`.
- *
- * The project used to own a row between the title and the tabs, which spent
- * a whole row on one word and made the chrome a row taller in the list than
- * it needed to be. Here it reads as what the window is currently about.
- */
-.topbar-sep {
-  width: 1px;
-  align-self: stretch;
-  margin: 6px 10px;
-  background: var(--sys-color-divider);
-  flex-shrink: 0;
-}
-.topbar-project {
-  font-size: 12px;
-  color: var(--sys-color-on-surface);
-  max-width: min(360px, 40%);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 /* Right of the title row: the accounts screen, and who is signed in. */
 .topbar-link {
   font: inherit;
@@ -294,4 +162,55 @@
   color: var(--sys-color-token-subtle);
   margin-right: 10px;
   white-space: nowrap;
+}
+
+/*
+ * The title row's context: the console, the project, then the run.
+ *
+ * Divided by a chevron rather than boxed. The names come from the engagement
+ * and can hold the divider's own character — `o'brien & sons <x> "q" (a)` is
+ * a real run name — so the divider is drawn in the subtle ink and the names
+ * in the plain one. `›` is also not the `>` a name would contain.
+ */
+.topbar-sep {
+  color: var(--sys-color-token-subtle);
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.topbar-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  color: var(--sys-color-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+/* The selected window's own title, when its tab was too narrow to hold it. */
+.topbar-detail {
+  font-size: 11px;
+  color: var(--sys-color-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+/*
+ * The address, outside the boxes: it is what the run is on, not what it is.
+ * First to give way when the row is tight, because the names above it are the
+ * better handle and this is the longest thing on the line.
+ */
+.topbar-url {
+  font-size: 11px;
+  color: var(--sys-color-token-subtle);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 999;
+  min-width: 0;
 }

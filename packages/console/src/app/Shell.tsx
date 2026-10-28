@@ -24,7 +24,7 @@ import { NetworkPanel } from '../panels/network/NetworkPanel';
 import { ElementsPanel } from '../panels/elements/ElementsPanel';
 import { SourcesPanel } from '../panels/sources/SourcesPanel';
 import { HistoryPanel } from '../panels/history/HistoryPanel';
-import { SessionPicker } from './SessionPicker';
+import { SessionLabel } from './SessionLabel';
 import { useActiveTab } from '../state/active-tab';
 import { SessionContext } from './session-context';
 import { ScreenPanel } from '../panels/screen/ScreenPanel';
@@ -331,8 +331,7 @@ export function Shell({ route }: { route: Route }) {
     <div className="shell">
       <TopBar relayUp={relayUp} theme={theme} onCycleTheme={cycleTheme} trailing={<TopBarAccount />}>
         <TopBarProject sessionId={sessionId} />
-        <span className="topbar-sep" />
-        <SessionPicker sessionId={sessionId} panel={route.panel} />
+        <SessionLabel sessionId={sessionId} />
       </TopBar>
       {/* The windows now ride in that strip, after its divider. */}
       <ProjectBar showing="inside" session={{ id: sessionId, panel: route.panel }} />

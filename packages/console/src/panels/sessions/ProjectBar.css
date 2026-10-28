@@ -14,21 +14,6 @@
 }
 
 /*
- * Every segment of the path stays on its one line.
- *
- * The row is 26px and the names in it are as long as somebody made them, so
- * a narrow window broke "First project (1 recorded)" across three lines and
- * the row grew to swallow them. What gives way instead is the session's url,
- * which is the one part of the path that already ends in an ellipsis and the
- * one a reader can lose the tail of and still know where they are.
- *
- * No overflow rule here: the session picker's menu hangs out of this row.
- */
-.projectbar .session-picker,
-.projectbar .session-picker-button {
-  min-width: 0;
-}
-/*
  * A project's name is as long as whoever named it, and a nowrap segment that
  * is also allowed to be any width simply takes the row: "Acme Corporation —
  * Q3 external penetration test, production estate" left the session segment

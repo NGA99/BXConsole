@@ -192,8 +192,8 @@ export function TopBarProject({ sessionId, view }: { sessionId?: string; view?: 
   if (!project || outside) return null;
   return (
     <>
-      <span className="topbar-sep" />
-      <span className="topbar-project" title={project.name}>
+      <span className="topbar-sep">›</span>
+      <span className="topbar-crumb" title={project.name}>
         {plain(project.name)}
       </span>
     </>
