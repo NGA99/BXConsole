@@ -310,6 +310,53 @@
   color: var(--sys-color-error);
 }
 
+/*
+ * The key, beside the snippets that carry it.
+ *
+ * Set off in a box because what is written under it is not background: it is
+ * the one thing on this tab that cannot be undone, and the sentence saying so
+ * has to be read before the link above it is clicked.
+ */
+.install-key {
+  border: 1px solid var(--sys-color-divider);
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  background: var(--sys-color-surface1);
+}
+.install-key-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.install-key-label {
+  font-size: 11px;
+  color: var(--sys-color-token-subtle);
+}
+.install-key-row code {
+  font-size: 11px;
+  color: var(--sys-color-on-surface);
+  background: var(--sys-color-surface3);
+  border-radius: 3px;
+  padding: 1px 6px;
+  /* Masked, so there is no selecting half of it by accident; copy takes it. */
+  user-select: none;
+}
+.install-key-note {
+  margin: 6px 0 0;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--sys-color-token-subtle);
+}
+.install-key-note strong {
+  color: var(--sys-color-on-surface);
+  font-weight: 500;
+}
+.install-key .confirm {
+  margin-top: 8px;
+}
+
 .install-head-spacer {
   flex: 1 1 0;
   min-width: 0;

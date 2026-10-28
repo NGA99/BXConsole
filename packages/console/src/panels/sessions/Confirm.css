@@ -1,0 +1,22 @@
+/* Drawn in the error ink, because everything it guards is irreversible. */
+.confirm {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  font-size: 11px;
+  color: var(--sys-color-error);
+  border: 1px solid var(--sys-color-error);
+  border-radius: 2px;
+  padding: 5px 7px;
+}
+.confirm input {
+  font: inherit;
+  font-size: 11px;
+  color: var(--sys-color-on-surface);
+  background: var(--sys-color-cdt-base-container);
+  border: 1px solid var(--sys-color-neutral-outline);
+  border-radius: 2px;
+  padding: 1px 4px;
+  width: 160px;
+}

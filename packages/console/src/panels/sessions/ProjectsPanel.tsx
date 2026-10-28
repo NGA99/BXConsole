@@ -24,11 +24,12 @@ import {
   forgetProject,
   renameProject,
   restoreProject,
-  rotateProjectKey,
   trashProject,
 } from '../../transport/client';
 import { navigateToView } from '../../app/router';
 import { copyText } from '../network/copy';
+import { Confirm } from './Confirm';
+import { maskKey } from './agent-key';
 import './ProjectsPanel.css';
 import { fullTimestamp } from '../../devtools-ui/time';
 import { isEnterSubmit } from '../../devtools-ui/enter-key';
@@ -186,11 +187,11 @@ function ProjectRow({
    * that still fits, and it is the right one here because the mistake these
    * prevent is clicking the wrong row.
    */
-  const [confirming, setConfirming] = useState<'rotate' | 'forget' | null>(null);
+  const [confirming, setConfirming] = useState<'forget' | null>(null);
   const [typed, setTyped] = useState('');
   const matches = typed.trim() === project.name;
 
-  const arm = (what: 'rotate' | 'forget' | null) => {
+  const arm = (what: 'forget' | null) => {
     setConfirming(what);
     setTyped('');
   };
@@ -267,11 +268,28 @@ function ProjectRow({
         </span>
       </div>
 
+      {/*
+        * The key, masked, and no rotate.
+        *
+        * It was printed whole here — eight working credentials at once, on
+        * the screen most likely to end up in a screen share or a screenshot.
+        * The ends are kept because the question this screen is actually asked
+        * is "which project is this key?", which four characters either side
+        * answers; copy still takes the whole thing.
+        *
+        * Rotating moved to the Agent tab, where the key is handed out. It
+        * kills every payload already planted, and an irreversible action
+        * belongs where its consequence can be read, not repeated down a list
+        * of projects you are only browsing.
+        */}
       <div className="project-key" onClick={(e) => e.stopPropagation()}>
         <span className="project-key-label">Agent key</span>
-        <code className="mono">{project.agentKey}</code>
+        <code className="mono" title="Payloads carrying this key record into this project. The Agent tab builds the snippet, and rotates it.">
+          {maskKey(project.agentKey)}
+        </code>
         <button
           className="detail-link"
+          title="Copy the whole key"
           onClick={() => {
             void copyText(project.agentKey);
             setCopied(true);
@@ -280,25 +298,7 @@ function ProjectRow({
         >
           {copied ? 'copied' : 'copy'}
         </button>
-        {mine && confirming !== 'rotate' && (
-          <button className="detail-link" onClick={() => arm('rotate')}>
-            rotate
-          </button>
-        )}
       </div>
-
-      {mine && confirming === 'rotate' && (
-        <Confirm
-          what={`Every payload carrying the current key stops being recorded. Type “${project.name}” to draw a new one.`}
-          name={project.name}
-          typed={typed}
-          setTyped={setTyped}
-          enabled={matches}
-          action="rotate the key"
-          onGo={() => (rotateProjectKey(project.id), arm(null))}
-          onCancel={() => arm(null)}
-        />
-      )}
 
       {mine && (
         <div className="project-actions" onClick={(e) => e.stopPropagation()}>
@@ -350,51 +350,6 @@ function ProjectRow({
           onCancel={() => arm(null)}
         />
       )}
-    </div>
-  );
-}
-
-function Confirm({
-  what,
-  name,
-  typed,
-  setTyped,
-  enabled,
-  action,
-  onGo,
-  onCancel,
-}: {
-  what: string;
-  name: string;
-  typed: string;
-  setTyped: (v: string) => void;
-  enabled: boolean;
-  action: string;
-  onGo: () => void;
-  onCancel: () => void;
-}) {
-  return (
-    // Typing a project's name to arm a rotate or a delete must not also walk
-    // into the project.
-    <div className="project-confirm" onClick={(e) => e.stopPropagation()}>
-      <span>{what}</span>
-      <input
-        autoFocus
-        value={typed}
-        placeholder={name}
-        spellCheck={false}
-        onChange={(e) => setTyped(e.target.value)}
-        onKeyDown={(e) => {
-          if (isEnterSubmit(e.nativeEvent) && enabled) onGo();
-          if (e.key === 'Escape') onCancel();
-        }}
-      />
-      <button className="detail-link bad" disabled={!enabled} onClick={onGo}>
-        {action}
-      </button>
-      <button className="detail-link" onClick={onCancel}>
-        cancel
-      </button>
     </div>
   );
 }

@@ -7,9 +7,12 @@
  */
 import { useState } from "react";
 import { useSnippetProject } from "../../state/projects";
+import { rotateProjectKey } from "../../transport/client";
 import { copyText } from "../network/copy";
 import { AgentSource } from "./AgentSource";
 import { PrePayloadEditor } from "./PrePayloadEditor";
+import { Confirm } from "./Confirm";
+import { maskKey } from "./agent-key";
 import {
   loadSetup,
   saveSetup,
@@ -80,6 +83,9 @@ export function AgentPanel({ onDiagnose }: { onDiagnose?: () => void }) {
   const [setup, setSetupState] = useState<Setup>(() => loadSetup());
   const [showSource, setShowSource] = useState(false);
   const [copied, setCopied] = useState<string | null>(null);
+  // Rotating is armed by typing the project's name; see Confirm for why.
+  const [rotating, setRotating] = useState(false);
+  const [typed, setTyped] = useState("");
 
   const setSetup = (patch: Partial<Setup>) => {
     setSetupState((prev) => {
@@ -186,6 +192,54 @@ export function AgentPanel({ onDiagnose }: { onDiagnose?: () => void }) {
               </>
             )}
           </div>
+
+          {/*
+            * The key itself, and the one control that can change it.
+            *
+            * It was on the Projects screen, printed whole on every card, with
+            * `rotate` beside it — a credential on a browsing screen and an
+            * irreversible action repeated down a list. Here it sits with the
+            * snippets that carry it, which is both where it is wanted and the
+            * only place its consequence can be stated: rotating does not
+            * change the payloads already out there, it stops them.
+            */}
+          {project && (
+            <div className="install-key">
+              <div className="install-key-row">
+                <span className="install-key-label">Agent key</span>
+                <code className="mono">{maskKey(project.agentKey)}</code>
+                <button className="detail-link" title="Copy the whole key" onClick={() => void copy("key", project.agentKey)}>
+                  {copied === "key" ? "copied" : "copy"}
+                </button>
+                {!rotating && (
+                  <button className="detail-link" onClick={() => (setRotating(true), setTyped(""))}>
+                    rotate
+                  </button>
+                )}
+              </div>
+              <p className="install-key-note">
+                This is what tells the relay a run is <strong>{project.name}</strong>&rsquo;s; it is
+                already in the snippets above. Rotate it when it has been seen — it ends up in the
+                page you pasted it into, and in whatever logs that page&rsquo;s requests touch.
+                Rotating draws a new one and <strong>every payload already planted with the old key
+                stops recording</strong>, with no way to call them back. Recordings you already have
+                are untouched.
+              </p>
+              {rotating && (
+                <Confirm
+                  what={`Every payload carrying the current key stops being recorded. Type “${project.name}” to draw a new one.`}
+                  name={project.name}
+                  typed={typed}
+                  setTyped={setTyped}
+                  enabled={typed.trim() === project.name.trim()}
+                  action="rotate the key"
+                  onGo={() => (rotateProjectKey(project.id), setRotating(false))}
+                  onCancel={() => setRotating(false)}
+                />
+              )}
+            </div>
+          )}
+
           {snippets.map((s) => (
             <div key={s.id} className="install-snippet">
               <div className="install-snippet-head">
