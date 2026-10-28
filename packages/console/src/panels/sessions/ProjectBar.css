@@ -1,45 +1,12 @@
 /*
- * The path row, above the tabs.
+ * The row that names the session you are reading.
  *
- * Quieter than the tab bar under it: this says where you are, the tabs say
- * what you are looking at, and a row with equal weight would read as a second
- * set of tabs.
+ * It is a strip like the tabs on the session list — the same height, ink and
+ * controls, from strip.css — because moving into a session should not change
+ * what the chrome looks like. Only what this row adds is here.
  */
 .projectbar {
-  display: flex;
-  align-items: center;
-  gap: 6px;
   padding: 0;
-  height: var(--tabbar-height);
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--sys-color-divider);
-  /* The same strip as the tab bar in the session list, so the chrome is one
-     thing whichever screen you are on. */
-  background: var(--sys-color-surface2);
-  font-size: 11px;
-  color: var(--sys-color-token-subtle);
-}
-
-/* The roots of the two things above a project: the list, and the relay's
-   own accounts. Links rather than tabs, because a tab would put them back
-   among the four that are about one project. */
-.projectbar-root {
-  font: inherit;
-  font-size: 11px;
-  color: var(--sys-color-primary);
-  background: none;
-  border: none;
-  border-radius: 2px;
-  padding: 1px 4px;
-  cursor: pointer;
-}
-.projectbar-root:hover {
-  background: var(--sys-color-surface2);
-}
-/* Where you already are: still a way back, no longer an invitation. */
-.projectbar-root.here {
-  color: var(--sys-color-on-surface);
-  font-weight: 500;
 }
 
 .projectbar-sep {
@@ -57,11 +24,6 @@
  *
  * No overflow rule here: the session picker's menu hangs out of this row.
  */
-.projectbar-root,
-.projectbar-sep,
-.projectbar-who {
-  white-space: nowrap;
-}
 .projectbar .session-picker,
 .projectbar .session-picker-button {
   min-width: 0;
@@ -89,9 +51,6 @@
   color: var(--sys-color-on-surface);
 }
 
-.projectbar-spacer {
-  flex: 1;
-}
 .projectbar-who {
   white-space: nowrap;
   padding-right: 2px;
@@ -136,35 +95,3 @@
  * Never the tabs' selected underline: these leave the screen rather than
  * being one of its views.
  */
-.projectbar-up {
-  appearance: none;
-  font: inherit;
-  color: var(--sys-color-on-surface);
-  background: transparent;
-  border: 0;
-  padding: 0 10px;
-  cursor: pointer;
-  white-space: nowrap;
-  flex-shrink: 0;
-}
-.projectbar-up:hover {
-  background: var(--sys-color-state-hover-on-subtle);
-}
-.projectbar-up:focus-visible {
-  outline: 2px solid var(--sys-color-primary);
-  outline-offset: -2px;
-}
-/* Where you already are: still a way back, no longer an invitation. */
-.projectbar-up.here {
-  color: var(--sys-color-on-surface);
-  font-weight: 500;
-}
-
-/* Divides what leaves this screen from what the screen is about. */
-.projectbar-divider {
-  width: 1px;
-  align-self: stretch;
-  margin: 0 6px 0 2px;
-  background: var(--sys-color-divider);
-  flex-shrink: 0;
-}

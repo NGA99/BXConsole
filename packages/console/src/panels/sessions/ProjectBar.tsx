@@ -19,6 +19,7 @@ import { navigateToView, type PanelId } from '../../app/router';
 import { SessionPicker } from '../../app/SessionPicker';
 import { projectCounts, describeCount } from './project-counts';
 import { plain } from '../../devtools-ui/plain-text';
+import '../../devtools-ui/strip.css';
 import './ProjectBar.css';
 
 /** Which of the three things is on screen, which is not always the route. */
@@ -60,7 +61,7 @@ export function ProjectBar({ showing, session }: { showing: Showing; session?: {
   return (
     <>
       <LostNotice />
-      <div className="projectbar">
+      <div className="projectbar strip">
       {/*
         * In the session list the tab row carries this instead, so it is not
         * drawn twice; there it sits among the tabs, which is where people
@@ -68,7 +69,7 @@ export function ProjectBar({ showing, session }: { showing: Showing; session?: {
         */}
       {!(showing === 'inside' && !session) && (
         <button
-          className={`projectbar-up${showing === 'projects' ? ' here' : ''}`}
+          className={`strip-item${showing === 'projects' ? ' selected' : ''}`}
           title="Every project you can read"
           onClick={() => navigateToView('projects')}
         >
@@ -90,7 +91,7 @@ export function ProjectBar({ showing, session }: { showing: Showing; session?: {
             */}
           {session ? (
             <button
-              className="projectbar-up"
+              className="strip-item"
               title={`${label(currentId)}\nThe runs in this project`}
               onClick={() => {
                 selectProject(currentId);
@@ -114,12 +115,12 @@ export function ProjectBar({ showing, session }: { showing: Showing; session?: {
       {session && (
         <>
           {/* Divides what leaves this screen from what the screen is about. */}
-          <span className="projectbar-divider" />
+          <span className="strip-divider" />
           <SessionPicker sessionId={session.id} panel={session.panel} />
         </>
       )}
 
-      <div className="projectbar-spacer" />
+      <div className="strip-spacer" />
       </div>
     </>
   );

@@ -114,9 +114,9 @@ export function SessionsPanel({ view }: { view: SessionView }) {
            * selected underline the four beside it use.
            */
           leading={
-            <div className="tabbar-leading">
+            <div className="strip-leading">
               <button
-                className={`tabbar-tab${atProjects ? ' selected' : ''}`}
+                className={`strip-item${atProjects ? ' selected' : ''}`}
                 role="tab"
                 aria-selected={atProjects}
                 title="Every project you can read"

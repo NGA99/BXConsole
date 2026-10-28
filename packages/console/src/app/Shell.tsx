@@ -254,7 +254,7 @@ export function Shell({ route }: { route: Route }) {
     </span>
   );
   const inspectButton = (
-    <span className="tabbar-leading">
+    <span className="strip-leading">
       <button
         className={`toolbar-button${inspectOn ? ' active' : ''}`}
         title="Select an element in the page to inspect it (picks one element, then turns off)"

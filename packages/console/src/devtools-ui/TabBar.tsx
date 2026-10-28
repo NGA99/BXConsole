@@ -1,6 +1,7 @@
 /** The DevTools top tab strip. */
 import type { ReactNode } from 'react';
 import { useSelectedInView } from './selected-in-view';
+import './strip.css';
 import './TabBar.css';
 
 export interface Tab<T extends string> {
@@ -24,13 +25,13 @@ export function TabBar<T extends string>({
 }) {
   const bar = useSelectedInView(active);
   return (
-    <div className="tabbar" role="tablist" ref={bar}>
+    <div className="tabbar strip strip-scroll" role="tablist" ref={bar}>
       {leading}
       {tabs.map((t) => (
         <button
           key={t.id}
           role="tab"
-          className={`tabbar-tab${t.id === active ? ' selected' : ''}`}
+          className={`strip-item${t.id === active ? ' selected' : ''}`}
           aria-selected={t.id === active}
           disabled={t.disabled}
           onClick={() => onSelect(t.id)}
@@ -38,7 +39,7 @@ export function TabBar<T extends string>({
           {t.label}
         </button>
       ))}
-      <div className="tabbar-spacer" />
+      <div className="strip-spacer" />
       {trailing}
     </div>
   );

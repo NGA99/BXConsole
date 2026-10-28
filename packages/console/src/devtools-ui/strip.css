@@ -1,0 +1,103 @@
+/*
+ * The console's strip: one row of flat controls, ruled off from what is under
+ * it.
+ *
+ * There are three — the tabs on the session list, the panels' tabs inside a
+ * session, and the row that names the session you are reading — and each used
+ * to carry its own hand-copied set of the same values. They drifted, as copies
+ * do: 11px against 12px, centred against stretched, a 6px gap against none, a
+ * different ink on the same control. The same button was a different size and
+ * colour depending on which screen you were on.
+ *
+ * So the strip is defined once here and the components wear it. Changing a
+ * strip now changes every strip, which is the only way three of them stay
+ * alike.
+ */
+.strip {
+  display: flex;
+  align-items: stretch;
+  height: var(--tabbar-height);
+  flex-shrink: 0;
+  background: var(--sys-color-surface2);
+  border-bottom: 1px solid var(--sys-color-divider);
+  user-select: none;
+}
+
+/*
+ * Scrolling is not part of the strip.
+ *
+ * A strip of tabs that does not fit should scroll rather than lose its last
+ * tab off the edge. But the row naming a session holds the session picker,
+ * whose menu has to hang out of the row — an overflow rule there clips the
+ * menu to a 27px slot. So the strips that only hold tabs opt in.
+ */
+.strip-scroll {
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.strip-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* One control in the strip: a tab, or something shaped like one. */
+.strip-item {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sys-color-on-surface-subtle);
+  font: inherit;
+  padding: 0 10px;
+  cursor: pointer;
+  position: relative;
+  white-space: nowrap;
+}
+.strip-item:hover:not(:disabled) {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+.strip-item:disabled {
+  color: var(--sys-color-state-disabled);
+  cursor: default;
+}
+.strip-item:focus-visible {
+  outline: 2px solid var(--sys-color-primary);
+  outline-offset: -2px;
+}
+
+/* The one you are on. Nothing else in a strip carries the underline. */
+.strip-item.selected {
+  color: var(--sys-color-on-surface);
+  background: var(--sys-color-cdt-base-container);
+}
+.strip-item.selected::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -1px;
+  height: 2px;
+  background: var(--sys-color-primary-bright);
+}
+
+/* A group at the head of the strip, ruled off from the tabs after it. */
+.strip-leading {
+  display: flex;
+  align-items: stretch;
+  border-right: 1px solid var(--sys-color-divider);
+  margin-right: 2px;
+}
+
+/* The same rule, standing on its own between two groups. */
+.strip-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 0 6px 0 2px;
+  background: var(--sys-color-divider);
+  flex-shrink: 0;
+}
+
+.strip-spacer {
+  flex: 1;
+}

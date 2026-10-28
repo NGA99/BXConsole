@@ -1,66 +1,4 @@
-.tabbar {
-  display: flex;
-  align-items: stretch;
-  height: var(--tabbar-height);
-  background: var(--sys-color-surface2);
-  border-bottom: 1px solid var(--sys-color-divider);
-  flex-shrink: 0;
-  user-select: none;
-  /* Docked narrow, the five panel tabs are wider than the column holding
-     them. Without this the last one is simply cut off, with no scrollbar and
-     no way to reach it; the bar scrolls instead, and hides the scrollbar so a
-     bar that does fit looks no different. */
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-.tabbar::-webkit-scrollbar {
-  display: none;
-}
-.tabbar-tab {
-  appearance: none;
-  flex-shrink: 0;
-  border: 0;
-  background: transparent;
-  color: var(--sys-color-on-surface-subtle);
-  font: inherit;
-  padding: 0 10px;
-  cursor: pointer;
-  position: relative;
-  white-space: nowrap;
-}
-.tabbar-tab:hover:not(:disabled) {
-  background: var(--sys-color-state-hover-on-subtle);
-}
-.tabbar-tab:disabled {
-  color: var(--sys-color-state-disabled);
-  cursor: default;
-}
-.tabbar-tab.selected {
-  color: var(--sys-color-on-surface);
-  background: var(--sys-color-cdt-base-container);
-}
-.tabbar-tab.selected::after {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: -1px;
-  height: 2px;
-  background: var(--sys-color-primary-bright);
-}
-.tabbar-spacer {
-  flex: 1;
-}
-
-.tabbar-leading {
-  display: flex;
-  align-items: center;
-  padding: 0 2px 0 4px;
-  border-right: 1px solid var(--sys-color-divider);
-  margin-right: 2px;
-}
-
-/* An action at the far end of the strip, past the tabs: folding the pane away. */
+/* What the tab strip adds on top of the shared strip (see strip.css). */
 .tabbar-action {
   appearance: none;
   border: 0;
@@ -91,21 +29,3 @@
  * unselected tabs use. Finding it was the whole point, and that half-step is
  * enough without a box.
  */
-.tabbar-up {
-  appearance: none;
-  flex-shrink: 0;
-  border: 0;
-  background: transparent;
-  color: var(--sys-color-on-surface);
-  font: inherit;
-  padding: 0 10px;
-  cursor: pointer;
-  white-space: nowrap;
-}
-.tabbar-up:hover {
-  background: var(--sys-color-state-hover-on-subtle);
-}
-.tabbar-up:focus-visible {
-  outline: 2px solid var(--sys-color-primary);
-  outline-offset: -2px;
-}
