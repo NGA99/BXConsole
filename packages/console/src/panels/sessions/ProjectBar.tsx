@@ -16,7 +16,6 @@ import { useProjectsStore, selectProject } from '../../state/projects';
 import { useSessionList } from '../../state/sessions';
 import { useAccount, useIsAdmin } from '../../state/whoami';
 import { navigateToView, type PanelId, type SessionView } from '../../app/router';
-import { TabStrip } from '../../app/TabStrip';
 import { projectCounts, describeCount } from './project-counts';
 import { plain } from '../../devtools-ui/plain-text';
 import '../../devtools-ui/strip.css';
@@ -112,20 +111,12 @@ export function ProjectBar({ showing, session }: { showing: Showing; session?: {
         </>
       )}
 
-      {session && (
-        <>
-          {/*
-            * Left of the rule, the ways out; right of it, the windows of the
-            * run you are in. They keep a browser's tab shape because that is
-            * what they are — windows, not views of one — and sharing the row
-            * with the two buttons costs nothing, while a row of their own
-            * moved every row under it the moment a page opened a popup.
-            */}
-          <span className="strip-divider" />
-          <TabStrip sessionId={session.id} />
-        </>
-      )}
-
+      {/*
+        * The windows are not here. They are the tab row of the browser block
+        * below this strip (BrowserChrome), where they sit above the address
+        * of the one selected and read as what they are. This strip stays the
+        * ways out, and keeps its place whether a run is open or not.
+        */}
       <div className="strip-spacer" />
       </div>
     </>

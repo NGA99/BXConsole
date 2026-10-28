@@ -1,0 +1,106 @@
+/*
+ * The browser block: a tab row, and the address of the tab that is open.
+ *
+ * It sits under the console's own strip, so nothing anyone navigates with
+ * moves when a window opens — the title row and the Projects / Sessions tabs
+ * keep their place, and only the page below shifts down.
+ */
+.chrome {
+  flex-shrink: 0;
+}
+
+/*
+ * The tab row is a shade darker than the bar, which is how a browser separates
+ * "which window" from "what that window is on". The selected tab is the bar's
+ * own colour, so it joins the surface below it and the rest stay behind.
+ */
+.chrome-tabs {
+  display: flex;
+  align-items: flex-end;
+  height: 29px;
+  padding: 0 8px;
+  background: var(--sys-color-surface3);
+}
+
+.chrome-bar {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  height: 36px;
+  padding: 0 6px;
+  background: var(--sys-color-surface);
+  border-bottom: 1px solid var(--sys-color-divider);
+  user-select: none;
+}
+
+.chrome-reload {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--sys-color-token-subtle);
+  font: inherit;
+  font-size: 14px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+.chrome-reload:hover:not(:disabled) {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+.chrome-reload:disabled {
+  color: var(--sys-color-state-disabled);
+  cursor: default;
+}
+.chrome-reload:focus-visible {
+  outline: 2px solid var(--sys-color-primary);
+  outline-offset: -2px;
+}
+
+/*
+ * The address, in the shape a browser gives it — and nothing more.
+ *
+ * It is not a field. The page is a recording of somewhere else, so there is
+ * no address to type and nowhere to go; it carries no caret, no focus ring
+ * and no hover, which is what keeps the shape from promising one.
+ */
+.chrome-pill {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  height: 28px;
+  margin: 0 4px;
+  padding: 0 13px;
+  border-radius: 999px;
+  background: var(--sys-color-surface2);
+  cursor: default;
+}
+
+.chrome-url {
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  /* Selectable on its own, because copying the address out is the one thing
+     anyone wants to do with it. */
+  user-select: text;
+}
+.chrome-url.empty {
+  color: var(--sys-color-state-disabled);
+  font-style: italic;
+}
+
+/* The host is the fact; the path is where it is first given up when tight. */
+.chrome-host {
+  color: var(--sys-color-on-surface);
+}
+.chrome-path {
+  color: var(--sys-color-token-subtle);
+}

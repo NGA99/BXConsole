@@ -25,6 +25,7 @@ import { ElementsPanel } from '../panels/elements/ElementsPanel';
 import { SourcesPanel } from '../panels/sources/SourcesPanel';
 import { HistoryPanel } from '../panels/history/HistoryPanel';
 import { SessionLabel } from './SessionLabel';
+import { BrowserChrome } from './BrowserChrome';
 import { useActiveTab } from '../state/active-tab';
 import { SessionContext } from './session-context';
 import { ScreenPanel } from '../panels/screen/ScreenPanel';
@@ -333,8 +334,9 @@ export function Shell({ route }: { route: Route }) {
         <TopBarProject sessionId={sessionId} />
         <SessionLabel sessionId={sessionId} />
       </TopBar>
-      {/* The windows now ride in that strip, after its divider. */}
       <ProjectBar showing="inside" session={{ id: sessionId, panel: route.panel }} />
+      {/* Below the strip, so opening a window never moves the rows above it. */}
+      <BrowserChrome sessionId={sessionId} />
       {screenCollapsed ? (
         <div className="dock">
           <div className="dock-strip">

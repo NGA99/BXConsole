@@ -13,6 +13,12 @@
  * `o'brien & sons <x> "q" (a)` — so a name can hold the same character the
  * divider uses. `›` is not `>`, and the dividers are drawn in the subtle ink
  * while the names keep the plain one, which is what tells them apart.
+ *
+ * The address is not here any more, nor the connection dot. Both belong to
+ * one window rather than to the run, and both now sit in the browser block's
+ * address bar, where the window they describe is the tab directly above them.
+ * This row is left saying only where you are: the console, the project, the
+ * run.
  */
 import { useSessionList } from '../state/sessions';
 import { useActiveTab } from '../state/active-tab';
@@ -23,11 +29,10 @@ export function SessionLabel({ sessionId }: { sessionId: string }) {
   const current = sessions.find((s) => s.sessionId === sessionId);
 
   const label = plain(current ? current.name ?? current.title ?? current.sessionId : `session-${sessionId}`);
-  // The windows are tabs in the strip below; this names the one selected.
+  // The windows are tabs in the browser block below; this names the one
+  // selected, on the rare occasion its tab is too narrow to.
   const activeTab = useActiveTab(sessionId);
   const tab = current?.tabs?.find((t) => t.tabId === activeTab);
-  const shownUrl = tab?.url ?? current?.url;
-  const live = tab ? tab.connected : current?.connected;
   /*
    * The selected window's own title, spelled out here because its tab cannot.
    *
@@ -44,40 +49,9 @@ export function SessionLabel({ sessionId }: { sessionId: string }) {
     <>
       <span className="topbar-sep">›</span>
       <span className="topbar-crumb" title={label}>
-        <span className={`dot ${live ? 'on' : 'off'}`} />
         {label}
       </span>
       {windowTitle && <span className="topbar-detail">{windowTitle}</span>}
-      {/* No chevron before the address: it is what the run is on, not another
-          level of where you are, and it gives way first when the row is tight. */}
-      {shownUrl && (
-        <span className="topbar-url mono" title={plain(shownUrl)}>
-          {plain(shortUrl(shownUrl))}
-        </span>
-      )}
     </>
   );
-}
-
-/**
- * The window's address, as this line is meant to read like one.
- *
- * It used to stop at the path, which threw away the query — and the query is
- * often the only thing telling two windows of a run apart. Three tabs all
- * titled "Example Domain" on `/?1`, `/?2` and `/?3` showed as the same host
- * three times, which is worse than showing nothing.
- *
- * The scheme is dropped on https, where it says nothing, and kept on anything
- * else: a run on plain http is a fact about the engagement.
- */
-function shortUrl(url: string): string {
-  try {
-    const u = new URL(url);
-    const scheme = u.protocol === 'https:' ? '' : `${u.protocol}//`;
-    // A bare "/" is noise, but not once there is a query hanging off it.
-    const path = u.pathname === '/' && !u.search && !u.hash ? '' : u.pathname;
-    return scheme + u.host + path + u.search + u.hash;
-  } catch {
-    return url;
-  }
 }

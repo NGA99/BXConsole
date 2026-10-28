@@ -43,7 +43,7 @@ import { useElementsSelection } from '../../state/elements-selection';
 import { useInspectMode } from '../../state/inspect-mode';
 import { navigate } from '../../app/router';
 import { Toolbar, ToolbarButton, ToolbarDivider } from '../../devtools-ui/Toolbar';
-import { CollapsePaneIcon, PauseIcon, PlayIcon, RefreshIcon, StepIcon } from '../../devtools-ui/icons';
+import { CollapsePaneIcon, PauseIcon, PlayIcon, StepIcon } from '../../devtools-ui/icons';
 import { DomMirror } from './mirror';
 import { ScreenReplayer, SPEEDS, type ReplayStatus, type Speed } from './replay';
 import { useScreenReplay } from '../../state/screen-replay';
@@ -537,9 +537,9 @@ export function ScreenPanel({ sessionId, onCollapse }: { sessionId: string; onCo
             <CollapsePaneIcon />
           </ToolbarButton>
         )}
-        <ToolbarButton title={replay ? 'Reload this frame' : 'Take a fresh snapshot'} onClick={() => (replay ? replayer.current?.seek(replay.ts) : refreshScreen(sessionId))}>
-          <RefreshIcon />
-        </ToolbarButton>
+        {/* The reload is in the browser block's address bar now, where a
+            browser keeps it and where it is still reachable with this pane
+            folded away. This toolbar is left saying how you are watching. */}
         <ToolbarDivider />
         <span
           className={`screen-status ${status.state}${hidden && !replay && connected ? ' backgrounded' : ''}`}
