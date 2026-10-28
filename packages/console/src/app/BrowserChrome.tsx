@@ -75,15 +75,16 @@ export function BrowserChrome({ sessionId }: { sessionId: string }) {
         </button>
         <span className={`chrome-pill${live ? '' : ' gone'}`}>
           {/*
-            * Where a browser puts the lock — and, unlike a lock, it says so in
-            * words.
+            * No dot here, only the word at the other end.
             *
-            * A dot alone was not read. It is 8px of grey against 8px of green
-            * in the one place people have learnt to ignore, and "is this run
-            * still going?" is the question the address raises every time. The
-            * word is the answer; the dot is what makes it findable.
+            * There was one, in the lock's place. Stacked with the tab's dot
+            * directly above and the Screen's directly below, it made a column
+            * of three lights saying one thing, and the dot was the one of the
+            * three that said it least — 8px of colour where a browser keeps
+            * the padlock everybody has learnt to skip. The tab's dot is about
+            * this window and the Screen's is about what the mirror is showing;
+            * this row says it in words instead.
             */}
-          <span className={`dot ${live ? 'on' : 'off'}`} />
           {shown ? (
             <span className="chrome-url mono" title={plain(url!)}>
               <span className="chrome-host">{plain(shown.head)}</span>
