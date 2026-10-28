@@ -121,3 +121,49 @@
   margin-left: auto;
   white-space: nowrap;
 }
+
+/*
+ * The controls that leave this screen.
+ *
+ * The same shape as a tab, so the chrome reads as one thing: no border, no
+ * box, the arrow and a hover of its own. QA rounds kept finding people who
+ * could not see the way out — a blue word in this quieter row read as a
+ * label — and what fixes that is the arrow and the darker ink, not a box,
+ * which only made the control look foreign to the strip above it.
+ *
+ * Never the tabs' selected underline: these leave the screen rather than
+ * being one of its views.
+ */
+.projectbar-up {
+  font: inherit;
+  font-size: 11px;
+  color: var(--sys-color-on-surface);
+  background: transparent;
+  border: 0;
+  border-radius: 2px;
+  padding: 2px 8px;
+  cursor: pointer;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.projectbar-up:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+.projectbar-up:focus-visible {
+  outline: 2px solid var(--sys-color-primary);
+  outline-offset: -2px;
+}
+/* Where you already are: still a way back, no longer an invitation. */
+.projectbar-up.here {
+  color: var(--sys-color-on-surface);
+  font-weight: 500;
+}
+
+/* Divides what leaves this screen from what the screen is about. */
+.projectbar-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 5px 2px;
+  background: var(--sys-color-divider);
+  flex-shrink: 0;
+}

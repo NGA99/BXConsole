@@ -62,35 +62,43 @@ export function ProjectBar({ showing, session }: { showing: Showing; session?: {
     <>
       <LostNotice />
       <div className="projectbar">
-      <button
-        className={`projectbar-root${showing === 'projects' ? ' here' : ''}`}
-        title="Every project you can read"
-        onClick={() => navigateToView('projects')}
-      >
-        Projects
-      </button>
+      {/*
+        * In the session list the tab row carries this instead, so it is not
+        * drawn twice; there it sits among the tabs, which is where people
+        * look. Here it is still the only way out.
+        */}
+      {!(showing === 'inside' && !session) && (
+        <button
+          className={`projectbar-up${showing === 'projects' ? ' here' : ''}`}
+          title="Every project you can read"
+          onClick={() => navigateToView('projects')}
+        >
+          ← Projects
+        </button>
+      )}
 
       {/* Only inside one. On the list itself there is no "where you are" to
           say, and a name beside the root would read as a second heading. */}
       {inside && current && currentId && (
         <>
-          <span className="projectbar-sep">/</span>
-          {/* With a session open the project is the way back to its runs, so
-              it is a link like the root above it. The dropdown is the list's:
-              switching project from inside one session means leaving it, and
-              a control that quietly did that would be a surprise. */}
+          {/*
+            * Inside a session this is the way back to the list you came from,
+            * so it is named after that list rather than after the project. A
+            * project name is as long as whoever made it — one here reads
+            * "NC / Do not delete! (3 recorded)", whose own slash made the row
+            * look like four levels instead of three. The name is still on the
+            * button, to be read by hovering.
+            */}
           {session ? (
             <button
-              className="projectbar-root projectbar-name"
-              // The name as well as what clicking does: it is capped here, so
-              // a long one is read by hovering or nowhere.
+              className="projectbar-up"
               title={`${label(currentId)}\nThe runs in this project`}
               onClick={() => {
                 selectProject(currentId);
                 navigateToView('sessions');
               }}
             >
-              {label(currentId)}
+              ← Sessions
             </button>
           ) : (
             // The list view: this is where you already are, so the crumb
@@ -106,7 +114,8 @@ export function ProjectBar({ showing, session }: { showing: Showing; session?: {
 
       {session && (
         <>
-          <span className="projectbar-sep">/</span>
+          {/* Divides what leaves this screen from what the screen is about. */}
+          <span className="projectbar-divider" />
           <SessionPicker sessionId={session.id} panel={session.panel} />
         </>
       )}

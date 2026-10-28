@@ -91,6 +91,27 @@ export function SessionsPanel({ view }: { view: SessionView }) {
           ]}
           active={view}
           onSelect={setView}
+          /*
+           * The way out sits in the tab row, divided off from it.
+           *
+           * It was a blue word in the thin row above, and QA rounds showed
+           * people scanning the tabs and reading that row as decoration. A
+           * tab is what they look at, so this is shaped like one — but it
+           * leaves the project rather than choosing a view inside it, so it
+           * keeps the arrow, the border and the divider, and never takes the
+           * selected underline the four beside it use.
+           */
+          leading={
+            <div className="tabbar-leading">
+              <button
+                className="tabbar-up"
+                title="Every project you can read"
+                onClick={() => navigateToView('projects')}
+              >
+                ← Projects
+              </button>
+            </div>
+          }
         />
       )}
       {nothingToBeIn ? (

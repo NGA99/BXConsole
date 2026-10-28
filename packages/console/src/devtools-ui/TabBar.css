@@ -76,3 +76,36 @@
   background: var(--sys-color-state-hover-on-subtle);
   color: var(--sys-color-on-surface);
 }
+
+/*
+ * A control in the leading slot that leaves this screen rather than choosing
+ * a view in it — see SessionsPanel.
+ *
+ * Shaped exactly like the tabs beside it. It was given a border and a
+ * rounded box first, to say it was not one of them, and that read as a
+ * foreign object dropped into the strip. The arrow and the divider say the
+ * same thing without breaking the row: what it never takes is the selected
+ * underline, because you are never "on" it — it is the way out.
+ *
+ * Its text keeps the selected tab's colour rather than the subtle one the
+ * unselected tabs use. Finding it was the whole point, and that half-step is
+ * enough without a box.
+ */
+.tabbar-up {
+  appearance: none;
+  flex-shrink: 0;
+  border: 0;
+  background: transparent;
+  color: var(--sys-color-on-surface);
+  font: inherit;
+  padding: 0 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.tabbar-up:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+.tabbar-up:focus-visible {
+  outline: 2px solid var(--sys-color-primary);
+  outline-offset: -2px;
+}
