@@ -93,7 +93,7 @@
 }
 .elements-crumb {
   padding: 2px 6px;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   color: var(--sys-color-on-surface-subtle);
 }
 .elements-crumb:hover {

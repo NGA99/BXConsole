@@ -59,9 +59,15 @@
    * The console had 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11 and 14px rounding in
    * it, which is eleven decisions nobody made and nobody can tell apart: a
    * 2px corner and a 3px corner are the same corner. These are the ones
-   * worth telling apart — something you type in, something boxed off, and
-   * something shaped like a pill. A circle is still 50%.
+   * worth telling apart: a corner barely taken off, for the bars and markers
+   * in a chart and for code set into a line; something you type in or press;
+   * something boxed off; and something fully rounded. A circle is still 50%.
+   *
+   * Most of the eleven were the last of those, written as half the element's
+   * height — 7px on a 14px badge, 14px on a 28px button — which is the same
+   * shape arrived at by arithmetic, and wrong the moment the height changes.
    */
+  --radius-xs: 2px;
   --radius-sm: 4px;
   --radius-md: 6px;
   --radius-pill: 999px;
@@ -176,7 +182,7 @@ body,
 }
 ::-webkit-scrollbar-thumb {
   background: var(--sys-color-neutral-outline);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   border: 2px solid transparent;
   background-clip: content-box;
 }

@@ -81,7 +81,7 @@
   height: 28px;
   margin: 0 4px;
   padding: 0 13px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   background: var(--sys-color-surface2);
   cursor: default;
 }

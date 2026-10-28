@@ -163,7 +163,7 @@
   padding: 0 5px;
   height: 14px;
   line-height: 14px;
-  border-radius: 7px;
+  border-radius: var(--radius-pill);
   background: var(--sys-color-state-hover-on-subtle);
   color: var(--sys-color-token-subtle);
   font-size: 10px;

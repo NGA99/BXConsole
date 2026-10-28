@@ -88,7 +88,7 @@ html:not([data-theme='light']) .hist-body {
   height: 18px;
   padding: 0 7px;
   border: 1px solid transparent;
-  border-radius: 9px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--sys-color-token-subtle);
   font: inherit;
@@ -127,7 +127,7 @@ html:not([data-theme='light']) .hist-body {
   height: 19px;
   padding: 0 8px;
   border: 1px solid var(--sys-color-neutral-outline);
-  border-radius: 10px;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--sys-color-on-surface);
   font: inherit;
@@ -189,7 +189,7 @@ html:not([data-theme='light']) .hist-body {
 .hist-lane-swatch {
   width: 7px;
   height: 7px;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   flex: 0 0 auto;
 }
 
@@ -236,14 +236,14 @@ html:not([data-theme='light']) .hist-body {
   height: 12px;
   width: 2px;
   margin-left: -1px;
-  border-radius: 1px;
+  border-radius: var(--radius-xs);
   background: var(--sys-color-token-subtle);
   cursor: pointer;
 }
 
 .hist-marker.bar {
   margin-left: 0;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   opacity: 0.8;
 }
 
@@ -425,7 +425,7 @@ html:not([data-theme='light']) .hist-body {
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   background: transparent;
   color: var(--sys-color-token-subtle);
   cursor: pointer;
@@ -484,7 +484,7 @@ html:not([data-theme='light']) .hist-body {
   text-align: center;
   color: var(--sys-color-token-subtle);
   border: 1px solid var(--sys-color-divider);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   line-height: 13px;
   font-size: 10px;
   cursor: pointer;
@@ -518,7 +518,7 @@ html:not([data-theme='light']) .hist-body {
   align-items: center;
   justify-content: center;
   border: none;
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   font-size: 9px;
   line-height: 1;
   cursor: pointer;

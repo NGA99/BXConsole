@@ -116,7 +116,7 @@
 }
 .otree-line.is-node:hover {
   background: color-mix(in srgb, var(--sys-color-primary-bright) 14%, transparent);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 /*

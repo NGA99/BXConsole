@@ -32,7 +32,7 @@
   font: inherit;
   font-size: 12px;
   padding: 2px 6px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: default;
 }
 .netsearch-close:hover {
@@ -111,7 +111,7 @@
 .netsearch-count {
   flex: 0 0 auto;
   padding: 0 5px;
-  border-radius: 7px;
+  border-radius: var(--radius-pill);
   background: var(--sys-color-state-hover-on-subtle);
   color: var(--sys-color-token-subtle);
   font-size: 9px;
@@ -152,7 +152,7 @@
 .netsearch-label mark {
   background: var(--sys-color-search-hit);
   color: inherit;
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
 }
 
 .netsearch-more {

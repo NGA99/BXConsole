@@ -39,7 +39,7 @@
   font-size: 11px;
   color: var(--sys-color-error);
   border: 1px solid var(--sys-color-error);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   padding: 5px 8px;
   margin-bottom: 12px;
 }
@@ -69,7 +69,7 @@
   color: var(--sys-color-on-surface);
   background: var(--sys-color-cdt-base-container);
   border: 1px solid var(--sys-color-neutral-outline);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   padding: 1px 2px;
 }
 .admin-id {
@@ -120,6 +120,6 @@
   color: var(--sys-color-on-surface);
   background: var(--sys-color-cdt-base-container);
   border: 1px solid var(--sys-color-neutral-outline);
-  border-radius: 2px;
+  border-radius: var(--radius-xs);
   padding: 1px 2px;
 }

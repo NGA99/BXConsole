@@ -10,7 +10,7 @@
   margin-top: 8px;
   padding: 8px;
   background: var(--sys-color-surface2);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   user-select: all;
 }
 /* Fixed columns, so the counts, user agents and times line up down the list
@@ -197,7 +197,7 @@
   margin: 24px 28px;
   padding: 16px 18px;
   border: 1px solid var(--sys-color-divider);
-  border-radius: 8px;
+  border-radius: var(--radius-md);
   background: var(--sys-color-surface1);
   /* The panel takes the width it is given. The cap it used to have left a
      third of a wide window empty while the snippets opposite wrapped onto
@@ -338,7 +338,7 @@
   font-size: 11px;
   color: var(--sys-color-on-surface);
   background: var(--sys-color-surface3);
-  border-radius: 3px;
+  border-radius: var(--radius-xs);
   padding: 1px 6px;
   /* Masked, so there is no selecting half of it by accident; copy takes it. */
   user-select: none;
@@ -379,7 +379,7 @@
   margin: 4px 0;
   padding: 8px;
   background: var(--sys-color-surface2);
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   white-space: pre-wrap;
   word-break: break-all;
   user-select: all;
@@ -397,7 +397,7 @@
   display: inline-block;
   padding: 0 6px;
   border: 1px solid var(--sys-color-divider);
-  border-radius: 9px;
+  border-radius: var(--radius-pill);
   color: var(--sys-color-token-subtle);
   font-variant-numeric: tabular-nums;
   font-size: 11px;
@@ -494,7 +494,7 @@
 .install-source {
   margin: 0 0 14px;
   border: 1px solid var(--sys-color-divider);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 .install-source .install-snippet-head {
@@ -516,7 +516,7 @@
 .prepayload {
   margin: 10px 0 14px;
   border: 1px solid var(--sys-color-divider);
-  border-radius: 5px;
+  border-radius: var(--radius-sm);
   overflow: hidden;
 }
 .prepayload .install-snippet-head {
