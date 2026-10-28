@@ -661,10 +661,36 @@ export class Relay {
         return;
       }
 
-      case 'project.trash':
-      case 'project.restore': {
+      case 'project.trash': {
         if (!this.mayAdministerFrom(ws, msg.projectId)) return;
-        const next = await this.projects!.setTrashed(msg.projectId, msg.type === 'project.trash');
+        /*
+         * Taken while the project is still visible, because after this it is
+         * not: deleting is immediate on the owner's side. They are told it is
+         * gone rather than told it changed, which is what moves them off it
+         * and out of its recordings.
+         */
+        const audience = this.projectAudience(msg.projectId);
+        const next = await this.projects!.setTrashed(msg.projectId, true);
+        if (next) this.sendTo(audience, { type: 'project.removed', projectId: msg.projectId, reason: 'deleted' });
+        this.refreshAdmins();
+        return;
+      }
+
+      case 'project.restore': {
+        /*
+         * An administrator may put one back, and that is the other half of
+         * deleting being immediate: the owner cannot undo it because they can
+         * no longer see it.
+         *
+         * This is the one thing an administrator does to a project without
+         * taking it first, and it is allowed because it hands nothing over —
+         * the project goes back to the owner it already had, and the
+         * administrator is no nearer its recordings than before. Reaching
+         * those still means taking the project, in a file, where it shows.
+         */
+        const admin = this.consoles.get(ws)?.role === 'admin';
+        if (!admin && !this.mayAdministerFrom(ws, msg.projectId)) return;
+        const next = await this.projects!.setTrashed(msg.projectId, false);
         if (next) this.tellAboutProject(next);
         this.refreshAdmins();
         return;

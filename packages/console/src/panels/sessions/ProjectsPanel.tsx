@@ -17,21 +17,16 @@ import { useEffect, useRef, useState } from 'react';
 import type { Project } from '@bxconsole/protocol';
 import { useProjectsStore, selectProject } from '../../state/projects';
 import { useSessionList, useSessionsStore } from '../../state/sessions';
-import { purgeNote } from './purge';
 import { useAccount } from '../../state/whoami';
 import {
   createProject,
-  forgetProject,
   renameProject,
-  restoreProject,
   trashProject,
 } from '../../transport/client';
 import { navigateToView } from '../../app/router';
 import { copyText } from '../network/copy';
 import { Confirm } from './Confirm';
-import { maskKey } from './agent-key';
 import './ProjectsPanel.css';
-import { fullTimestamp } from '../../devtools-ui/time';
 import { isEnterSubmit } from '../../devtools-ui/enter-key';
 import { projectCounts, liveness, type Liveness } from './project-counts';
 
@@ -187,16 +182,15 @@ function ProjectRow({
    * that still fits, and it is the right one here because the mistake these
    * prevent is clicking the wrong row.
    */
-  const [confirming, setConfirming] = useState<'forget' | null>(null);
+  const [confirming, setConfirming] = useState<'delete' | null>(null);
   const [typed, setTyped] = useState('');
   const matches = typed.trim() === project.name;
 
-  const arm = (what: 'forget' | null) => {
+  const arm = (what: 'delete' | null) => {
     setConfirming(what);
     setTyped('');
   };
 
-  const trashed = project.trashedAt !== undefined;
 
   /*
    * The card opens the project, the way a row opens a session. It used to take
@@ -214,7 +208,7 @@ function ProjectRow({
 
   return (
     <div
-      className={`project project-${liveness}${trashed ? ' trashed' : ''}`}
+      className={`project project-${liveness}`}
       role="button"
       tabIndex={0}
       title={selected ? `Showing ${project.name}` : `Show the recordings in ${project.name}`}
@@ -257,11 +251,6 @@ function ProjectRow({
             shared with you
           </span>
         )}
-        {trashed && (
-          <span className="project-tag bad" title={`Moved to the trash on ${fullTimestamp(project.trashedAt!)}`}>
-            {purgeNote(project.trashedAt, purgeDays) ?? 'in the trash'}
-          </span>
-        )}
         <div className="project-spacer" />
         <span className="project-count">
           {sessions} {sessions === 1 ? 'recording' : 'recordings'}
@@ -285,7 +274,7 @@ function ProjectRow({
       <div className="project-key" onClick={(e) => e.stopPropagation()}>
         <span className="project-key-label">Agent key</span>
         <code className="mono" title="Payloads carrying this key record into this project. The Agent tab builds the snippet, and rotates it.">
-          {maskKey(project.agentKey)}
+          {project.agentKey}
         </code>
         <button
           className="detail-link"
@@ -300,53 +289,46 @@ function ProjectRow({
         </button>
       </div>
 
+      {/*
+        * Deleting is one step and it happens now.
+        *
+        * It used to put the project in a trash that stayed on this screen for
+        * seven days, with `take out of the trash` and `delete for good` on
+        * the card — which made the list a place where deleted things went on
+        * living, and left the reader to tell a project apart from the ghost
+        * of one. Deleting takes it off the screen, and the seven days are
+        * kept where they are of use: an administrator can put it back.
+        */}
       {mine && (
         <div className="project-actions" onClick={(e) => e.stopPropagation()}>
-          {trashed ? (
-            <>
-              <button className="detail-link" onClick={() => restoreProject(project.id)}>
-                take out of the trash
-              </button>
-              {purgeDays > 0 && sessions > 0 && (
-                <span className="project-note">
-                  Its {sessions} {sessions === 1 ? 'recording is' : 'recordings are'} deleted with it.
-                </span>
-              )}
-              {confirming !== 'forget' && (
-                <button className="detail-link bad" onClick={() => arm('forget')}>
-                  delete for good
-                </button>
-              )}
-            </>
-          ) : home ? (
+          {home ? (
             <span className="project-note">
-              The home project cannot be trashed or deleted: a payload with no key has to have
-              somewhere to land.
+              The home project cannot be deleted: a payload with no key has to have somewhere to
+              land.
             </span>
           ) : (
-            <>
-              <button className="detail-link" onClick={() => trashProject(project.id)}>
-                move to the trash
+            // Nothing beside it. What deleting does — gone from here, an
+            // administrator's to put back for a week — is in the confirmation
+            // that follows, which is where it is read rather than skimmed;
+            // saying it twice made the card a paragraph with a link in it.
+            confirming !== 'delete' && (
+              <button className="detail-link bad" onClick={() => arm('delete')}>
+                delete
               </button>
-              {purgeDays > 0 && (
-                <span className="project-note">
-                  Reversible for {purgeDays} days, then it and its recordings are deleted.
-                </span>
-              )}
-            </>
+            )
           )}
         </div>
       )}
 
-      {mine && confirming === 'forget' && (
+      {mine && confirming === 'delete' && (
         <Confirm
-          what={`This deletes the project and its ${sessions} ${sessions === 1 ? 'recording' : 'recordings'}, for good. Type “${project.name}” to confirm.`}
+          what={`This takes the project and its ${sessions} ${sessions === 1 ? 'recording' : 'recordings'} off your console. Only an administrator can bring it back, for ${purgeDays} days. Type “${project.name}” to confirm.`}
           name={project.name}
           typed={typed}
           setTyped={setTyped}
           enabled={matches}
           action="delete it"
-          onGo={() => (forgetProject(project.id), arm(null))}
+          onGo={() => (trashProject(project.id), arm(null))}
           onCancel={() => arm(null)}
         />
       )}

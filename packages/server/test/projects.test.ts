@@ -168,16 +168,23 @@ describe('who may see what', () => {
     assert.equal(mayAdminister(s.get(hers.id)!, ANA), true);
   });
 
-  test('a trashed project is still its owner’s, so it can be restored or emptied', async () => {
+  test('a deleted project leaves its owner’s sight at once, and is still there to be put back', async () => {
+    /*
+     * Deleting is immediate on the owner's side and the seven days are an
+     * administrator's to undo. So the record stays — `get` and `all` find it,
+     * which is what the administrator's screen reads — while `visibleTo`,
+     * the one gate on what a console sees, no longer offers it.
+     */
     const { store: s } = store();
     await s.load();
     await s.create('Home', ANA); // the first is the home one, which cannot be trashed
     const hers = await s.create('Ana’s', ANA);
     await s.setTrashed(hers.id, true);
-    assert.ok(s.get(hers.id)?.trashedAt);
-    assert.ok(s.visibleTo(ANA).some((p) => p.id === hers.id));
+    assert.ok(s.get(hers.id)?.trashedAt, 'the record went, so there is nothing to put back');
+    assert.ok(!s.visibleTo(ANA).some((p) => p.id === hers.id), 'a deleted project is still on its owner’s screen');
     await s.setTrashed(hers.id, false);
     assert.equal(s.get(hers.id)?.trashedAt, undefined);
+    assert.ok(s.visibleTo(ANA).some((p) => p.id === hers.id), 'putting it back did not bring it back');
   });
 
   test('the home project cannot be trashed, only the others', async () => {

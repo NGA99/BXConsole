@@ -121,10 +121,6 @@
 .project.project-empty {
   border-left-color: var(--sys-color-primary);
 }
-.project.trashed {
-  opacity: 0.72;
-}
-
 .project-top {
   display: flex;
   align-items: center;
@@ -206,9 +202,16 @@
 
 /* The confirmation, which has to read as a stop rather than a prompt. */
 /*
- * The card is still the way in — clicking it opens the project — but it does
- * not light up under the pointer, and nothing inside it does either. The one
- * exception is the name, which is a field you type in and says so.
+ * The card lifts under the pointer, and nothing on it changes colour.
+ *
+ * The obvious hover — a background wash — was tried and taken out: it ran
+ * across the name field, the key and the delete link alike, and a card whose
+ * every part lights up together reads as one button, which it is not. Height
+ * says the same thing without touching any of them. What is printed on the
+ * card stays exactly as it was; the card is simply nearer.
+ *
+ * The one part that still answers on its own is the name, which is a field
+ * you type in and says so.
  *
  * This is deliberately unlike the Sessions list, whose rows do light up. The
  * card carries several things that are their own controls, and a wash moving
@@ -217,6 +220,34 @@
  * Keyboard users still get the card as a stop, so it still has to say when it
  * is on one — that is focus, not hover.
  */
+.project {
+  transition:
+    box-shadow 120ms ease,
+    transform 120ms ease,
+    border-color 120ms ease;
+}
+.project:hover {
+  transform: translateY(-1px);
+  border-color: var(--sys-color-neutral-outline);
+  box-shadow: 0 3px 8px var(--sys-color-shadow);
+}
+/* Pressed: back down to the page, which is the other half of the gesture. */
+.project:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 3px var(--sys-color-shadow);
+}
+/* Movement is the whole effect, so where movement is unwanted the border and
+   the shadow carry it alone. */
+@media (prefers-reduced-motion: reduce) {
+  .project {
+    transition: none;
+  }
+  .project:hover,
+  .project:active {
+    transform: none;
+  }
+}
+
 .project:focus-visible {
   outline: 2px solid var(--sys-color-primary);
   outline-offset: -2px;

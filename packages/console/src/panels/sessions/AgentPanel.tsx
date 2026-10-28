@@ -12,7 +12,6 @@ import { copyText } from "../network/copy";
 import { AgentSource } from "./AgentSource";
 import { PrePayloadEditor } from "./PrePayloadEditor";
 import { Confirm } from "./Confirm";
-import { maskKey } from "./agent-key";
 import {
   loadSetup,
   saveSetup,
@@ -207,7 +206,7 @@ export function AgentPanel({ onDiagnose }: { onDiagnose?: () => void }) {
             <div className="install-key">
               <div className="install-key-row">
                 <span className="install-key-label">Agent key</span>
-                <code className="mono">{maskKey(project.agentKey)}</code>
+                <code className="mono">{project.agentKey}</code>
                 <button className="detail-link" title="Copy the whole key" onClick={() => void copy("key", project.agentKey)}>
                   {copied === "key" ? "copied" : "copy"}
                 </button>

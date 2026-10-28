@@ -18,6 +18,9 @@
   /* Text on a filled primary surface. Light blue in dark mode needs dark
      ink on it, which is why this is a token and not white. */
   --sys-color-on-primary: #ffffff;
+  /* What a surface lifted off the page casts. Darker in dark mode, where a
+     faint black on a dark ground says nothing at all. */
+  --sys-color-shadow: rgba(0, 0, 0, 0.14);
   --sys-color-primary-bright: #1a73e8;
   --sys-color-tonal-container: #d3e3fd;
   /* Where a search match is picked out of the line it sits in. */
@@ -68,6 +71,7 @@
     --sys-color-neutral-outline: #5e5e5e;
     --sys-color-primary: #a8c7fa;
     --sys-color-on-primary: #062e6f;
+    --sys-color-shadow: rgba(0, 0, 0, 0.55);
     --sys-color-primary-bright: #8ab4f8;
     --sys-color-tonal-container: #004a77;
     --sys-color-search-hit: #6c5a00;
@@ -108,6 +112,7 @@
     --sys-color-neutral-outline: #5e5e5e;
     --sys-color-primary: #a8c7fa;
     --sys-color-on-primary: #062e6f;
+    --sys-color-shadow: rgba(0, 0, 0, 0.55);
     --sys-color-primary-bright: #8ab4f8;
     --sys-color-tonal-container: #004a77;
     --sys-color-search-hit: #6c5a00;

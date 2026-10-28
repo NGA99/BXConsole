@@ -25,8 +25,11 @@ import {
   setAccountPassword,
   setAccountRole,
   transferProject,
+  restoreProject,
 } from '../../transport/client';
 import { absoluteTimestamp } from '../../devtools-ui/time';
+import { purgeNote } from './purge';
+import { useSessionsStore } from '../../state/sessions';
 import './AdminPanel.css';
 
 export function AdminPanel() {
@@ -249,6 +252,8 @@ function Ownership({
   loaded: boolean;
 }) {
   const byId = new Map(accounts.map((a) => [a.id, a]));
+  // The same window the relay applies, read from where it is already sent.
+  const purgeDays = useSessionsStore((st) => st.trashPurgeDays);
   /*
    * A project whose owner is not an account any more.
    *
@@ -286,9 +291,28 @@ function Ownership({
               const owner = byId.get(p.owner);
               return (
                 <tr key={p.id} className={owner ? undefined : 'admin-orphan'}>
+                  {/*
+                    * A deleted project, and the one way back.
+                    *
+                    * Deleting is immediate for the owner — it leaves their
+                    * screen at once — so these seven days are only reachable
+                    * from here. Putting one back hands nothing over: it
+                    * returns to the owner it already had, and an
+                    * administrator who wants to read it still has to take it
+                    * with the owner field below, where that shows.
+                    */}
                   <td>
                     {p.name}
-                    {p.trashedAt !== undefined && <span className="admin-tag bad">in the trash</span>}
+                    {p.trashedAt !== undefined && (
+                      <>
+                        <span className="admin-tag bad" title={`Deleted on ${new Date(p.trashedAt).toISOString()}`}>
+                          {purgeNote(p.trashedAt, purgeDays) ?? 'deleted'}
+                        </span>
+                        <button className="detail-link" onClick={() => restoreProject(p.id)}>
+                          put it back
+                        </button>
+                      </>
+                    )}
                   </td>
                   <td>{p.sessions}</td>
                   <td title={new Date(p.createdAt).toISOString()}>{absoluteTimestamp(p.createdAt)}</td>

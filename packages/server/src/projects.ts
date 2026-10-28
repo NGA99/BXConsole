@@ -229,9 +229,24 @@ export class ProjectStore {
   }
 
   /** The projects this account may read, newest first. */
+  /**
+   * The projects a console may see — which never includes a deleted one.
+   *
+   * Deleting is immediate on the owner's side: the project leaves their
+   * screen and takes its recordings with it. The seven days it is kept are
+   * an administrator's to undo, not the owner's to browse, so the trash is
+   * not a place anyone visits. `all` is what the administrator's screen
+   * reads, and it keeps everything.
+   *
+   * Runs still land in a trashed project, which is deliberate and lives in
+   * setTrashed: a page tidied away still has windows open, and dropping
+   * those would lose the tail of the engagement rather than tidy it.
+   */
   visibleTo(accountId: string | undefined): Project[] {
     if (this.broken) return [];
-    return this.projects.filter((p) => mayRead(p, accountId)).sort((a, b) => b.createdAt - a.createdAt);
+    return this.projects
+      .filter((p) => p.trashedAt === undefined && mayRead(p, accountId))
+      .sort((a, b) => b.createdAt - a.createdAt);
   }
 
   async create(name: string, owner: string, opts: { home?: boolean } = {}): Promise<Project> {
