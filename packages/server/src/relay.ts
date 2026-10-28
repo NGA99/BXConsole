@@ -83,8 +83,27 @@ interface ScreenState {
   opsSinceKeyframe: number;
   /** a keyframe has been asked for and not arrived yet */
   awaitingKeyframe: boolean;
-  /** the window whose stream is being recorded, so keyframes go back to it */
-  tabId: string;
+}
+
+/**
+ * The keyframe cadence is kept per window, not per run.
+ *
+ * `data-screen="record"` is the default, so every window of a run streams
+ * from its first tick and a run that has spread holds several at once. One
+ * state shared between them was wrong in every direction: a second window's
+ * opening snapshot reset the first window's op count, so its next keyframe
+ * never came due; the request for one went to whichever window had sent ops
+ * most recently; and `awaitingKeyframe`, being shared, let one window's
+ * outstanding request block every other window's.
+ *
+ * A window left with nothing but the keyframe it opened with is a window
+ * whose only frame compaction drops first, and after that the console has
+ * nothing to show for it — so this is also half of why a closed window came
+ * back blank.
+ */
+function screenKey(sessionId: string, tabId: string): string {
+  // NUL cannot occur in either id, so the pair cannot be spelled two ways.
+  return `${sessionId}\u0000${tabId}`;
 }
 
 export class Relay {
@@ -135,7 +154,9 @@ export class Relay {
   /** which url each in-flight sources.get asked for, so the reply can be stored */
   private readonly sourceAsks = new Map<string, { sessionId: string; url: string }>();
   /** the last cursor position written to each recording, for sampling */
-  private readonly lastCursor = new Map<string, { ts: number; x: number; y: number; pressed: boolean }>();
+  // `tab`: whose trail this is, so a window closing clears the cursor only
+  // when the cursor was its own.
+  private readonly lastCursor = new Map<string, { ts: number; x: number; y: number; pressed: boolean; tab: string }>();
   /** pulls the page's own files in while the page is still there to fetch them */
   private collector: AssetCollector | null = null;
 
@@ -230,12 +251,12 @@ export class Relay {
     ws.on('close', () => {
       if (!entry) return;
       void this.registry.markTabDisconnected(entry.meta.sessionId, tabId, ws);
-      // Only the recording window's departure ends the recording; a popup
-      // closing must not punch a hole in the window that is still streaming.
-      if (this.screenState.get(entry.meta.sessionId)?.tabId === tabId) {
-        this.screenState.delete(entry.meta.sessionId);
-        // The next window to stream starts its own trail rather than carrying
-        // on from where a cursor in a different document happened to stop.
+      // This window's cadence goes with it, and only this window's: a popup
+      // closing must not punch a hole in a window that is still streaming.
+      this.screenState.delete(screenKey(entry.meta.sessionId, tabId));
+      // The next window to stream starts its own trail rather than carrying
+      // on from where a cursor in a different document happened to stop.
+      if (this.lastCursor.get(entry.meta.sessionId)?.tab === tabId) {
         this.lastCursor.delete(entry.meta.sessionId);
       }
       // The last window of the run just left: whatever is still queued can no
@@ -250,10 +271,11 @@ export class Relay {
    */
   private recordScreen(entry: SessionEntry, event: ScreenEvent, tabId: string): void {
     const id = entry.meta.sessionId;
+    const key = screenKey(id, tabId);
     if (event.type === 'screen.snapshot') {
       // Key order matters: screen-log.ts recognises keyframe lines by their prefix.
       this.store.screen.append(id, { k: 1, ts: event.ts, tab: tabId, snapshot: event });
-      this.screenState.set(id, { lastKeyframeAt: event.ts, opsSinceKeyframe: 0, awaitingKeyframe: false, tabId });
+      this.screenState.set(key, { lastKeyframeAt: event.ts, opsSinceKeyframe: 0, awaitingKeyframe: false });
       return;
     }
     if (event.type === 'screen.cursor') {
@@ -262,12 +284,12 @@ export class Relay {
     }
     if (event.type !== 'screen.mutations') return;
 
-    const state = this.screenState.get(id);
+    const state = this.screenState.get(key);
     if (!state) {
       // Ops with no keyframe behind them in this process (the relay restarted
       // under a page that keeps recording): anchor the recording first, and
       // drop these, since nothing could replay them.
-      this.screenState.set(id, { lastKeyframeAt: event.ts, opsSinceKeyframe: 0, awaitingKeyframe: true, tabId });
+      this.screenState.set(key, { lastKeyframeAt: event.ts, opsSinceKeyframe: 0, awaitingKeyframe: true });
       const a = agentFor(entry, tabId);
       if (a) send(a, { type: 'screen.keyframe' });
       return;
@@ -278,8 +300,8 @@ export class Relay {
     const due = event.ts - state.lastKeyframeAt >= KEYFRAME_MS || state.opsSinceKeyframe >= KEYFRAME_OPS;
     // Back to the window that produced these ops: a keyframe from any other
     // window would anchor this recording to the wrong document, and a window
-    // that is not streaming answers nothing, latching the flag forever.
-    state.tabId = tabId;
+    // that is not streaming answers nothing, latching the flag forever. The
+    // key already names that window, so there is nothing to point back at.
     const streaming = agentFor(entry, tabId);
     if (due && !state.awaitingKeyframe && streaming) {
       state.awaitingKeyframe = true;
@@ -365,7 +387,7 @@ export class Relay {
     const due = !last || event.ts - last.ts >= CURSOR_SAMPLE_MS;
     if (!pressChanged && (!moved || !due)) return;
 
-    this.lastCursor.set(sessionId, { ts: event.ts, x: event.x, y: event.y, pressed: event.pressed });
+    this.lastCursor.set(sessionId, { ts: event.ts, x: event.x, y: event.y, pressed: event.pressed, tab: tabId });
     /*
      * The anchor is kept only while the button is down.
      *
@@ -1037,7 +1059,10 @@ export class Relay {
     const audience = this.audienceFor(sessionId);
     if (!(await this.registry.forget(sessionId))) return false;
     this.networkConfig.delete(sessionId);
-    this.screenState.delete(sessionId);
+    // Every window's cadence, since the map is keyed by the pair.
+    for (const key of this.screenState.keys()) {
+      if (key.startsWith(`${sessionId}\u0000`)) this.screenState.delete(key);
+    }
     this.lastCursor.delete(sessionId);
     this.sendTo(audience, { type: 'session.removed', sessionId });
     return true;
