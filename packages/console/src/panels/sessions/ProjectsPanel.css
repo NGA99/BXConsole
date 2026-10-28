@@ -11,13 +11,6 @@
   flex: 1;
   min-height: 0;
 }
-.projects-head {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding-bottom: 8px;
-}
-.projects-sub,
 .projects-empty,
 .project-note {
   font-size: 11px;
@@ -27,21 +20,79 @@
   padding: 10px 0;
 }
 
+/*
+ * Making a project is what this screen is for, so it is a block of its own
+ * with its own heading — see ProjectsPanel.tsx for what it used to be and
+ * why nobody could find it.
+ */
 .projects-new {
+  border: 1px solid var(--sys-color-divider);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 14px;
+  background: var(--sys-color-surface1);
+}
+.projects-new-title {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--sys-color-on-surface);
+}
+.projects-new-row {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding-bottom: 10px;
+  gap: 8px;
 }
 .projects-new input {
-  width: 240px;
+  flex: 1 1 auto;
+  min-width: 0;
+  max-width: 320px;
+  /* The size of everything else on the screen. It was 11px, the smallest
+     text here, on the one control that matters most. */
   font: inherit;
-  font-size: 11px;
   color: var(--sys-color-on-surface);
   background: var(--sys-color-cdt-base-container);
   border: 1px solid var(--sys-color-neutral-outline);
-  border-radius: 2px;
-  padding: 2px 4px;
+  border-radius: 4px;
+  padding: 4px 8px;
+}
+.projects-new input:focus-visible {
+  outline: 2px solid var(--sys-color-primary);
+  outline-offset: -1px;
+}
+
+/*
+ * The console's only filled button.
+ *
+ * Everything else in here is a text link, which is how the screen's own
+ * purpose came to look like its smallest action. One filled button is what
+ * makes it the thing you do on this screen — a second one somewhere else
+ * would undo that, so it is scoped here rather than offered as a style to
+ * reach for.
+ */
+.projects-create {
+  appearance: none;
+  flex: 0 0 auto;
+  border: 0;
+  border-radius: 4px;
+  padding: 5px 12px;
+  font: inherit;
+  font-weight: 500;
+  color: var(--sys-color-on-primary);
+  background: var(--sys-color-primary);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.projects-create:hover:not(:disabled) {
+  background: var(--sys-color-primary-bright);
+}
+.projects-create:disabled {
+  background: var(--sys-color-state-disabled);
+  cursor: default;
+}
+.projects-create:focus-visible {
+  outline: 2px solid var(--sys-color-primary-bright);
+  outline-offset: 2px;
 }
 
 .project {

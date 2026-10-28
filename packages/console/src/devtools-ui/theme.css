@@ -15,6 +15,9 @@
   --sys-color-divider: #d9d9d9;
   --sys-color-neutral-outline: #c7c7c7;
   --sys-color-primary: #0b57d0;
+  /* Text on a filled primary surface. Light blue in dark mode needs dark
+     ink on it, which is why this is a token and not white. */
+  --sys-color-on-primary: #ffffff;
   --sys-color-primary-bright: #1a73e8;
   --sys-color-tonal-container: #d3e3fd;
   /* Where a search match is picked out of the line it sits in. */
@@ -64,6 +67,7 @@
     --sys-color-divider: #494c50;
     --sys-color-neutral-outline: #5e5e5e;
     --sys-color-primary: #a8c7fa;
+    --sys-color-on-primary: #062e6f;
     --sys-color-primary-bright: #8ab4f8;
     --sys-color-tonal-container: #004a77;
     --sys-color-search-hit: #6c5a00;
@@ -103,6 +107,7 @@
     --sys-color-divider: #494c50;
     --sys-color-neutral-outline: #5e5e5e;
     --sys-color-primary: #a8c7fa;
+    --sys-color-on-primary: #062e6f;
     --sys-color-primary-bright: #8ab4f8;
     --sys-color-tonal-container: #004a77;
     --sys-color-search-hit: #6c5a00;

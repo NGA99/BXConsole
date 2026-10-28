@@ -13,7 +13,7 @@
  * relay checks all of this again; hiding the buttons is so that what is shown
  * is what works.
  */
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { Project } from '@bxconsole/protocol';
 import { useProjectsStore, selectProject } from '../../state/projects';
 import { useSessionList, useSessionsStore } from '../../state/sessions';
@@ -51,6 +51,7 @@ export function ProjectsPanel() {
   const live = projectCounts(sessions, homeId);
 
   const [entering, setEntering] = useState<string | null>(null);
+  const nameRef = useRef<HTMLInputElement>(null);
 
   /*
    * Making a project is how you say what you are about to work on, so it
@@ -59,7 +60,19 @@ export function ProjectsPanel() {
    */
   const make = () => {
     const name = making.trim();
-    if (!name) return;
+    /*
+     * With no name yet the button is still the way in: it puts the cursor
+     * where the name goes.
+     *
+     * Disabling it instead left the one filled control on the screen grey
+     * every time the screen was opened, which is the state people arrive
+     * on — and a grey button is exactly as easy to miss as the text link it
+     * replaced.
+     */
+    if (!name) {
+      nameRef.current?.focus();
+      return;
+    }
     createProject(name);
     setEntering(name);
     setMaking('');
@@ -76,26 +89,44 @@ export function ProjectsPanel() {
 
   return (
     <div className="projects">
-      {/* No heading here: the path row above already says Projects, and the
-          screen saying it twice reads as two different things. */}
-      <div className="projects-head">
-        <span className="projects-sub">
-          A project owns its recordings and its agent key. Runs land in the project whose key the
-          payload carries.
-        </span>
-      </div>
-
+      {/*
+        * No heading and no preamble. The tab row above already says Projects,
+        * and the paragraph that stood here — what a project owns, where a run
+        * lands — was read by nobody who did not already know it, while it
+        * pushed the one control this screen is for further down the page.
+        * What it said is on the cards: every card names its key, and the home
+        * card says what a payload with no key does.
+        */}
+      {/*
+        * A block with a heading, not a line with an input on it.
+        *
+        * It was an input and a `create` link, which is the shape of the
+        * Sessions screen's filter box — same place on the screen, same size —
+        * so people typed a name into it and waited for the list to narrow.
+        * And `create` wore `.detail-link`, the style of the eight `copy`,
+        * `rotate` and `move to the trash` under it, so the one thing this
+        * screen is for looked like its smallest action.
+        *
+        * Not a <form>. Its submit-on-Enter fires on the Enter that commits an
+        * IME composition, which is the bug that made "ㅁㄴㅇㄹ" into two
+        * projects; isEnterSubmit is what knows the difference.
+        */}
       <div className="projects-new">
-        <input
-          value={making}
-          placeholder="New project name"
-          spellCheck={false}
-          onChange={(e) => setMaking(e.target.value)}
-          onKeyDown={(e) => isEnterSubmit(e.nativeEvent) && make()}
-        />
-        <button className="detail-link" disabled={!making.trim()} onClick={make}>
-          create
-        </button>
+        <h2 className="projects-new-title">New project</h2>
+        <div className="projects-new-row">
+          <input
+            ref={nameRef}
+            value={making}
+            placeholder="Name it after the engagement"
+            aria-label="New project name"
+            spellCheck={false}
+            onChange={(e) => setMaking(e.target.value)}
+            onKeyDown={(e) => isEnterSubmit(e.nativeEvent) && make()}
+          />
+          <button className="projects-create" onClick={make}>
+            Create project
+          </button>
+        </div>
       </div>
 
       {order.length === 0 ? (
