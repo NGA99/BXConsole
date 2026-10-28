@@ -1,0 +1,34 @@
+/*
+ * A word pinned to the thing beside it: `home`, `you`, `shared with you`,
+ * `deleted in 7 days`.
+ *
+ * There were two of these, on the Projects screen and the administrator's,
+ * and they had drifted to within a pixel of each other without ever being
+ * the same thing — 6px of padding against 5, a 14px line against 13. Near
+ * enough that nobody could see it, far enough that changing one left the
+ * other behind.
+ *
+ * Not a chip you press. The network filter's chips are 20px tall, carry a
+ * surface of their own and answer the pointer; this does none of that,
+ * because it is a label rather than a control.
+ */
+.tag {
+  /* Its own box, so a tag is the same height in a card's flex row as in a
+     table cell. Left to the inline flow it was 16px in one and 14px in the
+     other, which is the drift coming back in by a different door. */
+  display: inline-flex;
+  align-items: center;
+  border: 1px solid var(--sys-color-neutral-outline);
+  border-radius: var(--radius-pill);
+  padding: 0 6px;
+  font-size: 10px;
+  line-height: 14px;
+  color: var(--sys-color-token-subtle);
+  white-space: nowrap;
+}
+
+/* The state worth noticing: deleted, orphaned, about to go. */
+.tag.bad {
+  color: var(--sys-color-error);
+  border-color: var(--sys-color-error);
+}

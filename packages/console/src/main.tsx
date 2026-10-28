@@ -4,6 +4,7 @@ import { App } from './App';
 import { connect } from './transport/client';
 import './devtools-ui/theme.css';
 import './devtools-ui/field.css';
+import './devtools-ui/tag.css';
 
 connect();
 

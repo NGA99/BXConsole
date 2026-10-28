@@ -88,18 +88,9 @@
   background: color-mix(in srgb, var(--sys-color-error) 8%, transparent);
 }
 
+/* The shared tag (tag.css), set off from the name it follows in a cell. */
 .admin-tag {
-  border: 1px solid var(--sys-color-neutral-outline);
-  border-radius: var(--radius-pill);
-  padding: 0 5px;
   margin-left: 6px;
-  font-size: 10px;
-  line-height: 13px;
-  color: var(--sys-color-token-subtle);
-}
-.admin-tag.bad {
-  color: var(--sys-color-error);
-  border-color: var(--sys-color-error);
 }
 
 .admin-add,

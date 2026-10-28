@@ -164,7 +164,7 @@ function AccountRow({
       <tr>
         <td>
           {account.user}
-          {isMe && <span className="admin-tag">you</span>}
+          {isMe && <span className="tag admin-tag">you</span>}
         </td>
         <td>
           <select
@@ -308,7 +308,7 @@ function Ownership({
                     {p.name}
                     {p.trashedAt !== undefined && (
                       <>
-                        <span className="admin-tag bad" title={`Deleted on ${new Date(p.trashedAt).toISOString()}`}>
+                        <span className="tag admin-tag bad" title={`Deleted on ${new Date(p.trashedAt).toISOString()}`}>
                           {purgeNote(p.trashedAt, purgeDays) ?? 'deleted'}
                         </span>
                         <button className="detail-link" onClick={() => restoreProject(p.id)}>

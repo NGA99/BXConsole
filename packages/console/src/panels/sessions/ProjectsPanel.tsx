@@ -243,12 +243,12 @@ function ProjectRow({
           <span className="project-name readonly">{project.name}</span>
         )}
         {home && (
-          <span className="project-tag" title="Where a payload with no key lands, when the relay is set up to accept one">
+          <span className="tag project-tag" title="Where a payload with no key lands, when the relay is set up to accept one">
             home
           </span>
         )}
         {!mine && (
-          <span className="project-tag" title="Shared with you: you can read its recordings, not change the project">
+          <span className="tag project-tag" title="Shared with you: you can read its recordings, not change the project">
             shared with you
           </span>
         )}

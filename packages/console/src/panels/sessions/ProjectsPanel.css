@@ -142,19 +142,6 @@
   color: var(--sys-color-token-subtle);
   white-space: nowrap;
 }
-.project-tag {
-  border: 1px solid var(--sys-color-neutral-outline);
-  border-radius: var(--radius-pill);
-  padding: 0 6px;
-  font-size: 10px;
-  line-height: 14px;
-  color: var(--sys-color-token-subtle);
-  white-space: nowrap;
-}
-.project-tag.bad {
-  color: var(--sys-color-error);
-  border-color: var(--sys-color-error);
-}
 
 .project-key {
   /* flex-start, not stretch: the row is only as wide as the key and its
