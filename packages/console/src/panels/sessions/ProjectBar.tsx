@@ -16,7 +16,7 @@ import { useProjectsStore, selectProject } from '../../state/projects';
 import { useSessionList } from '../../state/sessions';
 import { useAccount, useIsAdmin } from '../../state/whoami';
 import { navigateToView, type PanelId, type SessionView } from '../../app/router';
-import { SessionPicker } from '../../app/SessionPicker';
+import { TabStrip } from '../../app/TabStrip';
 import { projectCounts, describeCount } from './project-counts';
 import { plain } from '../../devtools-ui/plain-text';
 import '../../devtools-ui/strip.css';
@@ -114,9 +114,15 @@ export function ProjectBar({ showing, session }: { showing: Showing; session?: {
 
       {session && (
         <>
-          {/* Divides what leaves this screen from what the screen is about. */}
+          {/*
+            * Left of the rule, the ways out; right of it, the windows of the
+            * run you are in. They keep a browser's tab shape because that is
+            * what they are — windows, not views of one — and sharing the row
+            * with the two buttons costs nothing, while a row of their own
+            * moved every row under it the moment a page opened a popup.
+            */}
           <span className="strip-divider" />
-          <SessionPicker sessionId={session.id} panel={session.panel} />
+          <TabStrip sessionId={session.id} />
         </>
       )}
 

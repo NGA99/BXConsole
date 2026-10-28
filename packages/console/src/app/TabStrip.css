@@ -1,14 +1,27 @@
 /* The windows of a session, shown as tabs above the panel. */
+/*
+ * The windows ride inside the strip now, after its divider, rather than in a
+ * row of their own above it. A row of their own appeared the moment a page
+ * opened a popup and pushed everything under it down; with `spread` on that
+ * is the common case. So this is a group in a row, not a row: no background,
+ * no rule of its own, and it takes the width left over.
+ *
+ * They keep a browser's tab shape — rounded on top, sitting on the strip's
+ * bottom edge — because that is what they are. The flat items to the left of
+ * the divider choose a view; these choose a window.
+ */
 .tabstrip {
   display: flex;
   align-items: flex-end;
   gap: 2px;
-  padding: 4px 8px 0;
-  /* Sits above the top bar, the way a browser keeps its tabs above the address bar. */
-  background: var(--sys-color-surface3);
+  padding: 0;
+  flex: 1 1 auto;
+  min-width: 0;
   overflow-x: auto;
-  flex: 0 0 auto;
-  scrollbar-width: thin;
+  scrollbar-width: none;
+}
+.tabstrip::-webkit-scrollbar {
+  display: none;
 }
 
 .tabstrip-tab {
@@ -32,7 +45,7 @@
   width: 180px;
   flex: 0 0 auto;
   min-width: 0;
-  height: 24px;
+  height: 23px;
   padding: 0 10px 0 8px;
   border: 1px solid transparent;
   border-bottom: none;
