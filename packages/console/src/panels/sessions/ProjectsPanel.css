@@ -222,19 +222,27 @@
  */
 .project {
   transition:
-    box-shadow 120ms ease,
-    transform 120ms ease,
-    border-color 120ms ease;
+    box-shadow 160ms ease-out,
+    transform 160ms ease-out;
 }
+/*
+ * The shadow and the height, and nothing else.
+ *
+ * `border-color` was in here, and it is a shorthand: it set the left edge
+ * too, which is the liveness light. Hovering a live project turned its green
+ * stripe grey and back, which is both a lie and the flicker that made the
+ * whole thing feel unsteady. The three other edges are not worth reaching
+ * for one at a time — the shadow already draws the card away from the page.
+ */
 .project:hover {
-  transform: translateY(-1px);
-  border-color: var(--sys-color-neutral-outline);
-  box-shadow: 0 3px 8px var(--sys-color-shadow);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 10px var(--sys-color-shadow);
 }
 /* Pressed: back down to the page, which is the other half of the gesture. */
 .project:active {
   transform: translateY(0);
   box-shadow: 0 1px 3px var(--sys-color-shadow);
+  transition-duration: 60ms;
 }
 /* Movement is the whole effect, so where movement is unwanted the border and
    the shadow carry it alone. */
