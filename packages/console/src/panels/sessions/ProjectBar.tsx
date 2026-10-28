@@ -18,6 +18,7 @@ import { useAccount, useIsAdmin } from '../../state/whoami';
 import { navigateToView, type PanelId } from '../../app/router';
 import { SessionPicker } from '../../app/SessionPicker';
 import { projectCounts, describeCount } from './project-counts';
+import { plain } from '../../devtools-ui/plain-text';
 import './ProjectBar.css';
 
 /** Which of the three things is on screen, which is not always the route. */
@@ -32,8 +33,6 @@ export type Showing = 'projects' | 'admin' | 'inside';
  */
 export function ProjectBar({ showing, session }: { showing: Showing; session?: { id: string; panel: PanelId } }) {
   const { byId, homeId, selectedId } = useProjectsStore();
-  const account = useAccount();
-  const isAdmin = useIsAdmin();
   const sessions = useSessionList();
   const inside = showing === 'inside';
   /*
@@ -73,7 +72,7 @@ export function ProjectBar({ showing, session }: { showing: Showing; session?: {
           title="Every project you can read"
           onClick={() => navigateToView('projects')}
         >
-          ← Projects
+          Projects
         </button>
       )}
 
@@ -98,7 +97,7 @@ export function ProjectBar({ showing, session }: { showing: Showing; session?: {
                 navigateToView('sessions');
               }}
             >
-              ← Sessions
+              Sessions
             </button>
           ) : (
             // The list view: this is where you already are, so the crumb
@@ -121,27 +120,6 @@ export function ProjectBar({ showing, session }: { showing: Showing; session?: {
       )}
 
       <div className="projectbar-spacer" />
-      {isAdmin && (
-        <button
-          className={`projectbar-root${showing === 'admin' ? ' here' : ''}`}
-          title="Accounts, and who owns which project"
-          onClick={() => navigateToView('admin')}
-        >
-          Admin
-        </button>
-      )}
-      {account && (
-        <span
-          className="projectbar-who"
-          title={
-            account.role === 'admin'
-              ? 'An administrator: can add accounts and reassign projects'
-              : 'A member: owns projects, and reads what is shared with them'
-          }
-        >
-          {account.user}
-        </span>
-      )}
       </div>
     </>
   );
@@ -159,7 +137,7 @@ export function ProjectBar({ showing, session }: { showing: Showing; session?: {
  * Not said to whoever caused it: a console that asked for a project to be
  * deleted already knows.
  */
-function LostNotice() {
+export function LostNotice() {
   const lost = useProjectsStore((s) => s.lost);
   const clear = useProjectsStore((s) => s.clearLost);
   if (!lost) return null;
@@ -176,5 +154,66 @@ function LostNotice() {
         dismiss
       </button>
     </div>
+  );
+}
+
+
+/**
+ * The project, on the title row: `BXConsole | NC`.
+ *
+ * It used to have a row of its own between the title and the tabs, which was
+ * a whole row saying one word. On the title row it reads as what it is — the
+ * thing the window is currently about — and the row it vacated is gone.
+ *
+ * @param sessionId  when a run is open, the project named is the one that run
+ *                   is in rather than whichever the list was last left on;
+ *                   those differ as soon as a session is opened from the
+ *                   picker and belongs somewhere else.
+ */
+export function TopBarProject({ sessionId }: { sessionId?: string }) {
+  const { byId, homeId, selectedId } = useProjectsStore();
+  const sessions = useSessionList();
+  const open = sessionId ? sessions.find((s) => s.sessionId === sessionId) : undefined;
+  const currentId = sessionId ? open?.projectId ?? homeId : selectedId;
+  const project = currentId ? byId[currentId] : undefined;
+  if (!project) return null;
+  return (
+    <>
+      <span className="topbar-sep" />
+      <span className="topbar-project" title={project.name}>
+        {plain(project.name)}
+      </span>
+    </>
+  );
+}
+
+/** Who is signed in, and the way to the relay's accounts. Right of the title row. */
+export function TopBarAccount() {
+  const account = useAccount();
+  const isAdmin = useIsAdmin();
+  return (
+    <>
+      {isAdmin && (
+        <button
+          className="topbar-link"
+          title="Accounts, and who owns which project"
+          onClick={() => navigateToView('admin')}
+        >
+          Admin
+        </button>
+      )}
+      {account && (
+        <span
+          className="topbar-who"
+          title={
+            account.role === 'admin'
+              ? 'An administrator: can add accounts and reassign projects'
+              : 'A member: owns projects, and reads what is shared with them'
+          }
+        >
+          {account.user}
+        </span>
+      )}
+    </>
   );
 }

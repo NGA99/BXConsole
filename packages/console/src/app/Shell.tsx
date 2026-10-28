@@ -28,7 +28,7 @@ import { TabStrip } from './TabStrip';
 import { useActiveTab } from '../state/active-tab';
 import { SessionContext } from './session-context';
 import { ScreenPanel } from '../panels/screen/ScreenPanel';
-import { ProjectBar } from '../panels/sessions/ProjectBar';
+import { ProjectBar, TopBarProject, TopBarAccount } from '../panels/sessions/ProjectBar';
 import { useSessionsStore } from '../state/sessions';
 import { subscribeSession } from '../transport/client';
 import { ContextMenu } from '../devtools-ui/ContextMenu';
@@ -81,17 +81,20 @@ function TopBar({
   theme,
   onCycleTheme,
   children,
+  trailing,
 }: {
   relayUp: boolean;
   theme: Theme;
   onCycleTheme: () => void;
   children?: React.ReactNode;
+  trailing?: React.ReactNode;
 }) {
   return (
     <div className="topbar">
       <span className="topbar-title">BXConsole</span>
       {children}
       <div className="topbar-spacer" />
+      {trailing}
       <span className={`relay-status ${relayUp ? 'on' : 'off'}`}>{relayUp ? 'relay connected' : 'relay disconnected'}</span>
       <button className="topbar-theme" title={`Theme: ${theme} (click to change)`} onClick={onCycleTheme}>
         {theme === 'system' ? '◐' : theme === 'light' ? '☀' : '☾'}
@@ -207,7 +210,9 @@ export function Shell({ route }: { route: Route }) {
   if (!route.sessionId) {
     return (
       <div className="shell">
-        <TopBar relayUp={relayUp} theme={theme} onCycleTheme={cycleTheme} />
+        <TopBar relayUp={relayUp} theme={theme} onCycleTheme={cycleTheme} trailing={<TopBarAccount />}>
+          <TopBarProject />
+        </TopBar>
         <div className="shell-body">
           <div className="shell-panel">
             {/* Its own boundary, outside the top bar: this list is the way in
@@ -324,7 +329,9 @@ export function Shell({ route }: { route: Route }) {
   return (
     <SessionContext.Provider value={sessionId}>
     <div className="shell">
-      <TopBar relayUp={relayUp} theme={theme} onCycleTheme={cycleTheme} />
+      <TopBar relayUp={relayUp} theme={theme} onCycleTheme={cycleTheme} trailing={<TopBarAccount />}>
+        <TopBarProject sessionId={sessionId} />
+      </TopBar>
       {/* The session's windows, kept directly above the row that names the one
           you are reading — where a browser keeps its tabs, over the address
           bar rather than over the title bar. */}

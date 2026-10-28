@@ -19,7 +19,7 @@ import { Toolbar, ToolbarButton, ToolbarDivider, ToolbarInput } from '../../devt
 import { TabBar } from '../../devtools-ui/TabBar';
 import { AgentPanel } from './AgentPanel';
 import { WebhookPanel } from './WebhookPanel';
-import { ProjectBar } from './ProjectBar';
+import { LostNotice } from './ProjectBar';
 import { ProjectsPanel } from './ProjectsPanel';
 import { AdminPanel } from './AdminPanel';
 import { useProjectsStore } from '../../state/projects';
@@ -77,18 +77,30 @@ export function SessionsPanel({ view }: { view: SessionView }) {
    * connection would be worse than waiting.
    */
   const nothingToBeIn = inside && projectsLoaded && order.length === 0;
+  // The Projects screen is also what shows when there is no project to be in.
+  const atProjects = view === 'projects' || nothingToBeIn;
 
   return (
     <>
-      <ProjectBar showing={nothingToBeIn || view === 'projects' ? 'projects' : view === 'admin' ? 'admin' : 'inside'} />
-      {inside && !nothingToBeIn && (
-        <TabBar
-          tabs={[
-            { id: 'sessions', label: live > 0 ? `Sessions (${live} live)` : 'Sessions' },
-            { id: 'webhook', label: 'Webhook' },
-            { id: 'trash', label: trashed.length > 0 ? `Trash (${trashed.length})` : 'Trash' },
-            { id: 'agent', label: 'Agent' },
-          ]}
+      <LostNotice />
+      {/*
+        * One strip on every screen of the list, so the way up does not change
+        * shape as you move. Projects is a tab like the four beside it — it
+        * takes the selected underline when its screen is the one showing,
+        * which is what makes it a tab rather than a button wearing a tab's
+        * clothes. The divider is all that marks it as the level above.
+        */}
+      <TabBar
+        tabs={
+          inside && !nothingToBeIn
+            ? [
+                { id: 'sessions', label: live > 0 ? `Sessions (${live} live)` : 'Sessions' },
+                { id: 'webhook', label: 'Webhook' },
+                { id: 'trash', label: trashed.length > 0 ? `Trash (${trashed.length})` : 'Trash' },
+                { id: 'agent', label: 'Agent' },
+              ]
+            : []
+        }
           active={view}
           onSelect={setView}
           /*
@@ -104,16 +116,17 @@ export function SessionsPanel({ view }: { view: SessionView }) {
           leading={
             <div className="tabbar-leading">
               <button
-                className="tabbar-up"
+                className={`tabbar-tab${atProjects ? ' selected' : ''}`}
+                role="tab"
+                aria-selected={atProjects}
                 title="Every project you can read"
-                onClick={() => navigateToView('projects')}
+                onClick={() => setView('projects')}
               >
-                ← Projects
+                Projects
               </button>
             </div>
           }
         />
-      )}
       {nothingToBeIn ? (
         <ProjectsPanel />
       ) : view === 'webhook' ? (

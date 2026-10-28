@@ -251,3 +251,47 @@
 .issue-badge.warning svg {
   color: var(--sys-color-yellow-outline);
 }
+
+/*
+ * The title row's context: `BXConsole | NC`.
+ *
+ * The project used to own a row between the title and the tabs, which spent
+ * a whole row on one word and made the chrome a row taller in the list than
+ * it needed to be. Here it reads as what the window is currently about.
+ */
+.topbar-sep {
+  width: 1px;
+  align-self: stretch;
+  margin: 6px 10px;
+  background: var(--sys-color-divider);
+  flex-shrink: 0;
+}
+.topbar-project {
+  font-size: 12px;
+  color: var(--sys-color-on-surface);
+  max-width: min(360px, 40%);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Right of the title row: the accounts screen, and who is signed in. */
+.topbar-link {
+  font: inherit;
+  font-size: 11px;
+  color: var(--sys-color-primary);
+  background: none;
+  border: none;
+  border-radius: 2px;
+  padding: 1px 4px;
+  margin-right: 6px;
+  cursor: pointer;
+}
+.topbar-link:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+.topbar-who {
+  font-size: 11px;
+  color: var(--sys-color-token-subtle);
+  margin-right: 10px;
+  white-space: nowrap;
+}

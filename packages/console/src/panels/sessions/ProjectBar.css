@@ -9,11 +9,13 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 0 8px;
-  height: 26px;
+  padding: 0;
+  height: var(--tabbar-height);
   flex-shrink: 0;
   border-bottom: 1px solid var(--sys-color-divider);
-  background: var(--sys-color-cdt-base-container);
+  /* The same strip as the tab bar in the session list, so the chrome is one
+     thing whichever screen you are on. */
+  background: var(--sys-color-surface2);
   font-size: 11px;
   color: var(--sys-color-token-subtle);
 }
@@ -135,13 +137,12 @@
  * being one of its views.
  */
 .projectbar-up {
+  appearance: none;
   font: inherit;
-  font-size: 11px;
   color: var(--sys-color-on-surface);
   background: transparent;
   border: 0;
-  border-radius: 2px;
-  padding: 2px 8px;
+  padding: 0 10px;
   cursor: pointer;
   white-space: nowrap;
   flex-shrink: 0;
@@ -163,7 +164,7 @@
 .projectbar-divider {
   width: 1px;
   align-self: stretch;
-  margin: 5px 2px;
+  margin: 0 6px 0 2px;
   background: var(--sys-color-divider);
   flex-shrink: 0;
 }
