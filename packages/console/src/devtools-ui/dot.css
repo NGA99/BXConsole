@@ -1,0 +1,36 @@
+/*
+ * Whether the thing beside it is still there.
+ *
+ * One light, in one language, wherever the console says this: on a session in
+ * the list, on a window in the tab strip, on the Screen's status, and now on
+ * a project. The Projects screen said it differently — a three-pixel stripe
+ * down the left edge of the card — which is the same fact drawn two ways on
+ * two screens, and the only screen that did it that way.
+ *
+ * Three states, not two. A session is connected or it is not; a project also
+ * has the case of holding nothing yet, which is neither alive nor dead and is
+ * worth telling apart from a project whose runs have all gone — the first is
+ * waiting for its first payload, the second has recordings to read.
+ */
+.dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--sys-color-state-disabled);
+  flex-shrink: 0;
+}
+
+/* Something is connected right now. */
+.dot.on {
+  background: var(--sys-color-green);
+}
+
+/* It was, and is not: the run has ended, and what it recorded is still here. */
+.dot.bad {
+  background: var(--sys-color-error);
+}
+
+/* Nothing has arrived yet, which is not the same as nothing being left. */
+.dot.empty {
+  background: var(--sys-color-primary);
+}

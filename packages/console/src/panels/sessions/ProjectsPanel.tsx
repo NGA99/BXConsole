@@ -209,7 +209,7 @@ function ProjectRow({
 
   return (
     <div
-      className={`project project-${liveness}`}
+      className="project"
       role="button"
       tabIndex={0}
       title={selected ? `Showing ${project.name}` : `Show the recordings in ${project.name}`}
@@ -222,6 +222,22 @@ function ProjectRow({
       }}
     >
       <div className="project-top">
+        {/*
+          * The runs inside, in the same light every other screen uses — the
+          * sessions list, the window strip, the Screen's status. It was three
+          * pixels down the card's left edge, which read well and was the one
+          * place in the console saying this with anything but a dot.
+          */}
+        <span
+          className={`dot ${liveness === 'live' ? 'on' : liveness === 'dead' ? 'bad' : 'empty'}`}
+          title={
+            liveness === 'live'
+              ? 'A run in this project is connected'
+              : liveness === 'dead'
+                ? 'Its runs have all ended; their recordings are here'
+                : 'Nothing has been recorded in it yet'
+          }
+        />
         {mine ? (
           <input
             className="project-name"

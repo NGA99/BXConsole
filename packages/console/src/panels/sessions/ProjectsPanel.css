@@ -84,31 +84,24 @@
   outline-offset: 2px;
 }
 
+/*
+ * No light on the left edge any more.
+ *
+ * Three pixels down the card's left side used to report the runs inside —
+ * green, red, or the accent for a project holding none. It read well, and it
+ * was the only place in the console that said this with anything but a dot:
+ * the sessions list, the window strip and the Screen's status all use one,
+ * so this screen was the one speaking differently. The dot sits before the
+ * name now, where the name is what it is about.
+ */
 .project {
   border: 1px solid var(--sys-color-divider);
-  /* A light on the left edge, three pixels of it on every card. It used to
-     mark the project you had open; that is what the breadcrumb and the card's
-     own title are for, so the edge now reports the runs inside instead. The
-     padding drops by the two extra pixels so the text does not shift. */
-  border-left-width: 3px;
   border-radius: var(--radius-md);
   padding: 7px 9px;
-  padding-left: 7px;
   margin-bottom: 8px;
   display: flex;
   flex-direction: column;
   gap: 5px;
-}
-/* Green while a run in it is connected, red once they have all gone quiet but
-   recordings remain, and the plain accent while it holds none. */
-.project.project-live {
-  border-left-color: var(--sys-color-green);
-}
-.project.project-dead {
-  border-left-color: var(--sys-color-error);
-}
-.project.project-empty {
-  border-left-color: var(--sys-color-primary);
 }
 .project-top {
   display: flex;

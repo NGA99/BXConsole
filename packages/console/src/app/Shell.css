@@ -93,16 +93,6 @@
 .dock-strip-button:hover {
   background: var(--sys-color-state-hover-on-subtle);
 }
-.dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--sys-color-state-disabled);
-  flex-shrink: 0;
-}
-.dot.on {
-  background: var(--sys-color-green);
-}
 
 .topbar-theme {
   appearance: none;
