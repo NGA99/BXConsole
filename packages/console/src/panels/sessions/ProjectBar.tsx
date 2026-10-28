@@ -15,7 +15,7 @@
 import { useProjectsStore, selectProject } from '../../state/projects';
 import { useSessionList } from '../../state/sessions';
 import { useAccount, useIsAdmin } from '../../state/whoami';
-import { navigateToView, type PanelId } from '../../app/router';
+import { navigateToView, type PanelId, type SessionView } from '../../app/router';
 import { SessionPicker } from '../../app/SessionPicker';
 import { projectCounts, describeCount } from './project-counts';
 import { plain } from '../../devtools-ui/plain-text';
@@ -170,14 +170,20 @@ export function LostNotice() {
  *                   is in rather than whichever the list was last left on;
  *                   those differ as soon as a session is opened from the
  *                   picker and belongs somewhere else.
+ * @param view       which list screen is showing, so the two that are not
+ *                   inside a project can say so by naming none. The Projects
+ *                   screen is the one above every project and Admin is beside
+ *                   them all; naming the one the list happened to be left on
+ *                   claimed you were in it.
  */
-export function TopBarProject({ sessionId }: { sessionId?: string }) {
+export function TopBarProject({ sessionId, view }: { sessionId?: string; view?: SessionView }) {
+  const outside = !sessionId && (view === 'projects' || view === 'admin');
   const { byId, homeId, selectedId } = useProjectsStore();
   const sessions = useSessionList();
   const open = sessionId ? sessions.find((s) => s.sessionId === sessionId) : undefined;
   const currentId = sessionId ? open?.projectId ?? homeId : selectedId;
   const project = currentId ? byId[currentId] : undefined;
-  if (!project) return null;
+  if (!project || outside) return null;
   return (
     <>
       <span className="topbar-sep" />

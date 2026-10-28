@@ -211,7 +211,7 @@ export function Shell({ route }: { route: Route }) {
     return (
       <div className="shell">
         <TopBar relayUp={relayUp} theme={theme} onCycleTheme={cycleTheme} trailing={<TopBarAccount />}>
-          <TopBarProject />
+          <TopBarProject view={route.view} />
         </TopBar>
         <div className="shell-body">
           <div className="shell-panel">
