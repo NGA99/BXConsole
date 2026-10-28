@@ -322,12 +322,22 @@
   font-size: 9px;
   margin-left: 2px;
 }
+/*
+ * Fixed, not absolute: these hang from buttons in `.toolbar`, which scrolls,
+ * and an overflow that scrolls also clips — the menu was cut to the toolbar's
+ * own 26px and could not be seen at all. useAnchoredPopup sets top and left
+ * from the button's rectangle; the values here are only a starting point for
+ * the first paint, before it measures.
+ */
 .level-menu-popup,
 .console-settings-popup {
-  position: absolute;
-  top: 100%;
+  position: fixed;
+  top: 0;
   left: 0;
   z-index: 10;
+  /* A menu longer than the window scrolls rather than running off the end. */
+  max-height: calc(100vh - 8px);
+  overflow-y: auto;
   min-width: 160px;
   padding: 4px 0;
   background: var(--sys-color-surface);
@@ -340,8 +350,6 @@
   position: relative;
 }
 .console-settings-popup {
-  left: auto;
-  right: 0;
   padding: 8px 12px;
   display: flex;
   flex-direction: column;

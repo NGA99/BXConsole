@@ -11,6 +11,7 @@ import { useSessionsStore } from '../../state/sessions';
 import { evaluate } from '../../transport/client';
 import { Toolbar, ToolbarButton, ToolbarDivider, ToolbarInput } from '../../devtools-ui/Toolbar';
 import { ContextMenu, type MenuState } from '../../devtools-ui/ContextMenu';
+import { useAnchoredPopup } from '../../devtools-ui/in-viewport';
 import { clockTime as formatTime, fullTimestamp } from '../../devtools-ui/time';
 import { navigate } from '../../app/router';
 import { SourceLink } from '../../devtools-ui/SourceLink';
@@ -76,6 +77,9 @@ export function ConsolePanel({ sessionId }: { sessionId: string }) {
     }
   };
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const settingsAnchor = useRef<HTMLDivElement>(null);
+  const settingsPopup = useRef<HTMLDivElement>(null);
+  useAnchoredPopup(settingsAnchor, settingsPopup, settingsOpen, 'right');
   const [menu, setMenu] = useState<MenuState | null>(null);
 
   // ---- live expressions (the eye icon): evaluated every 500ms while open
@@ -264,12 +268,14 @@ export function ConsolePanel({ sessionId }: { sessionId: string }) {
           <EyeIcon active={liveOpen} />
         </ToolbarButton>
         <div style={{ flex: 1 }} />
-        <div className="console-settings">
+        <div className="console-settings" ref={settingsAnchor}>
           <ToolbarButton title="Console settings" onClick={() => setSettingsOpen((o) => !o)}>
             <GearIcon active={settingsOpen} />
           </ToolbarButton>
           {settingsOpen && (
-            <div className="console-settings-popup" onMouseLeave={() => setSettingsOpen(false)}>
+            // Opens `right`: the gear is the last thing in the toolbar, so a
+            // menu lining up with its left edge would hang off the window.
+            <div className="console-settings-popup" ref={settingsPopup} onMouseLeave={() => setSettingsOpen(false)}>
               <label>
                 <input type="checkbox" checked={settings.hideNetwork} onChange={(e) => setSettings({ ...settings, hideNetwork: e.target.checked })} />
                 Hide network
