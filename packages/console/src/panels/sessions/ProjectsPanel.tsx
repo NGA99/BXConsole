@@ -13,7 +13,7 @@
  * relay checks all of this again; hiding the buttons is so that what is shown
  * is what works.
  */
-import { useEffect, useRef, useState } from 'react';
+import { useRef, useState } from 'react';
 import type { Project } from '@bxconsole/protocol';
 import { useProjectsStore, selectProject } from '../../state/projects';
 import { useSessionList, useSessionsStore } from '../../state/sessions';

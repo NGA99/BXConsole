@@ -8,12 +8,13 @@
  * relay, and the landing pane reads them as a verdict. See the protocol's
  * ping.ts for why each probe exists, and diagnose.ts for how they are read.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { PROBES, PROBE_DIRECTIVE, type Probe, type ProbeArrival } from '@bxconsole/protocol';
 import { newPingToken, pingTokenLive, subscribePings } from '../../transport/client';
 import { copyText } from '../network/copy';
 import { clockTimeShort, fullTimestamp } from '../../devtools-ui/time';
 import { agentVerdict, readFraming, readMatrix, snippetFor, tagFor, urlFor, type Arrived } from './diagnose';
+import { ProbeRequest } from './ProbeRequest';
 import { useSessionList } from '../../state/sessions';
 import './WebhookPanel.css';
 
@@ -37,7 +38,6 @@ export function WebhookPanel() {
   const [selected, setSelected] = useState<string | null>(null);
   const [filter, setFilter] = useState('');
   const [copied, setCopied] = useState<string | null>(null);
-  const startedAt = useRef(Date.now());
 
   const copy = async (id: string, text: string) => {
     await copyText(text);
@@ -186,7 +186,7 @@ export function WebhookPanel() {
 
       <section className="diag-detail">
         {open ? (
-          <RequestDetail
+          <ProbeRequest
             arrival={open}
             onBack={() => setSelected(null)}
             onCopy={() => void copy('one', JSON.stringify(open, null, 2))}
@@ -290,76 +290,5 @@ export function WebhookPanel() {
         )}
       </section>
     </div>
-  );
-}
-
-function RequestDetail({
-  arrival,
-  onBack,
-  onCopy,
-  copied,
-}: {
-  arrival: ProbeArrival;
-  onBack: () => void;
-  onCopy: () => void;
-  copied: boolean;
-}) {
-  const headers = Object.entries(arrival.headers ?? {}).sort(([a], [b]) => a.localeCompare(b));
-  return (
-    <>
-      <div className="diag-h-row">
-        <h3 className="diag-h">Request details and headers</h3>
-        <button className="detail-link" onClick={onBack}>
-          back to probes
-        </button>
-        <button className="detail-link" onClick={onCopy}>
-          {copied ? 'copied' : 'copy this request'}
-        </button>
-      </div>
-      <dl className="diag-facts">
-        <div className="diag-facts-row">
-          <dt>Probe</dt>
-          <dd className="mono">{arrival.probe}</dd>
-        </div>
-        <div className="diag-facts-row">
-          <dt>Request</dt>
-          <dd className="mono">{`${arrival.method ?? 'GET'} ${arrival.path ?? ''}`}</dd>
-        </div>
-        <div className="diag-facts-row">
-          <dt>Date</dt>
-          <dd className="mono">{fullTimestamp(arrival.ts)}</dd>
-        </div>
-        <div className="diag-facts-row">
-          <dt>Address</dt>
-          <dd className="mono">{arrival.ip ?? '—'}</dd>
-        </div>
-        <div className="diag-facts-row">
-          <dt>Page</dt>
-          <dd className="mono">{arrival.pageUrl ?? arrival.referer ?? '—'}</dd>
-        </div>
-      </dl>
-
-      <h3 className="diag-h">Headers</h3>
-      <dl className="diag-facts">
-        {headers.map(([name, value]) => (
-          <div className="diag-facts-row" key={name}>
-            <dt>{name}</dt>
-            <dd className="mono">{value}</dd>
-          </div>
-        ))}
-        {(arrival.withheld ?? []).map((name) => (
-          <div className="diag-facts-row" key={name}>
-            <dt>{name}</dt>
-            <dd className="diag-withheld">not stored</dd>
-          </div>
-        ))}
-      </dl>
-      {(arrival.withheld?.length ?? 0) > 0 && (
-        <p className="diag-note">
-          This relay has no login, so anything kept here is readable by anyone who can reach it. Credentials are dropped on arrival, and they
-          answer nothing about which way in is blocked.
-        </p>
-      )}
-    </>
   );
 }

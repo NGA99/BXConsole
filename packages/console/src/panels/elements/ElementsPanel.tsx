@@ -4,7 +4,7 @@
  * screen stream as the mirror; selecting or hovering a node outlines it in
  * the Screen pane. Mounted only while visible so streaming stops with it.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ElementStyles } from '@bxconsole/protocol';
 import { subscribeScreen, domGetStyles } from '../../transport/client';
 import { applyScreenEvent, domModel, useDomVersions } from '../../state/dom-model';
