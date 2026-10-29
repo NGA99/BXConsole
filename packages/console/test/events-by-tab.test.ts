@@ -31,6 +31,9 @@ const message = (i: number): AgentEvent => ({
   ts: 1000 + i,
   level: 'log',
   args: [{ t: 'string', v: `line ${i}` }],
+  // Not inside a `console.group`. These are counted, not grouped, so the
+  // depth is only here because the agent always reports one.
+  groupDepth: 0,
 });
 
 beforeEach(() => {

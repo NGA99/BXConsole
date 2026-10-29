@@ -51,7 +51,7 @@ describe('requests that stay open', () => {
   test('neither offers a response body to go and read', () => {
     for (const kind of ['websocket', 'eventsource']) {
       assert.equal(bodyState(entry(kind), NOTHING_KEPT, false), 'none', kind);
-      assert.equal(bodySource(entry(kind), NOTHING_KEPT, false).from, 'nowhere', kind);
+      assert.equal(bodySource(entry(kind)).from, 'nowhere', kind);
     }
   });
 });
