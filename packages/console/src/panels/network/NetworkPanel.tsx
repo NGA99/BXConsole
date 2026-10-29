@@ -23,8 +23,8 @@ import { ContextMenu, type MenuState } from '../../devtools-ui/ContextMenu';
 import { RequestDetail } from './RequestDetail';
 import { WaterfallCell, WaterfallHeader } from './Waterfall';
 import { Overview } from './Overview';
-import { TypeIcon } from './icons';
-import { GearIcon } from '../../devtools-ui/icons';
+import { TypeIcon, FunnelIcon, SearchIcon } from './icons';
+import { GearIcon, ClearIcon } from '../../devtools-ui/icons';
 import { compileFilter, hostOf } from './filters';
 import { searchEntries } from './search';
 import { NetworkSearch } from './NetworkSearch';
@@ -764,34 +764,3 @@ function bodySize(e: NetworkEntry): number | undefined {
   return e.resource?.decodedBodySize ?? e.response?.bodyBytes ?? e.response?.body?.length;
 }
 
-function FunnelIcon({ active = false }: { active?: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" className={`toolbar-icon${active ? ' active' : ''}`}>
-      <path
-        d="M2 3h12l-4.6 5.6V13l-2.8 1.2V8.6z"
-        fill={active ? 'currentColor' : 'none'}
-        stroke="currentColor"
-        strokeWidth="1.4"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-function SearchIcon({ active = false }: { active?: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" className={`toolbar-icon${active ? ' active' : ''}`}>
-      <circle cx="6.8" cy="6.8" r="4.3" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <path d="M10.2 10.2L14 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
-    </svg>
-  );
-}
-
-function ClearIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14">
-      <circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M3.2 3.2l7.6 7.6" stroke="currentColor" strokeWidth="1.4" />
-    </svg>
-  );
-}

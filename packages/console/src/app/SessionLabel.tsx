@@ -23,6 +23,9 @@
 import { useSessionList } from '../state/sessions';
 import { useActiveTab } from '../state/active-tab';
 import { plain } from '../devtools-ui/plain-text';
+// The chevron, the crumb and the window's own title are the title row's
+// vocabulary, and this draws into that row. See TopBar.css.
+import './TopBar.css';
 
 export function SessionLabel({ sessionId }: { sessionId: string }) {
   const sessions = useSessionList();

@@ -19,7 +19,7 @@ import { Toolbar, ToolbarButton, ToolbarDivider, ToolbarInput } from '../../devt
 import { ProjectTabs } from './ProjectTabs';
 import { AgentPanel } from './AgentPanel';
 import { WebhookPanel } from './WebhookPanel';
-import { LostNotice } from './ProjectBar';
+import { LostNotice } from '../../app/LostNotice';
 import { ProjectsPanel } from './ProjectsPanel';
 import { AdminPanel } from './AdminPanel';
 import { useProjectsStore } from '../../state/projects';

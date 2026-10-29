@@ -97,6 +97,80 @@ export function CollapsePaneIcon({ size = 15 }: IconProps) {
   );
 }
 
+/*
+ * The three severities, drawn once.
+ *
+ * The error circle was drawn in three places — the Console's rows, the title
+ * bar's counters, and the Network list's Name column for a request that
+ * failed — each one its own `<svg>` with the same two paths in it, and the
+ * warning triangle in two. Nothing kept them the same shape; they happened to
+ * be, which is not a property you can rely on when one of them is edited.
+ *
+ * They stay on their own 14×14 grid rather than the 24×24 one above, because
+ * that is the grid they are drawn on and rescaling the paths to share a grid
+ * would move pixels for nothing. `className` is the caller's: the colour
+ * comes from the row, the badge or the cell these sit in.
+ *
+ * The ink on the filled glyph is literal black and white on purpose — it is
+ * ink on red or yellow, not on the page, so it does not follow the theme.
+ */
+interface GlyphProps extends IconProps {
+  className?: string;
+}
+
+export function ErrorIcon({ size = 14, className }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" className={className} aria-hidden="true">
+      <circle cx="7" cy="7" r="6" fill="currentColor" />
+      <path d="M4.5 4.5l5 5M9.5 4.5l-5 5" stroke="#fff" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
+export function WarnIcon({ size = 14, className }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" className={className} aria-hidden="true">
+      <path d="M7 1.5L13 12.5H1z" fill="currentColor" />
+      <path d="M7 5.5v3.5" stroke="#000" strokeWidth="1.4" />
+      <circle cx="7" cy="10.8" r="0.8" fill="#000" />
+    </svg>
+  );
+}
+
+export function InfoIcon({ size = 14, className }: GlyphProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" className={className} aria-hidden="true">
+      <circle cx="7" cy="7" r="6" fill="currentColor" />
+      <path d="M7 6v4" stroke="#fff" strokeWidth="1.4" />
+      <circle cx="7" cy="4" r="0.8" fill="#fff" />
+    </svg>
+  );
+}
+
+/**
+ * Clear what is listed: DevTools' circle-with-a-slash.
+ *
+ * One copy. It was byte-for-byte the same function in ConsolePanel.tsx and in
+ * NetworkPanel.tsx, which is the same button on two toolbars.
+ */
+export function ClearIcon({ size = 14 }: IconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 14 14" aria-hidden="true">
+      <circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
+      <path d="M3.2 3.2l7.6 7.6" stroke="currentColor" strokeWidth="1.4" />
+    </svg>
+  );
+}
+
+/** Pick an element in the page: DevTools' cursor over a corner. */
+export function InspectIcon({ active = false }: { active?: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" className={`toolbar-icon${active ? ' active' : ''}`} aria-hidden="true">
+      <path d="M2 2h7v1.5H3.5V9H2z M7 7l7 2.6-2.9 1.1L13 13.6 11.6 15l-2.9-2.9L7.6 15z" fill="currentColor" />
+    </svg>
+  );
+}
+
 /**
  * Stands in for a site's own icon when there is not one to show.
  *

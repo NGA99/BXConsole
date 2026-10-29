@@ -17,7 +17,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { sessionData } from '../state/session-data';
 import { TabBar, type Tab } from '../devtools-ui/TabBar';
 import { SplitView } from '../devtools-ui/SplitView';
-import { CollapseRightPaneIcon } from '../devtools-ui/icons';
+import { CollapseRightPaneIcon, ErrorIcon, WarnIcon, InspectIcon } from '../devtools-ui/icons';
 import { SessionsPanel } from '../panels/sessions/SessionsPanel';
 import { ConsolePanel } from '../panels/console/ConsolePanel';
 import { NetworkPanel } from '../panels/network/NetworkPanel';
@@ -29,7 +29,10 @@ import { BrowserChrome } from './BrowserChrome';
 import { useActiveTab } from '../state/active-tab';
 import { SessionContext } from './session-context';
 import { ScreenPanel } from '../panels/screen/ScreenPanel';
-import { LostNotice, TopBarProject, TopBarAccount } from '../panels/sessions/ProjectBar';
+import { TopBar, type Theme } from './TopBar';
+import { TopBarProject } from './TopBarProject';
+import { TopBarAccount } from './TopBarAccount';
+import { LostNotice } from './LostNotice';
 import { ProjectTabs } from '../panels/sessions/ProjectTabs';
 import { useSessionsStore } from '../state/sessions';
 import { subscribeSession } from '../transport/client';
@@ -52,7 +55,6 @@ const RIGHT_TABS: Tab<PanelId>[] = [
 const SCREEN_KEY = 'bxconsole.screen.collapsed';
 const DEVTOOLS_KEY = 'bxconsole.devtools.collapsed';
 const THEME_KEY = 'bxconsole.theme';
-type Theme = 'system' | 'light' | 'dark';
 
 function applyTheme(t: Theme): void {
   if (t === 'system') delete document.documentElement.dataset.theme;
@@ -65,44 +67,6 @@ function useIssueCounts(sessionId: string | null): { errors: number; warnings: n
   // Read the running totals: scanning the buffer here re-ran on every event,
   // including network ones, for up to five thousand entries.
   return store(useShallow((s) => s.issues));
-}
-
-/**
- * The window's title bar: the one row that should look the same wherever you
- * are.
- *
- * It used to be written out twice, once for the session list and once for an
- * open session, and the two drifted apart. The list kept the relay status
- * tucked beside the wordmark while the session pushed it to the far right,
- * and the session dropped the wordmark altogether — so moving between the two
- * views rearranged the bar under you. One component holds the shape now, and
- * a view supplies only the navigation that is its own.
- */
-function TopBar({
-  relayUp,
-  theme,
-  onCycleTheme,
-  children,
-  trailing,
-}: {
-  relayUp: boolean;
-  theme: Theme;
-  onCycleTheme: () => void;
-  children?: React.ReactNode;
-  trailing?: React.ReactNode;
-}) {
-  return (
-    <div className="topbar">
-      <span className="topbar-title">BXConsole</span>
-      {children}
-      <div className="topbar-spacer" />
-      {trailing}
-      <span className={`relay-status ${relayUp ? 'on' : 'off'}`}>{relayUp ? 'relay connected' : 'relay disconnected'}</span>
-      <button className="topbar-theme" title={`Theme: ${theme} (click to change)`} onClick={onCycleTheme}>
-        {theme === 'system' ? '◐' : theme === 'light' ? '☀' : '☾'}
-      </button>
-    </div>
-  );
 }
 
 export function Shell({ route }: { route: Route }) {
@@ -236,20 +200,13 @@ export function Shell({ route }: { route: Route }) {
     <span className="issue-badges" title="Errors and warnings in this session's console" onClick={() => navigate({ panel: 'console', sessionId })}>
       {counts.errors > 0 && (
         <span className="issue-badge error">
-          <svg width="12" height="12" viewBox="0 0 14 14">
-            <circle cx="7" cy="7" r="6" fill="currentColor" />
-            <path d="M4.5 4.5l5 5M9.5 4.5l-5 5" stroke="#fff" strokeWidth="1.4" />
-          </svg>
+          <ErrorIcon size={12} />
           {counts.errors}
         </span>
       )}
       {counts.warnings > 0 && (
         <span className="issue-badge warning">
-          <svg width="12" height="12" viewBox="0 0 14 14">
-            <path d="M7 1.5L13 12.5H1z" fill="currentColor" />
-            <path d="M7 5.5v3.5" stroke="#000" strokeWidth="1.4" />
-            <circle cx="7" cy="10.8" r="0.8" fill="#000" />
-          </svg>
+          <WarnIcon size={12} />
           {counts.warnings}
         </span>
       )}
@@ -266,9 +223,7 @@ export function Shell({ route }: { route: Route }) {
           if (next && screenCollapsed) setCollapsed(false);
         }}
       >
-        <svg width="16" height="16" viewBox="0 0 16 16" className={`toolbar-icon${inspectOn ? ' active' : ''}`}>
-          <path d="M2 2h7v1.5H3.5V9H2z M7 7l7 2.6-2.9 1.1L13 13.6 11.6 15l-2.9-2.9L7.6 15z" fill="currentColor" />
-        </svg>
+        <InspectIcon active={inspectOn} />
       </button>
     </span>
   );

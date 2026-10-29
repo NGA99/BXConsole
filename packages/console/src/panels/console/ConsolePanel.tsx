@@ -26,7 +26,8 @@ import { LevelMenu } from './LevelMenu';
 import { StackTrace } from './StackTrace';
 import { TableView } from './TableView';
 import { ConsolePrompt } from './ConsolePrompt';
-import { GearIcon } from '../../devtools-ui/icons';
+import { GearIcon, ErrorIcon, WarnIcon, InfoIcon, ClearIcon } from '../../devtools-ui/icons';
+import { SidebarIcon, EyeIcon } from './icons';
 import { applyFormat } from './format-spec';
 import { formatValue } from './format';
 import { buildTree, filterTree, severityOf, rowText, DEFAULT_LEVELS, ALL_LEVELS, type LevelFilter, type Row, type Severity } from './group-tree';
@@ -630,7 +631,14 @@ function Line({
         {repeat > 1 ? (
           <span className={`console-repeat severity-${severity}`}>{repeat}</span>
         ) : (
-          icon ?? (severity === 'error' ? <ErrorIcon /> : severity === 'warning' ? <WarnIcon /> : isInfoLevel ? <InfoIcon /> : null)
+          icon ??
+          (severity === 'error' ? (
+            <ErrorIcon className="console-icon error" />
+          ) : severity === 'warning' ? (
+            <WarnIcon className="console-icon warning" />
+          ) : isInfoLevel ? (
+            <InfoIcon className="console-icon info" />
+          ) : null)
         )}
       </span>
       <span className="console-body">{children}</span>
@@ -701,23 +709,6 @@ function sameSel(a: { kind: string; level?: string; source?: string }, b: { kind
   return a.kind === b.kind && a.level === b.level && a.source === b.source;
 }
 
-function SidebarIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" className={`toolbar-icon${active ? ' active' : ''}`}>
-      <rect x="1.5" y="2.5" width="13" height="11" rx="1.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M6 2.5v11" stroke="currentColor" strokeWidth="1.4" />
-    </svg>
-  );
-}
-function EyeIcon({ active }: { active: boolean }) {
-  return (
-    <svg width="16" height="16" viewBox="0 0 16 16" className={`toolbar-icon${active ? ' active' : ''}`}>
-      <path d="M1.5 8s2.5-4.5 6.5-4.5S14.5 8 14.5 8s-2.5 4.5-6.5 4.5S1.5 8 1.5 8z" fill="none" stroke="currentColor" strokeWidth="1.4" />
-      <circle cx="8" cy="8" r="2.2" fill="currentColor" />
-    </svg>
-  );
-}
-
 function countLeaves(rows: Row[]): number {
   let n = 0;
   for (const r of rows) n += r.children ? countLeaves(r.children) : 1;
@@ -732,39 +723,3 @@ function stripFirstLine(stack: string): string {
   return /^\s*at\s|@/.test(lines[0] ?? '') ? stack : lines.slice(1).join('\n');
 }
 
-// ------------------------------------------------------------------- icons
-
-function ErrorIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" className="console-icon error">
-      <circle cx="7" cy="7" r="6" fill="currentColor" />
-      <path d="M4.5 4.5l5 5M9.5 4.5l-5 5" stroke="#fff" strokeWidth="1.4" />
-    </svg>
-  );
-}
-function WarnIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" className="console-icon warning">
-      <path d="M7 1.5L13 12.5H1z" fill="currentColor" />
-      <path d="M7 5.5v3.5" stroke="#000" strokeWidth="1.4" />
-      <circle cx="7" cy="10.8" r="0.8" fill="#000" />
-    </svg>
-  );
-}
-function InfoIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14" className="console-icon info">
-      <circle cx="7" cy="7" r="6" fill="currentColor" />
-      <path d="M7 6v4" stroke="#fff" strokeWidth="1.4" />
-      <circle cx="7" cy="4" r="0.8" fill="#fff" />
-    </svg>
-  );
-}
-function ClearIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 14 14">
-      <circle cx="7" cy="7" r="5.5" fill="none" stroke="currentColor" strokeWidth="1.4" />
-      <path d="M3.2 3.2l7.6 7.6" stroke="currentColor" strokeWidth="1.4" />
-    </svg>
-  );
-}

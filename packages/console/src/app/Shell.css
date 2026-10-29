@@ -1,3 +1,11 @@
+/*
+ * The frame: the window, the two docks, and the counters the panels put in
+ * the tab strip.
+ *
+ * The title row's own rules were here too, in four groups with the dock's
+ * layout in between them. They are TopBar.css now, which the row and its
+ * children import.
+ */
 .shell {
   display: flex;
   flex-direction: column;
@@ -19,36 +27,6 @@
 .shell-panel[hidden] {
   display: none;
 }
-
-/* top bar */
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  height: var(--tabbar-height);
-  padding: 0 8px;
-  background: var(--sys-color-surface2);
-  border-bottom: 1px solid var(--sys-color-divider);
-  flex-shrink: 0;
-  user-select: none;
-}
-.topbar-title {
-  font-weight: 600;
-}
-/* Pushes the status and the theme button to the right edge in every view. */
-.topbar-spacer {
-  flex: 1;
-}
-.relay-status {
-  font-size: var(--ui-font-size-small);
-  color: var(--sys-color-token-subtle);
-}
-.relay-status.on {
-  color: var(--sys-color-green);
-}
-
-/* session picker */
-
 
 /* dock layout */
 .dock {
@@ -94,21 +72,7 @@
   background: var(--sys-color-state-hover-on-subtle);
 }
 
-.topbar-theme {
-  appearance: none;
-  border: 0;
-  background: transparent;
-  color: var(--sys-color-on-surface-subtle);
-  font: inherit;
-  font-size: 13px;
-  width: 22px;
-  height: 22px;
-  border-radius: 50%;
-  cursor: default;
-}
-.topbar-theme:hover {
-  background: var(--sys-color-state-hover-on-subtle);
-}
+/* Errors and warnings in this session's console, in the panels' tab strip. */
 .issue-badges {
   display: inline-flex;
   align-items: center;
@@ -130,77 +94,4 @@
 }
 .issue-badge.warning svg {
   color: var(--sys-color-yellow-outline);
-}
-
-/* Right of the title row: the accounts screen, and who is signed in. */
-.topbar-link {
-  font: inherit;
-  font-size: var(--ui-font-size-small);
-  color: var(--sys-color-primary);
-  background: none;
-  border: none;
-  border-radius: var(--radius-xs);
-  padding: 1px 4px;
-  margin-right: 6px;
-  cursor: pointer;
-}
-.topbar-link:hover {
-  background: var(--sys-color-state-hover-on-subtle);
-}
-.topbar-who {
-  font-size: var(--ui-font-size-small);
-  color: var(--sys-color-token-subtle);
-  margin-right: 10px;
-  white-space: nowrap;
-}
-
-/*
- * The title row's context: the console, the project, then the run.
- *
- * Divided by a chevron rather than boxed. The names come from the engagement
- * and can hold the divider's own character — `o'brien & sons <x> "q" (a)` is
- * a real run name — so the divider is drawn in the subtle ink and the names
- * in the plain one. `›` is also not the `>` a name would contain.
- */
-.topbar-sep {
-  color: var(--sys-color-token-subtle);
-  font-size: var(--ui-font-size);
-  flex-shrink: 0;
-}
-.topbar-crumb {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-size: var(--ui-font-size);
-  color: var(--sys-color-on-surface);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex-shrink: 0;
-}
-
-/* The selected window's own title, when its tab was too narrow to hold it. */
-.topbar-detail {
-  font-size: var(--ui-font-size-small);
-  color: var(--sys-color-on-surface);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex-shrink: 1;
-  min-width: 0;
-}
-
-/*
- * The address, outside the boxes: it is what the run is on, not what it is.
- * First to give way when the row is tight, because the names above it are the
- * better handle and this is the longest thing on the line.
- */
-.topbar-url {
-  font-size: var(--ui-font-size-small);
-  color: var(--sys-color-token-subtle);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  flex-shrink: 999;
-  min-width: 0;
 }

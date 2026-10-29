@@ -1,0 +1,111 @@
+/*
+ * The window's title row.
+ *
+ * Every rule the row and its three children use, in one place. They were in
+ * Shell.css, in four groups with the dock's layout in between them — `.topbar`
+ * near the top, `.topbar-theme` after the dock buttons, the account's two
+ * after the issue badges, the chevron and the crumb at the end — so the row
+ * had no one place to read it from, and the children that draw into it
+ * (TopBarProject, TopBarAccount, SessionLabel) were styled from a stylesheet
+ * none of them imported.
+ */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: var(--tabbar-height);
+  padding: 0 8px;
+  background: var(--sys-color-surface2);
+  border-bottom: 1px solid var(--sys-color-divider);
+  flex-shrink: 0;
+  user-select: none;
+}
+.topbar-title {
+  font-weight: 600;
+}
+/* Pushes the status and the theme button to the right edge in every view. */
+.topbar-spacer {
+  flex: 1;
+}
+
+.relay-status {
+  font-size: var(--ui-font-size-small);
+  color: var(--sys-color-token-subtle);
+}
+.relay-status.on {
+  color: var(--sys-color-green);
+}
+
+.topbar-theme {
+  appearance: none;
+  border: 0;
+  background: transparent;
+  color: var(--sys-color-on-surface-subtle);
+  font: inherit;
+  font-size: 13px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  cursor: default;
+}
+.topbar-theme:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+
+/* Right of the title row: the accounts screen, and who is signed in. */
+.topbar-link {
+  font: inherit;
+  font-size: var(--ui-font-size-small);
+  color: var(--sys-color-primary);
+  background: none;
+  border: none;
+  border-radius: var(--radius-xs);
+  padding: 1px 4px;
+  margin-right: 6px;
+  cursor: pointer;
+}
+.topbar-link:hover {
+  background: var(--sys-color-state-hover-on-subtle);
+}
+.topbar-who {
+  font-size: var(--ui-font-size-small);
+  color: var(--sys-color-token-subtle);
+  margin-right: 10px;
+  white-space: nowrap;
+}
+
+/*
+ * The title row's context: the console, the project, then the run.
+ *
+ * Divided by a chevron rather than boxed. The names come from the engagement
+ * and can hold the divider's own character — `o'brien & sons <x> "q" (a)` is
+ * a real run name — so the divider is drawn in the subtle ink and the names
+ * in the plain one. `›` is also not the `>` a name would contain.
+ */
+.topbar-sep {
+  color: var(--sys-color-token-subtle);
+  font-size: var(--ui-font-size);
+  flex-shrink: 0;
+}
+.topbar-crumb {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: var(--ui-font-size);
+  color: var(--sys-color-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 0;
+}
+
+/* The selected window's own title, when its tab was too narrow to hold it. */
+.topbar-detail {
+  font-size: var(--ui-font-size-small);
+  color: var(--sys-color-on-surface);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}

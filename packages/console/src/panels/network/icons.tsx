@@ -1,15 +1,43 @@
-/** Resource-type icons for the Name column, in the spirit of DevTools' small glyphs. */
+/**
+ * The Network panel's own glyphs: the resource-type icons for the Name
+ * column, and the two toolbar buttons that open the filter and the search.
+ *
+ * They were in NetworkPanel.tsx, below eight hundred lines of panel, which
+ * is where the third copy of the error circle was found.
+ */
 import type { ResourceType } from './classify';
+import { ErrorIcon } from '../../devtools-ui/icons';
+
+/** Opens the row filter: DevTools' funnel, filled while it is on. */
+export function FunnelIcon({ active = false }: { active?: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" className={`toolbar-icon${active ? ' active' : ''}`} aria-hidden="true">
+      <path
+        d="M2 3h12l-4.6 5.6V13l-2.8 1.2V8.6z"
+        fill={active ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="1.4"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
+/** Opens the search that looks inside the requests, not at which are listed. */
+export function SearchIcon({ active = false }: { active?: boolean }) {
+  return (
+    <svg width="16" height="16" viewBox="0 0 16 16" className={`toolbar-icon${active ? ' active' : ''}`} aria-hidden="true">
+      <circle cx="6.8" cy="6.8" r="4.3" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      <path d="M10.2 10.2L14 14" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 export function TypeIcon({ type, failed }: { type: ResourceType; failed?: boolean }) {
-  if (failed) {
-    return (
-      <svg className="type-icon error" width="14" height="14" viewBox="0 0 14 14">
-        <circle cx="7" cy="7" r="6" fill="currentColor" />
-        <path d="M4.5 4.5l5 5M9.5 4.5l-5 5" stroke="#fff" strokeWidth="1.4" />
-      </svg>
-    );
-  }
+  // A request that failed is the same error circle the Console's rows and the
+  // title bar's counters draw; it wears this column's class to take its size
+  // and colour from the cell.
+  if (failed) return <ErrorIcon className="type-icon error" />;
   switch (type) {
     case 'doc':
       return (
