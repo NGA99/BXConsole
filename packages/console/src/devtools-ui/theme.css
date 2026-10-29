@@ -2,50 +2,90 @@
  * Chrome DevTools look-alike tokens. Names follow devtools-frontend's
  * --sys-color-* convention so styles can be ported from it as panels grow.
  * Values approximate the default light and dark DevTools themes.
+ *
+ * Each token is written once, with both of its values.
+ *
+ * There were three blocks: the light values on `:root`, then the dark values
+ * under `@media (prefers-color-scheme: dark)`, then the same dark values
+ * again under `[data-theme='dark']` for the theme the console is told to use
+ * rather than the one the system asks for. Thirty-seven tokens, copied
+ * verbatim, so adding one meant remembering three places and forgetting one
+ * of them cost a colour that was right until somebody picked a theme by hand.
+ *
+ * `light-dark()` holds both values in the one declaration and reads the
+ * element's `color-scheme` to pick. That is what the three selectors below
+ * now set — and setting it is the point rather than a side effect: a scheme
+ * chosen by hand used to leave `color-scheme: light dark` in place, so the
+ * scrollbars and the native widgets kept following the system while every
+ * colour around them had changed.
  */
 :root {
-  --sys-color-cdt-base-container: #ffffff;
-  --sys-color-surface: #ffffff;
-  --sys-color-surface1: #f8f9fa;
-  --sys-color-surface2: #f1f3f4;
-  --sys-color-surface3: #e8eaed;
-  --sys-color-on-surface: #1f1f1f;
-  --sys-color-on-surface-subtle: #474747;
-  --sys-color-token-subtle: #5f6368;
-  --sys-color-divider: #d9d9d9;
-  --sys-color-neutral-outline: #c7c7c7;
-  --sys-color-primary: #0b57d0;
+  /* System: whatever the OS asks for. */
+  color-scheme: light dark;
+}
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+:root[data-theme='dark'] {
+  color-scheme: dark;
+}
+
+:root {
+  --sys-color-cdt-base-container: light-dark(#ffffff, #282828);
+  --sys-color-surface: light-dark(#ffffff, #1f1f1f);
+  --sys-color-surface1: light-dark(#f8f9fa, #282828);
+  --sys-color-surface2: light-dark(#f1f3f4, #2d2d2d);
+  --sys-color-surface3: light-dark(#e8eaed, #333333);
+  --sys-color-on-surface: light-dark(#1f1f1f, #e3e3e3);
+  --sys-color-on-surface-subtle: light-dark(#474747, #c7c7c7);
+  --sys-color-token-subtle: light-dark(#5f6368, #9aa0a6);
+  --sys-color-divider: light-dark(#d9d9d9, #494c50);
+  --sys-color-neutral-outline: light-dark(#c7c7c7, #5e5e5e);
+  --sys-color-primary: light-dark(#0b57d0, #a8c7fa);
   /* Text on a filled primary surface. Light blue in dark mode needs dark
      ink on it, which is why this is a token and not white. */
-  --sys-color-on-primary: #ffffff;
+  --sys-color-on-primary: light-dark(#ffffff, #062e6f);
   /* What a surface lifted off the page casts. Darker in dark mode, where a
      faint black on a dark ground says nothing at all. */
-  --sys-color-shadow: rgba(0, 0, 0, 0.14);
-  --sys-color-primary-bright: #1a73e8;
-  --sys-color-tonal-container: #d3e3fd;
+  --sys-color-shadow: light-dark(rgba(0, 0, 0, 0.14), rgba(0, 0, 0, 0.55));
+  --sys-color-primary-bright: light-dark(#1a73e8, #8ab4f8);
+  --sys-color-tonal-container: light-dark(#d3e3fd, #004a77);
   /* Where a search match is picked out of the line it sits in. */
-  --sys-color-search-hit: #fdf2a0;
-  --sys-color-state-hover-on-subtle: rgba(31, 31, 31, 0.06);
-  --sys-color-state-disabled: rgba(31, 31, 31, 0.38);
-  --sys-color-green: #188038;
-  --sys-color-error: #d93025;
-  --sys-color-error-container: #fce8e6;
-  --sys-color-error-bright: #c5221f;
-  --sys-color-on-error-container: #a50e0e;
-  --sys-color-orange: #e8710a;
-  --sys-color-yellow-container: #fef7e0;
-  --sys-color-on-yellow-container: #7f5600;
+  --sys-color-search-hit: light-dark(#fdf2a0, #6c5a00);
+  --sys-color-state-hover-on-subtle: light-dark(rgba(31, 31, 31, 0.06), rgba(255, 255, 255, 0.1));
+  --sys-color-state-disabled: light-dark(rgba(31, 31, 31, 0.38), rgba(227, 227, 227, 0.38));
+  --sys-color-green: light-dark(#188038, #6dd58c);
+  --sys-color-error: light-dark(#d93025, #f28b82);
+  --sys-color-error-container: light-dark(#fce8e6, #4a1b1a);
+  --sys-color-error-bright: light-dark(#c5221f, #ff8080);
+  --sys-color-on-error-container: light-dark(#a50e0e, #f2b8b5);
+  --sys-color-orange: light-dark(#e8710a, #fcad70);
+  --sys-color-yellow-container: light-dark(#fef7e0, #332b00);
+  --sys-color-on-yellow-container: light-dark(#7f5600, #fdd663);
+  /* The one colour that is the same in both, and says so by not pairing. */
   --sys-color-yellow-outline: #f9ab00;
-  --sys-color-token-property-special: #c80000;
-  --sys-color-token-attribute-value: #1a1aa6;
-  --sys-color-token-string: #c41a16;
-  --sys-color-token-number: #1c00cf;
-  --sys-color-token-keyword: #aa0d91;
-  --sys-color-token-tag: #881280;
-  --sys-color-token-attribute: #994500;
-  --sys-color-token-property: #881391;
-  --sys-color-token-meta: #7f7f7f;
-  --sys-color-token-variable: #1f1f1f;
+  --sys-color-token-property-special: light-dark(#c80000, #5db0d7);
+  --sys-color-token-attribute-value: light-dark(#1a1aa6, #f29766);
+  --sys-color-token-string: light-dark(#c41a16, #f28b54);
+  --sys-color-token-number: light-dark(#1c00cf, #9980ff);
+  --sys-color-token-keyword: light-dark(#aa0d91, #9a7fd5);
+  --sys-color-token-tag: light-dark(#881280, #5db0d7);
+  --sys-color-token-attribute: light-dark(#994500, #9bbbdc);
+  --sys-color-token-property: light-dark(#881391, #e3a7f6);
+  --sys-color-token-meta: light-dark(#7f7f7f, #9aa0a6);
+  --sys-color-token-variable: light-dark(#1f1f1f, #e3e3e3);
+
+  /*
+   * What a surface lifted clear of the page casts: a menu, a popup, a
+   * dropped-down list.
+   *
+   * There were four of these — `0 2px 8px rgba(0,0,0,.25)` in three places,
+   * `0 2px 10px rgba(0,0,0,.3)` in a fourth, `0 2px 14px rgb(0 0 0 / 18%)` in
+   * a fifth — which is one shadow written four ways, and none of them the
+   * token above, so in dark mode a faint black sat on a dark ground and the
+   * menu had no edge at all.
+   */
+  --elevation-popup: 0 2px 10px var(--sys-color-shadow);
 
   --font-ui: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
   --font-mono: Menlo, Monaco, Consolas, 'Courier New', monospace;
@@ -87,91 +127,7 @@
   --radius-md: 6px;
   --radius-pill: 999px;
   --toolbar-height: 26px;
-
-  color-scheme: light dark;
 }
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    --sys-color-cdt-base-container: #282828;
-    --sys-color-surface: #1f1f1f;
-    --sys-color-surface1: #282828;
-    --sys-color-surface2: #2d2d2d;
-    --sys-color-surface3: #333333;
-    --sys-color-on-surface: #e3e3e3;
-    --sys-color-on-surface-subtle: #c7c7c7;
-    --sys-color-token-subtle: #9aa0a6;
-    --sys-color-divider: #494c50;
-    --sys-color-neutral-outline: #5e5e5e;
-    --sys-color-primary: #a8c7fa;
-    --sys-color-on-primary: #062e6f;
-    --sys-color-shadow: rgba(0, 0, 0, 0.55);
-    --sys-color-primary-bright: #8ab4f8;
-    --sys-color-tonal-container: #004a77;
-    --sys-color-search-hit: #6c5a00;
-    --sys-color-state-hover-on-subtle: rgba(255, 255, 255, 0.1);
-    --sys-color-state-disabled: rgba(227, 227, 227, 0.38);
-    --sys-color-green: #6dd58c;
-    --sys-color-error: #f28b82;
-    --sys-color-error-container: #4a1b1a;
-    --sys-color-error-bright: #ff8080;
-    --sys-color-on-error-container: #f2b8b5;
-    --sys-color-orange: #fcad70;
-    --sys-color-yellow-container: #332b00;
-    --sys-color-on-yellow-container: #fdd663;
-    --sys-color-yellow-outline: #f9ab00;
-    --sys-color-token-property-special: #5db0d7;
-    --sys-color-token-attribute-value: #f29766;
-    --sys-color-token-string: #f28b54;
-    --sys-color-token-number: #9980ff;
-    --sys-color-token-keyword: #9a7fd5;
-    --sys-color-token-tag: #5db0d7;
-    --sys-color-token-attribute: #9bbbdc;
-    --sys-color-token-property: #e3a7f6;
-    --sys-color-token-meta: #9aa0a6;
-    --sys-color-token-variable: #e3e3e3;
-    }
-}
-
-:root[data-theme='dark'] {
-    --sys-color-cdt-base-container: #282828;
-    --sys-color-surface: #1f1f1f;
-    --sys-color-surface1: #282828;
-    --sys-color-surface2: #2d2d2d;
-    --sys-color-surface3: #333333;
-    --sys-color-on-surface: #e3e3e3;
-    --sys-color-on-surface-subtle: #c7c7c7;
-    --sys-color-token-subtle: #9aa0a6;
-    --sys-color-divider: #494c50;
-    --sys-color-neutral-outline: #5e5e5e;
-    --sys-color-primary: #a8c7fa;
-    --sys-color-on-primary: #062e6f;
-    --sys-color-shadow: rgba(0, 0, 0, 0.55);
-    --sys-color-primary-bright: #8ab4f8;
-    --sys-color-tonal-container: #004a77;
-    --sys-color-search-hit: #6c5a00;
-    --sys-color-state-hover-on-subtle: rgba(255, 255, 255, 0.1);
-    --sys-color-state-disabled: rgba(227, 227, 227, 0.38);
-    --sys-color-green: #6dd58c;
-    --sys-color-error: #f28b82;
-    --sys-color-error-container: #4a1b1a;
-    --sys-color-error-bright: #ff8080;
-    --sys-color-on-error-container: #f2b8b5;
-    --sys-color-orange: #fcad70;
-    --sys-color-yellow-container: #332b00;
-    --sys-color-on-yellow-container: #fdd663;
-    --sys-color-yellow-outline: #f9ab00;
-    --sys-color-token-property-special: #5db0d7;
-    --sys-color-token-attribute-value: #f29766;
-    --sys-color-token-string: #f28b54;
-    --sys-color-token-number: #9980ff;
-    --sys-color-token-keyword: #9a7fd5;
-    --sys-color-token-tag: #5db0d7;
-    --sys-color-token-attribute: #9bbbdc;
-    --sys-color-token-property: #e3a7f6;
-    --sys-color-token-meta: #9aa0a6;
-    --sys-color-token-variable: #e3e3e3;
-  }
 
 * {
   box-sizing: border-box;

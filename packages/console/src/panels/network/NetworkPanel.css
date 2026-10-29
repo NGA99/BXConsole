@@ -97,9 +97,6 @@
   color: var(--sys-color-token-subtle);
   text-align: center;
 }
-.network-name {
-  color: var(--sys-color-on-surface);
-}
 
 /* waterfall */
 .waterfall-cell {
@@ -339,7 +336,7 @@
   background: var(--sys-color-surface);
   border: 1px solid var(--sys-color-divider);
   border-radius: var(--radius-md);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--elevation-popup);
 }
 .network-more-popup label {
   display: flex;
@@ -359,7 +356,6 @@
 .type-icon.ws { color: #12b5cb; }
 .type-icon.doc { color: #5f6368; }
 .type-icon.error { color: var(--sys-color-error); }
-.error-text,
 .error-detail {
   color: var(--sys-color-error);
 }
@@ -442,45 +438,6 @@
   color: var(--sys-color-on-surface-subtle);
   border-radius: var(--radius-xs);
   cursor: default;
-}
-
-/* ---- search ---- */
-.network-search {
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  max-height: 40%;
-}
-.network-search-results {
-  overflow: auto;
-  border-bottom: 1px solid var(--sys-color-divider);
-}
-.network-search-hit {
-  display: grid;
-  grid-template-columns: 160px 110px 1fr;
-  gap: 8px;
-  padding: 2px 8px;
-  line-height: 18px;
-  white-space: nowrap;
-  overflow: hidden;
-}
-.network-search-hit:hover {
-  background: var(--sys-color-state-hover-on-subtle);
-}
-.network-search-hit.muted {
-  color: var(--sys-color-token-subtle);
-}
-.network-search-name {
-  color: var(--sys-color-primary);
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.network-search-where {
-  color: var(--sys-color-token-subtle);
-}
-.network-search-snippet {
-  overflow: hidden;
-  text-overflow: ellipsis;
 }
 
 /* ---- status bar markers ---- */
@@ -584,20 +541,6 @@
   min-width: 0;
   display: flex;
   flex-direction: column;
-}
-
-/*
- * What the search could not look in. Deliberately part of the results, not a
- * tooltip: a reader who misses this reads "No matches" as an answer.
- */
-.network-search-note {
-  display: flex;
-  align-items: baseline;
-  gap: 4px;
-  flex-wrap: wrap;
-  padding: 4px 8px;
-  border-bottom: 1px solid var(--sys-color-divider);
-  color: var(--sys-color-token-subtle);
 }
 
 /*

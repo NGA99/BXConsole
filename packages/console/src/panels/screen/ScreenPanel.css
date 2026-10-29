@@ -399,7 +399,7 @@
   text-align: center;
   background: var(--sys-color-surface1);
   border: 1px solid var(--sys-color-divider);
-  box-shadow: 0 2px 14px rgb(0 0 0 / 18%);
+  box-shadow: var(--elevation-popup);
 }
 .screen-ended-card strong {
   font-size: 17px;

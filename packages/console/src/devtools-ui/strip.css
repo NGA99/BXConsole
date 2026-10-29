@@ -89,15 +89,6 @@
   margin-right: 2px;
 }
 
-/* The same rule, standing on its own between two groups. */
-.strip-divider {
-  width: 1px;
-  align-self: stretch;
-  margin: 0 6px 0 2px;
-  background: var(--sys-color-divider);
-  flex-shrink: 0;
-}
-
 .strip-spacer {
   flex: 1;
 }
