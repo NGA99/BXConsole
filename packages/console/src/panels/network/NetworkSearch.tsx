@@ -13,6 +13,7 @@ import { Toolbar, ToolbarInput } from '../../devtools-ui/Toolbar';
 import type { NetworkEntry } from '../../state/session-data';
 import type { SearchHit, SearchResult } from './search';
 import { hostOf } from './filters';
+import { fileName } from '../../devtools-ui/file-name';
 import './NetworkSearch.css';
 
 /** Matches past this in one request fold behind a "Show N more". */
@@ -145,7 +146,7 @@ function Group({
       <div className="netsearch-group-head" onClick={() => setOpen((o) => !o)}>
         <span className={`netsearch-caret${open ? ' open' : ''}`}>▾</span>
         <span className="netsearch-file" title={url}>
-          {nameOf(url) || group.requestId}
+          {fileName(url) || group.requestId}
         </span>
         <span className="netsearch-host">{hostOf(url)}</span>
         <span className="netsearch-count">{group.hits.length}</span>
@@ -208,13 +209,4 @@ function Marked({ text, query, opts }: { text: string; query: string; opts: { re
       {parts.map((p, i) => (typeof p === 'string' ? <span key={i}>{p}</span> : <mark key={i}>{p.hit}</mark>))}
     </>
   );
-}
-
-function nameOf(url: string): string {
-  try {
-    const u = new URL(url);
-    return u.pathname.split('/').filter(Boolean).pop() ?? '(index)';
-  } catch {
-    return url;
-  }
 }

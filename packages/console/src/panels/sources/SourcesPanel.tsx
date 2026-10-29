@@ -14,6 +14,7 @@ import { CodeView, canFormat, detectLanguage, formatCode, type CodeLanguage } fr
 import { SourceTree } from './SourceTree';
 import { SplitView } from '../../devtools-ui/SplitView';
 import { hostOf } from '../network/filters';
+import { fileName } from '../../devtools-ui/file-name';
 import './SourcesPanel.css';
 
 /** Cleared on every document load: after a reload the files are new. */
@@ -79,7 +80,7 @@ export function SourcesPanel({ sessionId }: { sessionId: string }) {
     // the check it would open that session's file as soon as it appears.
     if (!target || target.sessionId !== sessionId) return;
     const url = String(target.url ?? '').split('#')[0]!;
-    if (!entries.some((e) => e.url === url)) setEntries((list) => [...list, { url, kind: guessKind(url), inline: false, label: nameOf(url) }]);
+    if (!entries.some((e) => e.url === url)) setEntries((list) => [...list, { url, kind: guessKind(url), inline: false, label: fileName(url) }]);
     open(url, target.line);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [target?.nonce]);
@@ -220,15 +221,6 @@ export function SourcesPanel({ sessionId }: { sessionId: string }) {
       }
     />
   );
-}
-
-function nameOf(url: string): string {
-  try {
-    const u = new URL(url);
-    return u.pathname.split('/').filter(Boolean).pop() ?? '(index)';
-  } catch {
-    return url;
-  }
 }
 function guessKind(url: string): SourceEntry['kind'] {
   const ext = (String(url ?? '').split('?')[0]!.split('.').pop() ?? '').toLowerCase();
