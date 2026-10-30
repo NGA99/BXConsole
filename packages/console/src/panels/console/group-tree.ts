@@ -107,19 +107,39 @@ export function filterTree(rows: Row[], levels: LevelFilter, text: string): Row[
   return out;
 }
 
+/**
+ * What the row says, for the filter to search.
+ *
+ * It has to be the text on the screen, and three rows say a word the entry
+ * does not carry: the error rows write their own `Uncaught` and `Uncaught (in
+ * promise)`, and a thrown expression at the prompt writes `Uncaught` too.
+ * Leaving those out meant `in promise` — the first thing a reader types to
+ * pull rejections out of a long log — matched nothing, while the uncaught row
+ * beside it matched only because pages tend to put the word in `message`
+ * themselves. Two rows that read alike on screen answered differently.
+ */
 export function rowText(row: Row): string {
   const e = row.entry;
   switch (e.type) {
     case 'console.message':
       return plainText(e.args);
     case 'error.uncaught':
-      return `${e.message} ${e.stack ?? ''}`;
+      // The row prepends its own `Uncaught` and strips the page's, so this
+      // reads the same whichever way the page phrased it, and never twice.
+      // Blocks are joined by the line breaks they are drawn with.
+      return [
+        `Uncaught ${String(e.message ?? '').replace(/^Uncaught\s+/, '')}`,
+        e.stack,
+        e.cause && `Caused by: ${plainText([e.cause])}`,
+      ]
+        .filter(Boolean)
+        .join('\n');
     case 'error.unhandledrejection':
-      return plainText([e.reason]);
+      return `Uncaught (in promise) ${plainText([e.reason])}`;
     case 'eval.command':
       return e.expression;
     case 'eval.result':
-      return plainText([e.exception ?? e.result ?? { t: 'undefined' }]);
+      return `${e.exception ? 'Uncaught ' : ''}${plainText([e.exception ?? e.result ?? { t: 'undefined' }])}`;
     case 'console.clear':
       return '';
     case 'page.navigated':
