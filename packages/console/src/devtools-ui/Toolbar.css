@@ -37,8 +37,8 @@
   background: transparent;
   color: var(--sys-color-on-surface-subtle);
   font: inherit;
-  height: 22px;
-  min-width: 22px;
+  height: var(--control-height);
+  min-width: var(--control-height);
   padding: 0 5px;
   border-radius: 50%;
   cursor: default;

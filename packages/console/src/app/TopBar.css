@@ -43,8 +43,8 @@
   color: var(--sys-color-on-surface-subtle);
   font: inherit;
   font-size: 13px;
-  width: 22px;
-  height: 22px;
+  width: var(--control-height);
+  height: var(--control-height);
   border-radius: 50%;
   cursor: default;
 }

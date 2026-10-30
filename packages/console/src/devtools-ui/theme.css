@@ -127,6 +127,26 @@
   --radius-md: 6px;
   --radius-pill: 999px;
   --toolbar-height: 26px;
+
+  /*
+   * How tall something you press is.
+   *
+   * 22px, written four times in four files: the toolbar button, the theme
+   * button in the title row, the replay button over the screen, and the
+   * pill the network filter is typed into. They are one decision — the
+   * target your pointer has to land on — and the first one to be changed
+   * alone would be the one that looks wrong.
+   *
+   * Deliberately not every small height in the console. A row of the DOM
+   * tree is 18px and a grid cell is 21px because that is how much text at
+   * this size needs, a favicon is 16px because that is the icon, and the
+   * history lane's label and track are both 22px because they have to line
+   * up with each other and not with a button. Those are different
+   * questions that happen to have close answers, and a token that covered
+   * them all would mean the next change to the button height silently
+   * moved the rows.
+   */
+  --control-height: 22px;
 }
 
 * {

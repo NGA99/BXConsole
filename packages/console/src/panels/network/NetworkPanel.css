@@ -47,7 +47,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  height: 22px;
+  height: var(--control-height);
   padding: 0 8px;
   border-radius: var(--radius-pill);
   background: var(--sys-color-surface2);
@@ -184,7 +184,7 @@
   display: flex;
   align-items: center;
   gap: 4px;
-  height: 26px;
+  height: var(--toolbar-height);
   padding: 0 8px;
   font-weight: 500;
   background: var(--sys-color-surface1);
@@ -453,7 +453,7 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 26px;
+  height: var(--toolbar-height);
   padding: 0 8px;
   border-bottom: 1px solid var(--sys-color-divider);
   background: var(--sys-color-surface1);

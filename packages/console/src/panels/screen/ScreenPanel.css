@@ -232,7 +232,7 @@
   align-items: center;
   gap: 6px;
   flex: 0 0 auto;
-  height: 26px;
+  height: var(--toolbar-height);
   padding: 0 6px;
   overflow: hidden;
   border-bottom: 1px solid var(--sys-color-divider);
@@ -245,7 +245,7 @@
   background: transparent;
   color: var(--sys-color-on-surface);
   line-height: 0;
-  height: 22px;
+  height: var(--control-height);
   min-width: 24px;
   display: inline-flex;
   align-items: center;
