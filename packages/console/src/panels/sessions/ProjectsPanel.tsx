@@ -283,13 +283,14 @@ function ProjectRow({
       </div>
 
       {/*
-        * The key, masked, and no rotate.
+        * The key in full, and no rotate.
         *
-        * It was printed whole here — eight working credentials at once, on
-        * the screen most likely to end up in a screen share or a screenshot.
-        * The ends are kept because the question this screen is actually asked
-        * is "which project is this key?", which four characters either side
-        * answers; copy still takes the whole thing.
+        * Shown whole on purpose. It was masked to `efc2…ee3a` for a while,
+        * on the argument that this is the screen most likely to end up in a
+        * screen share — and the masking was dropped again, because a key you
+        * can read is how you tell at a glance which project a key found in a
+        * page belongs to. Stated here because the question comes back: the
+        * absence of masking is the decision, not an oversight.
         *
         * Rotating moved to the Agent tab, where the key is handed out. It
         * kills every payload already planted, and an irreversible action
