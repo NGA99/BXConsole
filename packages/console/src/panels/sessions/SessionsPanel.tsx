@@ -41,9 +41,13 @@ export function SessionsPanel({ view }: { view: SessionView }) {
   const all = order.length === 0 ? everything : everything.filter((s) => (s.projectId ?? homeId) === selectedId);
   const trashed = all.filter((s) => s.trashedAt !== undefined);
   const kept = all.filter((s) => s.trashedAt === undefined);
-  const offline = kept.filter((s) => !s.connected);
-  const live = kept.length - offline.length;
-  const sessions = (view === 'trash' ? trashed : kept).filter((s) => {
+  /*
+   * What this view is about before the filter touches it. The table counts
+   * and acts on what it lists, and needs this only to say how much the
+   * filter is holding back.
+   */
+  const inView = view === 'trash' ? trashed : kept;
+  const sessions = inView.filter((s) => {
     if (view !== 'trash' && connectedOnly && !s.connected) return false;
     if (!q) return true;
     return [s.name, s.title, s.url, s.sessionId, s.userAgent].some((v) => v?.toLowerCase().includes(q));
@@ -93,9 +97,7 @@ export function SessionsPanel({ view }: { view: SessionView }) {
         <SessionList
           trash={view === 'trash'}
           ordered={ordered}
-          all={all}
-          offline={offline}
-          live={live}
+          inView={inView}
           purgeDays={purgeDays}
           elsewhere={everything.length - all.length}
           query={query}

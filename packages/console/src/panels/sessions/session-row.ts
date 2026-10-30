@@ -12,6 +12,27 @@ import type { SessionMeta } from '@bxconsole/protocol';
 import { plain } from '../../devtools-ui/plain-text';
 import { absoluteTimestamp } from '../../devtools-ui/time';
 
+/**
+ * Why the list is empty, which is four different things.
+ *
+ * It read the project rather than the listing, and so answered the wrong
+ * question twice: a project whose only recordings were in the trash said "No
+ * session matches the filter" with no filter typed, and a trash whose rows
+ * were all hidden by one said "The trash is empty" when it held two. Both
+ * came of asking "does this project have anything" when the reader is asking
+ * "where did the rows go".
+ *
+ * The filter is the first thing to rule out, because it is the one the reader
+ * did themselves and the one they can undo.
+ */
+export type EmptyReason = 'filtered' | 'trash-empty' | 'elsewhere' | 'nothing-yet';
+
+export function emptyReason({ trash, hidden, elsewhere }: { trash: boolean; hidden: number; elsewhere: number }): EmptyReason {
+  if (hidden > 0) return 'filtered';
+  if (trash) return 'trash-empty';
+  return elsewhere > 0 ? 'elsewhere' : 'nothing-yet';
+}
+
 /** Everything the row calls this session, for the tooltip the name carries. */
 export function identity(s: SessionMeta): string {
   return [plain(s.name), plain(s.title), `session-${s.sessionId}`].filter(Boolean).join('\n');

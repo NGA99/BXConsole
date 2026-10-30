@@ -10,7 +10,7 @@ import { describe, test } from 'node:test';
 import assert from 'node:assert/strict';
 import type { SessionMeta, SessionTab } from '@bxconsole/protocol';
 import { absoluteTimestamp } from '../src/devtools-ui/time';
-import { agentTitle, identity, liveWindows, relative, shortenUrl, windowCount } from '../src/panels/sessions/session-row';
+import { agentTitle, emptyReason, identity, liveWindows, relative, shortenUrl, windowCount } from '../src/panels/sessions/session-row';
 
 const run = (over: Partial<SessionMeta>): SessionMeta =>
   ({
@@ -29,6 +29,35 @@ const run = (over: Partial<SessionMeta>): SessionMeta =>
 
 const window_ = (over: Partial<SessionTab>): SessionTab =>
   ({ tabId: 't', url: 'http://app.test/', title: '', viewport: { width: 0, height: 0, dpr: 1 }, startedAt: 0, lastSeenAt: 0, connected: false, ...over }) as SessionTab;
+
+describe('why the list is empty', () => {
+  test('the filter is named first, because it is the one the reader can undo', () => {
+    assert.equal(emptyReason({ trash: false, hidden: 15, elsewhere: 0 }), 'filtered');
+    assert.equal(emptyReason({ trash: true, hidden: 2, elsewhere: 0 }), 'filtered');
+    // Even with somewhere else to point at: the rows are behind the filter.
+    assert.equal(emptyReason({ trash: false, hidden: 1, elsewhere: 9 }), 'filtered');
+  });
+
+  test('a trash whose rows are all filtered out does not claim to be empty', () => {
+    // It said "The trash is empty" while holding two, because it asked
+    // whether this was the trash view and nothing else.
+    assert.equal(emptyReason({ trash: true, hidden: 2, elsewhere: 0 }), 'filtered');
+    assert.equal(emptyReason({ trash: true, hidden: 0, elsewhere: 0 }), 'trash-empty');
+  });
+
+  test('a project whose only recordings are in the trash is not blamed on a filter', () => {
+    /*
+     * The old test was `all.length > 0`, and `all` counted the trashed ones
+     * — so a project with two in the trash and none kept said "No session
+     * matches the filter" to somebody who had typed nothing.
+     */
+    assert.equal(emptyReason({ trash: false, hidden: 0, elsewhere: 0 }), 'nothing-yet');
+  });
+
+  test('with nothing here but recordings elsewhere, it says where they are', () => {
+    assert.equal(emptyReason({ trash: false, hidden: 0, elsewhere: 21 }), 'elsewhere');
+  });
+});
 
 describe('what the row calls a session', () => {
   test('all three names, so the one you are searching for is in the tooltip', () => {

@@ -558,3 +558,9 @@
 .sessions-purge-note {
   color: var(--sys-color-token-subtle);
 }
+/* The count separates its own two numbers with a middot, so what the filter
+   is hiding joins that line the same way rather than butting against it. */
+.sessions-hidden-note::before {
+  content: '·';
+  padding-right: 6px;
+}
