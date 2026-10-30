@@ -14,6 +14,7 @@ import { absoluteTimestamp, fullTimestamp } from '../../devtools-ui/time';
 import { Toolbar, ToolbarButton, ToolbarDivider, ToolbarInput } from '../../devtools-ui/Toolbar';
 import { plain } from '../../devtools-ui/plain-text';
 import { Favicon } from './Favicon';
+import { agentTitle, identity, liveWindows, relative, shortenUrl, windowCount } from './session-row';
 import './SessionsPanel.css';
 
 export function SessionList({
@@ -249,52 +250,4 @@ function SessionRow({ session: s, trash, purgeDays }: { session: SessionMeta; tr
       </div>
     </div>
   );
-}
-
-/** Everything the row calls this session, for the tooltip the name carries. */
-function identity(s: SessionMeta): string {
-  return [plain(s.name), plain(s.title), `session-${s.sessionId}`].filter(Boolean).join('\n');
-}
-
-/**
- * The user agent, plus the viewport under it.
- *
- * The viewport is not in the user agent and is worth knowing — a 390-wide
- * window is a phone whatever the string claims. It had a column of its own
- * until the row became one line. Zero is what a recording made before the
- * window reported its size looks like, and "0×0" would state something false.
- */
-function agentTitle(s: SessionMeta): string {
-  const size = s.viewport.width > 0 && s.viewport.height > 0 ? `${s.viewport.width}×${s.viewport.height}` : null;
-  return [s.userAgent || 'no user agent reported', size].filter(Boolean).join('\n');
-}
-
-/**
- * Long URLs (search pages, signed links) would otherwise fill the row and push
- * everything else out. Cut the middle, not the end: the origin says which site
- * it is and the tail usually says which page. The full URL is in the tooltip.
- */
-function shortenUrl(url: string, max = 100): string {
-  if (url.length <= max) return url;
-  const head = Math.ceil((max - 1) * 0.6);
-  const tail = max - 1 - head;
-  return `${url.slice(0, head)}…${url.slice(-tail)}`;
-}
-
-/** Windows in the run, and how many still have a live agent. */
-function windowCount(s: SessionMeta): number {
-  return s.tabs?.length ?? 1;
-}
-function liveWindows(s: SessionMeta): number {
-  return s.tabs?.filter((t) => t.connected).length ?? (s.connected ? 1 : 0);
-}
-
-function relative(ts: number): string {
-  const d = Date.now() - ts;
-  if (d < 60_000) return 'just now';
-  if (d < 3_600_000) return `${Math.floor(d / 60_000)}m ago`;
-  if (d < 86_400_000) return `${Math.floor(d / 3_600_000)}h ago`;
-  // absoluteTimestamp, not the locale: a column is read against a server
-  // log, and this one sits under rows that say "3m ago" in English.
-  return absoluteTimestamp(ts);
 }
