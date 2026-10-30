@@ -201,7 +201,7 @@ token and gives you a pure-HTML snippet that tries five mechanisms at once:
 Whatever arrives tells you which directives are open, and the server reads
 `Sec-Fetch-Dest` as proof of which mechanism actually delivered it. The tab
 also reads the target's framing headers, which is how you know whether **Nest**
-can work before you commit to it. Tokens last 24 hours and survive a relay
+can work before you commit to it. Tokens last 7 days and survive a relay
 restart.
 
 `npm run csp-cases` serves seven pages with different policies for trying this

@@ -8,7 +8,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
-import { PING_PER_TOKEN, PROBES } from '@bxconsole/protocol';
+import { PING_PER_TOKEN, PING_TOKEN_TTL_MS, PROBES } from '@bxconsole/protocol';
 import { PingBoard, describeRequest, parseProbePath, scriptProbeBody } from '../src/ping';
 
 /** Account ids: a token belongs to the account that asked for it. */
@@ -28,6 +28,17 @@ describe('tokens', () => {
     const tokens = new Set(Array.from({ length: 50 }, () => board.issue(ANA).token));
     assert.equal(tokens.size, 50);
     for (const t of tokens) assert.match(t, /^[A-Za-z0-9]{6,32}$/, 'must survive the URL and the validator');
+  });
+
+  test('a token lasts the week it is documented to last', () => {
+    // Pinned, because the number is a judgement about how the tab is used —
+    // a URL pasted into a report form or a ticket is opened days later, not
+    // in the same sitting — and a quiet drift back to a day would break that
+    // in the one way nobody sees: the probe still answers 200.
+    const board = new PingBoard();
+    const { expiresAt } = board.issue(ANA);
+    assert.equal(PING_TOKEN_TTL_MS, 7 * 24 * 60 * 60_000);
+    assert.ok(Math.abs(expiresAt - Date.now() - PING_TOKEN_TTL_MS) < 1000);
   });
 
   test('an expiry in the past is not known', () => {
@@ -267,7 +278,7 @@ describe('tokens outliving the relay', () => {
 
   test('a token issued before a restart is still honoured after it', async () => {
     // The whole point of the Webhook tab is to paste a URL somewhere and come
-    // back to it. A token good for a day, held only in memory, made that fail
+    // back to it. A token good for a week, held only in memory, made that fail
     // in the worst way available: the probe still got a 200, so the page
     // looked fine and the tab stayed empty.
     const before = new PingBoard();

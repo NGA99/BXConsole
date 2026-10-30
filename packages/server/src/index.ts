@@ -231,7 +231,7 @@ function plain(res: http.ServerResponse, status: number, message: string): void 
  * the relay a page is allowed to take — see ping.ts.
  */
 const ping = new PingBoard();
-// A token is good for a day; the relay restarts far more often than that.
+// A token is good for a week; the relay restarts far more often than that.
 ping.useFile(path.join(repoRoot, 'sessions', PING_TOKENS_FILE));
 relay.watchPings(ping);
 

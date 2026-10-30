@@ -59,7 +59,7 @@ export function WebhookPanel() {
     setExpired(false);
     /*
      * A kept token is only worth reusing if the relay still honours it. It
-     * lapses after a day, and a lapsed one fails silently — the probe gets a
+     * lapses after a week, and a lapsed one fails silently — the probe gets a
      * 200, so the page looks fine and nothing ever shows up here. Ask first,
      * and say so rather than listening to a token nobody is recording.
      */

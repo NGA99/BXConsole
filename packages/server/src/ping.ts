@@ -57,10 +57,10 @@ export class PingBoard {
   /**
    * Where to write them.
    *
-   * A token is good for a day, and the relay is restarted far more often than
-   * that — a build, a crash, a machine waking up. Keeping them only in memory
-   * made the day a lie in the most confusing way available: the probe still
-   * got a 200, so the page looked fine and the tab stayed empty.
+   * A token is good for a week, and the relay is restarted far more often
+   * than that — a build, a crash, a machine waking up. Keeping them only in
+   * memory made that week a lie in the most confusing way available: the probe
+   * still got a 200, so the page looked fine and the tab stayed empty.
    */
   private file: string | null = null;
   /** arrivals, newest last, bounded overall and per token */
@@ -96,7 +96,7 @@ export class PingBoard {
          * and those are dropped rather than taken in as anybody's.
          *
          * Letting them through would mean keeping the leak they were written
-         * under for as long as they last — a day — and the leak is the part
+         * under for as long as they last — a week — and the leak is the part
          * nobody can see. A dropped token is visible and fixable instead:
          * the console asks whether a token is live before it listens, and
          * says "expired, make a new one" when it is not.

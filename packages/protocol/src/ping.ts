@@ -66,12 +66,14 @@ export const WITHHELD_HEADERS = ['cookie', 'set-cookie', 'authorization', 'proxy
 /**
  * How long a diagnosis token is good for.
  *
- * A day, because the point of the Webhook tab is to paste a URL somewhere —
- * a page, a job, a colleague's terminal — and come back to it. Anything
- * shorter and the usual way of using it fails, silently, long after the
- * person stopped watching.
+ * A week, because the point of the Webhook tab is to paste a URL somewhere —
+ * a page, a job, a colleague's terminal — and come back to it. A day was the
+ * length of a sitting, and that is not the rhythm: a payload left in a report
+ * form, a ticket queue or a support inbox is opened when somebody gets round
+ * to it, which is days. Anything shorter and the usual way of using it fails,
+ * silently, long after the person stopped watching.
  */
-export const PING_TOKEN_TTL_MS = 24 * 60 * 60_000;
+export const PING_TOKEN_TTL_MS = 7 * 24 * 60 * 60_000;
 /** Where the live tokens are kept, so a relay restart does not void them. */
 export const PING_TOKENS_FILE = 'ping-tokens.json';
 /** Arrivals kept per token, and overall. Memory only — the relay has no login. */
