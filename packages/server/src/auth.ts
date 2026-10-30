@@ -199,6 +199,18 @@ export class ConsoleAuth {
     return (this.file && !this.file.isMissing ? this.file.all()[0] : undefined)?.id ?? this.fallback.id;
   }
 
+  /**
+   * The account this name has now, or null when it no longer has one.
+   *
+   * `actorFor` answers the same question for a request, from its cookie. A
+   * console socket has no request to re-read: it was authenticated once at
+   * the handshake and is then held open for days, so the relay asks this
+   * instead — see Relay.stillAllowed.
+   */
+  current(user: string): Account | null {
+    return this.accountFor(user);
+  }
+
   /** Every account id that exists, for checking who a project may be given to. */
   accountIds(): Set<string> {
     if (this.file && !this.file.isMissing) return new Set(this.file.all().map((a) => a.id));

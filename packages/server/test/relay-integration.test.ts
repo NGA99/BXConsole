@@ -890,17 +890,26 @@ describe('the administrator’s screen over the socket', () => {
   const bo: Account = { user: 'bo', record: 'x', id: 'b2b2b2', role: 'member' };
   const root: Account = { user: 'root', record: 'x', id: 'c3c3c3', role: 'admin' };
 
-  /** An account list that records what it was asked to do, and can refuse. */
+  /**
+   * An account list that records what it was asked to do, and can refuse.
+   *
+   * `people` is readable and writable by the tests because the relay now asks
+   * it who somebody is for every message a console sends: a test that wants
+   * an account removed, demoted or given a new password changes it here, the
+   * way the file would change under a running relay.
+   */
   function fakeAccounts(refuseWith: string | null = null) {
     const asked: AccountChange[] = [];
     const people = [ana, bo, root];
     return {
       asked,
+      people,
       summaries: () => people.map((a) => ({ id: a.id, user: a.user, role: a.role })),
       change: async (change: AccountChange) => {
         asked.push(change);
         return refuseWith;
       },
+      current: (user: string) => people.find((a) => a.user === user) ?? null,
     };
   }
 
@@ -992,6 +1001,9 @@ describe('the administrator’s screen over the socket', () => {
   test('a change is pushed to every administrator with the screen open, and to no one else', async () => {
     const { relay, accounts } = await withAdmin();
     const root2: Account = { user: 'root2', record: 'x', id: 'd4d4d4', role: 'admin' };
+    // In the file as well as on the socket: a console whose account is not
+    // in the list is one whose account has been removed, and is closed.
+    accounts.people.push(root2);
     const watching = console_(relay, root);
     const alsoWatching = console_(relay, root2);
     const notWatching = console_(relay, root2);
@@ -1062,6 +1074,194 @@ describe('the administrator’s screen over the socket', () => {
     await other.deliver({ type: 'account.create', user: 'new', password: 'long enough', role: 'member' } satisfies ConsoleToServer);
     await settle();
     assert.equal(ws.received('admin.snapshot').length, 1, 'a closed console was written to');
+  });
+
+  test('an administrator can put back a project they do not own', async () => {
+    /*
+     * Deleting is immediate for the owner: the project leaves their screen,
+     * so the seven days before it is purged are reachable only from the
+     * administrator's table, which draws a "put it back" button on every
+     * deleted row. The button did nothing. The floor in handleConsoleMessage
+     * refused the message for being about a project the administrator cannot
+     * read — which is every project they have not taken — and refused it
+     * silently, so the row simply stayed deleted.
+     */
+    const { relay, projects } = await withAdmin();
+    const his = await projects.create('Bo’s', bo.id);
+    await projects.setTrashed(his.id, true);
+
+    const admin = console_(relay, root);
+    await admin.deliver({ type: 'project.restore', projectId: his.id } satisfies ConsoleToServer);
+    await settle();
+
+    assert.equal(projects.get(his.id)?.trashedAt, undefined, 'the administrator’s restore was dropped');
+  });
+
+  test('putting one back hands nothing over: it goes to the owner it had', async () => {
+    const { relay, projects } = await withAdmin();
+    const his = await projects.create('Bo’s', bo.id);
+    await projects.setTrashed(his.id, true);
+    const admin = console_(relay, root);
+    await admin.deliver({ type: 'project.restore', projectId: his.id } satisfies ConsoleToServer);
+    await settle();
+
+    assert.equal(projects.get(his.id)?.trashedAt, undefined, 'it was not put back at all');
+    assert.equal(projects.get(his.id)?.owner, bo.id, 'the restore quietly took the project');
+    // And the administrator still cannot read it: the exemption is for this
+    // one message, not a way around the project gate.
+    const readable = admin.received('projects.snapshot').at(-1)!['projects'] as Project[];
+    assert.ok(!readable.some((p) => p.id === his.id), 'restoring it made it readable');
+  });
+
+  test('a member cannot put back a project that is not theirs', async () => {
+    // The exemption is from the floor, not from the check: the handler still
+    // asks for the owner or an administrator.
+    const { relay, projects } = await withAdmin();
+    const his = await projects.create('Bo’s', bo.id);
+    await projects.setTrashed(his.id, true);
+
+    const member = console_(relay, ana);
+    await member.deliver({ type: 'project.restore', projectId: his.id } satisfies ConsoleToServer);
+    await settle();
+
+    assert.ok(projects.get(his.id)?.trashedAt !== undefined, 'a member undeleted someone else’s project');
+  });
+});
+
+/**
+ * A console socket outlives the thing that let it in.
+ *
+ * It is authenticated once, at the handshake, and then held open for as long
+ * as the page is open — days. Everything the relay decides about it is read
+ * from the account captured at that moment, so removing the account, changing
+ * its password or taking its role away reached the cookie, the HTTP routes
+ * and every new socket, and not the one already there.
+ */
+describe('an account that changes under an open console', () => {
+  const ana: Account = { user: 'ana', record: 'scrypt$old', id: 'a1a1a1', role: 'member' };
+  const root: Account = { user: 'root', record: 'x', id: 'c3c3c3', role: 'admin' };
+
+  async function open() {
+    const store = new SessionStore(dir);
+    const registry = new SessionRegistry(store);
+    const relay = new Relay(registry, store);
+    relay.useBlobs(new BlobStore(dir, Number.POSITIVE_INFINITY));
+    const projects = new ProjectStore(dir);
+    await projects.load();
+    await projects.create('Ana’s', ana.id);
+    relay.useProjects(projects);
+    relay.useAccountIds(() => new Set([ana.id, root.id]));
+    relay.useKeylessLanding(() => projects.homeId());
+    const people: Account[] = [{ ...ana }, { ...root }];
+    const asked: AccountChange[] = [];
+    relay.useAccounts({
+      summaries: () => people.map((a) => ({ id: a.id, user: a.user, role: a.role })),
+      change: async (c: AccountChange) => (asked.push(c), null),
+      current: (user: string) => people.find((a) => a.user === user) ?? null,
+    });
+    const agent = await join(relay);
+    return { relay, people, agent, asked };
+  }
+
+  function console_(relay: Relay, actor: Account): FakeSocket {
+    const ws = new FakeSocket();
+    relay.attachConsole(ws as unknown as WebSocket, actor);
+    return ws;
+  }
+
+  test('a removed account stops reading on the socket it already had', async () => {
+    const { relay, people } = await open();
+    const ws = console_(relay, ana);
+    await ws.deliver({ type: 'sessions.list' } satisfies ConsoleToServer);
+    assert.ok(ws.received('sessions.snapshot').length >= 2, 'it was not reading in the first place');
+
+    people.splice(
+      people.findIndex((a) => a.user === 'ana'),
+      1,
+    );
+    const before = ws.sent.length;
+    await ws.deliver({ type: 'sessions.list' } satisfies ConsoleToServer);
+    await settle();
+
+    assert.equal(ws.sent.length, before, `answered with ${JSON.stringify(ws.sent.slice(before))}`);
+    assert.equal(ws.readyState, 3, 'the socket was left open');
+  });
+
+  test('and cannot run an expression in the page it was watching', async () => {
+    // The sharpest version of it: the account is gone, the cookie is dead
+    // everywhere else, and this is still somebody's browser.
+    const { relay, people, agent } = await open();
+    const ws = console_(relay, ana);
+    people.length = 0;
+    const sentToPage = agent.sent.length;
+    await ws.deliver({ type: 'eval.request', sessionId: 'sess01', tabId: 'tabA', commandId: 'c1', expression: 'document.cookie' } satisfies ConsoleToServer);
+    await settle();
+
+    assert.equal(agent.sent.length, sentToPage, `reached the page: ${JSON.stringify(agent.sent.slice(sentToPage))}`);
+  });
+
+  test('a new password closes it, because the cookie it holds is dead', async () => {
+    /*
+     * The cookie is an HMAC keyed on the stored line, so changing a password
+     * invalidates every cookie issued under it — everywhere except here,
+     * where nothing was re-reading the line.
+     */
+    const { relay, people } = await open();
+    const ws = console_(relay, ana);
+    people[0] = { ...ana, record: 'scrypt$new' };
+
+    const before = ws.sent.length;
+    await ws.deliver({ type: 'sessions.list' } satisfies ConsoleToServer);
+    await settle();
+    assert.equal(ws.sent.length, before, 'the old cookie went on working on this socket');
+  });
+
+  test('a demoted administrator cannot still change the account list', async () => {
+    // Which is the part that matters: creating an administrator is how a
+    // demotion gets undone.
+    const { relay, people, asked } = await open();
+    const ws = console_(relay, root);
+    await ws.deliver({ type: 'admin.list' } satisfies ConsoleToServer);
+    await until(() => ws.received('admin.snapshot')[0], 'the admin snapshot');
+
+    people[1] = { ...root, role: 'member' };
+    await ws.deliver({ type: 'account.create', user: 'backdoor', password: 'long enough', role: 'admin' } satisfies ConsoleToServer);
+    await settle();
+
+    assert.deepEqual(asked, [], 'a demoted administrator reached the account file');
+  });
+
+  test('and is told what they are now, rather than shown a screen that does nothing', async () => {
+    const { relay, people } = await open();
+    const ws = console_(relay, root);
+    await ws.deliver({ type: 'admin.list' } satisfies ConsoleToServer);
+    const snapshots = ws.received('admin.snapshot').length;
+
+    people[1] = { ...root, role: 'member' };
+    await ws.deliver({ type: 'admin.list' } satisfies ConsoleToServer);
+    await settle();
+
+    assert.deepEqual(ws.received('console.whoami').at(-1)!['account'], { id: root.id, user: 'root', role: 'member' });
+    assert.equal(ws.received('admin.snapshot').length, snapshots, 'the demoted screen was refreshed anyway');
+    // Still connected: the person is still themselves, only less of one.
+    assert.equal(ws.readyState, 1, 'a role change closed the socket');
+  });
+
+  test('a role change stops the account list being pushed to that screen', async () => {
+    const { relay, people } = await open();
+    const demoted = console_(relay, root);
+    const other = console_(relay, root);
+    await demoted.deliver({ type: 'admin.list' } satisfies ConsoleToServer);
+    await other.deliver({ type: 'admin.list' } satisfies ConsoleToServer);
+
+    people[1] = { ...root, role: 'member' };
+    // Anything at all from the demoted console is enough to notice the change.
+    await demoted.deliver({ type: 'sessions.list' } satisfies ConsoleToServer);
+    const before = demoted.received('admin.snapshot').length;
+
+    await other.deliver({ type: 'account.create', user: 'new', password: 'long enough', role: 'member' } satisfies ConsoleToServer);
+    await settle();
+    assert.equal(demoted.received('admin.snapshot').length, before, 'the account list went to a member');
   });
 });
 

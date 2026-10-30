@@ -759,6 +759,9 @@ relay.useAccountIds(() => auth.accountIds());
 relay.useAccounts({
   summaries: () => auth.summaries(),
   change: (change) => auth.changeAccounts(change),
+  // Read again for every message a console sends: a socket opened days ago
+  // holds the account it was given at the handshake, and `.passwd` moves.
+  current: (user) => auth.current(user),
 });
 relay.useKeylessLanding(() => keylessLanding);
 

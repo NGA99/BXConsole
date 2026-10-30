@@ -565,6 +565,19 @@ export class Relay {
 
   private async handleConsoleMessage(ws: WebSocket, msg: ConsoleToServer): Promise<void> {
     /*
+     * Who this console is now, rather than who it was when it connected.
+     *
+     * Everything below reads the account off the socket, and that account was
+     * read from the cookie once, at the handshake. A console stays open for
+     * as long as the page is open — days — so removing an account, changing
+     * its password or taking its role away reached the cookie, the HTTP
+     * routes and every new socket, and not the one already there: the removed
+     * account went on listing recordings, streaming a live run and running
+     * expressions in the victim's page, and a demoted administrator went on
+     * creating accounts, which is a way to undo the demotion.
+     */
+    if (!this.stillAllowed(ws)) return;
+    /*
      * One gate for the lot.
      *
      * Twenty-eight of these carry a sessionId, and checking each where it is
@@ -582,15 +595,13 @@ export class Relay {
      * next project message added is refused before it is written rather than
      * after somebody notices.
      *
-     * The transfer is the exception, and it has to be here rather than in
-     * the handler. It is what an administrator does to a project they cannot
-     * read — reassigning what a removed account left behind, or taking one
-     * deliberately instead of being quietly exempt from the check — so
-     * requiring read access to send it would make it the one operation that
-     * cannot be performed by the only person who may perform it. Its handler
-     * asks for the admin role instead.
+     * The two in ADMIN_ABOUT_UNREADABLE are the exceptions, and they have to
+     * be here rather than in their handlers: both are what an administrator
+     * does to a project they cannot read, so requiring read access to send
+     * one would make it the operation that cannot be performed by the only
+     * person who may perform it. Both handlers ask for the admin role.
      */
-    if (msg.type !== 'project.transfer' && 'projectId' in msg && typeof msg.projectId === 'string' && !this.projectFor(ws, msg.projectId)) {
+    if (!ADMIN_ABOUT_UNREADABLE.has(msg.type) && 'projectId' in msg && typeof msg.projectId === 'string' && !this.projectFor(ws, msg.projectId)) {
       return;
     }
     switch (msg.type) {
@@ -1402,6 +1413,45 @@ export class Relay {
     }
   }
 
+  /**
+   * Whether this console is still the account it signed in as.
+   *
+   * Asked before every message, because the answer changes while the socket
+   * is open. The credential it holds is checked the way the cookie is: the
+   * stored line is the key the cookie was signed with, so a line that has
+   * changed is a cookie that no longer verifies anywhere else, and this
+   * socket should not be the one place it still works. An account that is
+   * gone is the same answer arrived at sooner.
+   *
+   * A role change is not a reason to close anything — the person is still
+   * themselves — so the socket is updated in place and told, which is what
+   * makes the administrator's screen it is showing fall back to saying the
+   * screen is not theirs. The adminWatchers entry goes with it, or the
+   * account list would keep being pushed to somebody who may not read it.
+   *
+   * With no account list wired there is nothing to re-check against: a relay
+   * built that way (the older hosts, and the tests that predate accounts)
+   * keeps what it had rather than closing every console.
+   */
+  private stillAllowed(ws: WebSocket): boolean {
+    const had = this.consoles.get(ws);
+    // No actor at all fails closed in every handler already; see `consoles`.
+    if (!had || !this.accounts) return true;
+    const live = this.accounts.current(had.user);
+    if (!live || live.id !== had.id || live.record !== had.record) {
+      this.consoles.delete(ws);
+      this.adminWatchers.delete(ws);
+      ws.close();
+      return false;
+    }
+    if (live.role !== had.role) {
+      this.consoles.set(ws, live);
+      if (live.role !== 'admin') this.adminWatchers.delete(ws);
+      send(ws, { type: 'console.whoami', account: { id: live.id, user: live.user, role: live.role } });
+    }
+    return true;
+  }
+
   /** Whether a console may act on this session at all. */
   private mayRead(ws: WebSocket, sessionId: string): boolean {
     const actor = this.consoles.get(ws);
@@ -1452,7 +1502,29 @@ export class Relay {
 export interface AccountAdmin {
   summaries(): AccountSummary[];
   change(change: AccountChange): Promise<string | null>;
+  /**
+   * The account this name has now, or null when it no longer has one.
+   *
+   * A console socket is authenticated once, at the handshake, and then held
+   * open for as long as the page is open. This is what lets the relay ask
+   * again — see Relay.stillAllowed.
+   */
+  current(user: string): Account | null;
 }
+
+/**
+ * The messages a console may send about a project it cannot read.
+ *
+ * Both are an administrator's and both are checked again in their handlers.
+ * Transferring is how an administrator comes to read a project at all, and
+ * restoring is the only way back from a deletion — the owner cannot ask for
+ * it, because a deleted project leaves their screen at once, so the
+ * administrator's screen is the one place the seven days are reachable from.
+ * The floor in handleConsoleMessage was refusing both before their handlers
+ * ran, which left the "put it back" button on that screen doing nothing at
+ * all for every project its administrator did not already own.
+ */
+const ADMIN_ABOUT_UNREADABLE: ReadonlySet<ConsoleToServer['type']> = new Set(['project.transfer', 'project.restore']);
 
 /** The console's message as the one shape `change` takes. */
 function changeFor(
